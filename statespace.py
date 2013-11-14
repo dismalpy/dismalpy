@@ -137,11 +137,16 @@ class Model(object):
     def update(self, params, transformed=False):
         pass
 
-    def estimate(self, params):
-        params = self.transform(params)
+    def estimate(self, params, transformed=False):
+        if not transformed:
+            params = self.transform(params)
         self.update(params, True)
         kalman_filter = prefix_kalman_filter_map[self.prefix]
         return Results(self, params, *kalman_filter(*self.args))
+
+    def is_stationary(self, params, transformed=False):
+        self.update(params, transformed)
+        return np.max(np.abs(np.linalg.eigvals(self.F))) < 1
 
     @property
     def args(self):
@@ -390,10 +395,10 @@ class Estimator(object):
             )
         return self.typed_models[prefix]
 
-    def loglike(self, params):
+    def loglike(self, params, transformed=False):
         prefix = find_best_blas_type((params,))[0]
         model = self.typed_model(prefix)
-        model.update(params)
+        model.update(params, transformed)
         kalman_filter = prefix_kalman_filter_map[prefix]
         ll = np.sum(kalman_filter(*model.args)[-1][self.burn:])
         return ll
