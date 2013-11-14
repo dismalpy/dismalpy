@@ -435,3 +435,166 @@ class Results(object):
 
     def loglike(self, burn=0):
         return np.sum(self.loglikelihood[burn:])
+
+class ARMA(Model):
+    def __init__(self, endog, exog=None, order=(1,0), dtype=None, A=None,
+                 measurement_error=False):
+
+        self.p = order[0]
+        self.q = order[1]
+        k = max(self.p, self.q+1)
+
+        self.measurement_error = measurement_error
+
+        super(ARMA, self).__init__(endog, exog, nstates=k, dtype=dtype,
+                                   A=A, init=True)
+
+        # Exclude VARMA cases
+        if not self.n == 1:
+            raise ValueError('Invalid endogenous variable. ARMA model does not'
+                             ' support vector ARMA models. `endog` must have'
+                             ' 1 column, got %d.' % self.n)
+
+        # Initialize the H matrix
+        H = np.zeros((1, self.k))
+        H[0,0] = 1
+        self.H = H
+
+        # Initialize the F matrix
+        F = np.zeros((self.k, self.k))
+        idx = np.diag_indices(self.k-1)
+        idx = (idx[0]+1, idx[1])
+        F[idx] = 1
+        self.F = F
+
+    def transform(self, unconstrained):
+        """
+        Transform unconstrained parameters used by the optimizer to constrained
+        parameters used in likelihood evaluation
+
+        References
+        ----------
+
+        Monahan, John F. 1984.
+        "A Note on Enforcing Stationarity in
+        Autoregressive-moving Average Models."
+        Biometrika 71 (2) (August 1): 403-404.
+        """
+        constrained = np.zeros(unconstrained.shape)
+
+        #
+        # y_0^(0) = 1
+
+        # k = 1
+        # y_1^(1) = r_1
+        # (since r_k \equiv y_k^(k))
+        #
+        # k = 2
+        # y_1^(2) = y_1^(1) + r_2 * y_1^(1)
+        #         = r_1     + r_2 * r_1
+        #         = r_1 * (1 + r_2)
+        # y_2^(2) = r_2
+        #
+        # k = 3
+        # y_1^(3) = y_1^(2)         + r_3 * y_2^(2)
+        #         = r_1 * (1 + r_2) + r_3 * r_2
+        # y_2^(3) = y_2^(2) + r_3 * y_1^(2)
+        #         = r_2     + r_3 * r_1 * (1 + r_2)
+        # y_3^(3) = r_3
+
+        # Transform the MA parameters (theta) to be invertible
+        if self.q > 0:
+            psi = unconstrained[:self.q]
+            theta = np.zeros((self.q, self.q))
+            r = psi/((1+psi**2)**0.5)
+            for k in range(self.q):
+                for i in range(k):
+                    theta[k,i] = theta[k-1,i] + r[k] * theta[k-1,k-i-1]
+                theta[k,k] = r[k]
+            constrained[:self.q] = theta[self.q-1,:]
+
+        # Transform the AR parameters (phi) to be stationary
+        if self.p > 0:
+            psi = unconstrained[self.q:self.q+self.p]
+            phi = np.zeros((self.p, self.p))
+            r = psi/((1+psi**2)**0.5)
+            for k in range(self.p):
+                for i in range(k):
+                    phi[k,i] = phi[k-1,i] + r[k] * phi[k-1,k-i-1]
+                phi[k,k] = r[k]
+            constrained[self.q:self.q+self.p] = -phi[self.p-1,:]
+
+        # Transform the standard deviation parameters to be positive
+        if self.measurement_error:
+            constrained[-2] = unconstrained[-2]**2
+        constrained[-1] = unconstrained[-1]**2
+
+        return constrained
+    constrain = transform
+
+    def untransform(self, constrained):
+        """
+        Transform constrained parameters used in likelihood evaluation
+        to unconstrained parameters used by the optimizer
+
+        References
+        ----------
+
+        Monahan, John F. 1984.
+        "A Note on Enforcing Stationarity in
+        Autoregressive-moving Average Models."
+        Biometrika 71 (2) (August 1): 403-404.
+        """
+
+        unconstrained = np.zeros(constrained.shape)
+
+        # Untransform the MA parameters (theta) from invertible
+        if self.q > 0:
+            theta = np.zeros((self.q, self.q))
+            theta[self.q-1:] = constrained[:self.q]
+            for k in range(self.q-1,0,-1):
+                for i in range(k):
+                    theta[k-1,i] = (theta[k,i] - theta[k,k]*theta[k,k-i-1]) / (1 - theta[k,k]**2)
+            r = theta.diagonal()
+            x = r / ((1 - r**2)**0.5)
+            unconstrained[:self.q] = x
+
+        # Untransform the AR parameters (phi) from stationary
+        if self.p > 0:
+            phi = np.zeros((self.p, self.p))
+            phi[self.p-1:] = -constrained[self.q:self.q+self.p]
+            for k in range(self.p-1,0,-1): # 2,   1, 0
+                for i in range(k):         # 0,1; 0; None
+                    phi[k-1,i] = (phi[k,i] - phi[k,k]*phi[k,k-i-1]) / (1 - phi[k,k]**2)
+                    #phi[1,0] = (phi[2,0] - phi[2,2] * phi[2,1]) / (1 - phi[2,2]**2)
+                    #phi[1,1] = (phi[2,1] - phi[2,2] * phi[2,0]) / (1 - phi[2,2]**2)
+            r = phi.diagonal()
+            x = r / ((1 - r**2)**0.5)
+            unconstrained[self.q:self.q+self.p] = x
+            # r^2 = x^2 / (1 + x^2)
+            # r^2 = (1 - r^2) x^2
+            # x^2 = r^2 / (1 - r^2)
+            # x = r / (1 - r^2)**0.5
+
+
+        # Untransform the standard deviation
+        if self.measurement_error:
+            unconstrained[-2] = constrained[-2]**0.5
+        unconstrained[-1] = constrained[-1]**0.5
+
+        return unconstrained
+    unconstrain = untransform
+
+    def update(self, params, transformed=False):
+        if not transformed:
+            params = self.transform(params)
+        theta = params[:self.q]
+        self.H[0,1:,0] = np.r_[theta, [0]*(self.k-self.q-1)]
+
+        phi = params[self.q:self.q+self.p]
+        self.F[0] = np.r_[phi, [0]*(self.k-self.p)]
+
+        if self.measurement_error:
+            self.R[0,0] = params[-2]
+
+        self.Q[0,0] = params[-1]
