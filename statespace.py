@@ -74,7 +74,7 @@ class Model(object):
     def __init__(self, endog, exog=None, nstates=None, init=False, dtype=None,
                  A=None, H=None, mu=None, F=None, R=None, Q=None,
                  initial_state=None, initial_state_cov=None):
-        self.endog = np.asarray(endog, dtype=dtype, order="C")
+        self.endog = np.array(endog, copy=True, dtype=dtype, order="C")
         self.dtype = self.endog.dtype
         self.prefix = find_best_blas_type((self.endog,))[0]
         if self.endog.ndim == 1:
@@ -84,7 +84,7 @@ class Model(object):
         self.k = None
 
         if exog is not None:
-            self.exog = np.asarray(exog, dtype=dtype, order="C").T
+            self.exog = np.asarray(exog, copy=True, dtype=dtype, order="C").T
             self.r = self.exog.shape[0]
         else:
             self.exog = np.zeros((1, self.nobs), dtype=dtype, order="F")
