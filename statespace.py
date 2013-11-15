@@ -84,12 +84,11 @@ class Model(object):
         self.k = None
 
         if exog is not None:
-            self.exog = np.asarray(exog, copy=True, dtype=dtype, order="C").T
+            self.exog = np.array(exog, copy=True, dtype=dtype, order="C").T
             self.r = self.exog.shape[0]
         else:
-            self.exog = np.zeros((1, self.nobs), dtype=dtype, order="F")
-            self.r = 1
-            self._A = np.empty((self.n, 0))
+            self.exog = None
+            self.r = 0
 
         if nstates is not None:
             self.k = nstates
@@ -107,7 +106,8 @@ class Model(object):
             if nstates is None:
                 raise ValueError('Cannot initialize model variables if'
                                  ' `nstates` has not been set.')
-            self.A  = np.zeros((self.n, self.r), self.dtype, order="F")
+            if not self.r == 0:
+                self.A  = np.zeros((self.n, self.r), self.dtype, order="F")
             self.H  = np.zeros((self.n, self.k), self.dtype, order="F")
             self.mu = np.zeros((self.k, ),       self.dtype, order="F")
             self.F  = np.zeros((self.k, self.k), self.dtype, order="F")
@@ -151,16 +151,17 @@ class Model(object):
     @property
     def args(self):
         return (
-            self.endog, self.exog, self.A, self.H, self.mu, self.F, self.R,
-            self.Q, self.initial_state, self.initial_state_cov
+            self.endog, self.H, self.mu, self.F, self.R, self.Q,
+            self.exog, self.A, self.initial_state, self.initial_state_cov
         )
 
     @property
     def A(self):
-        if self._A is not None:
-            return self._A
-        else:
-            raise NotImplementedError
+        #if self._A is not None:
+        #    return self._A
+        #else:
+        #    raise NotImplementedError
+        return self._A
     @A.setter
     def A(self, value):
         _A = np.asarray(value, dtype=self.dtype, order="F")
@@ -412,16 +413,16 @@ class Results(object):
         self.params = params
         # Save the state space representation at params
         self.model.update(params, True)
-        (y, z, A, H, mu, F, R, Q,
+        (y, H, mu, F, R, Q, z, A,
          initial_state, initial_state_cov) = self.model.args
         self.y = y
-        self.z = z
-        self.A = A.copy()
         self.H = H.copy()
         self.mu = mu.copy()
         self.F = F.copy()
         self.R = R.copy()
         self.Q = Q.copy()
+        self.z = z
+        self.A = A.copy() if A is not None else None
         # Save Kalman Filter output
         self.state = np.asarray(state[:,1:])
         self.state_cov = np.asarray(state_cov[:,:,1:])
