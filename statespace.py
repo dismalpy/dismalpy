@@ -415,6 +415,11 @@ class Results(object):
         # Save the inputs
         self.model = model
         self.params = params
+        # Save the model parameters
+        self.nobs = model.nobs
+        self.n = model.n
+        self.k = model.k
+        self.r = model.r
         # Save the state space representation at params
         self.model.update(params, True)
         (y, H, mu, F, R, Q, z, A,
