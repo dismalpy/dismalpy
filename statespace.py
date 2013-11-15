@@ -131,6 +131,10 @@ class Model(object):
         if initial_state_cov is not None:
             self.initial_state_cov = initial_state_cov
 
+    @property
+    def start_params(self):
+        raise NotImplementedError
+
     def transform(self, params):
         return params
 
@@ -467,6 +471,22 @@ class ARMA(Model):
         idx = (idx[0]+1, idx[1])
         F[idx] = 1
         self.F = F
+
+    @property
+    def start_params(self):
+        """
+        Starting parameters for maximum likelihood estimation
+        """
+        X = np.concatenate(
+            [self.endog[:,self.p-i:-i] for i in range(1, self.p+1)], 0).T
+        phi_cmle = np.linalg.pinv(X).dot(self.endog[:,self.p:].T)
+        resids = self.endog[:,self.p:].T - X.dot(phi_cmle)
+        sigma = resids.std()
+
+        if self.measurement_error:
+            sigma = np.r_[1, sigma]
+
+        return np.r_[np.zeros(self.q,), phi_cmle[:,0], sigma**2]
 
     def transform(self, unconstrained):
         """
