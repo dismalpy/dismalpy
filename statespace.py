@@ -503,47 +503,17 @@ class ARMA(Model):
         """
         constrained = np.zeros(unconstrained.shape)
 
-        #
-        # y_0^(0) = 1
-
-        # k = 1
-        # y_1^(1) = r_1
-        # (since r_k \equiv y_k^(k))
-        #
-        # k = 2
-        # y_1^(2) = y_1^(1) + r_2 * y_1^(1)
-        #         = r_1     + r_2 * r_1
-        #         = r_1 * (1 + r_2)
-        # y_2^(2) = r_2
-        #
-        # k = 3
-        # y_1^(3) = y_1^(2)         + r_3 * y_2^(2)
-        #         = r_1 * (1 + r_2) + r_3 * r_2
-        # y_2^(3) = y_2^(2) + r_3 * y_1^(2)
-        #         = r_2     + r_3 * r_1 * (1 + r_2)
-        # y_3^(3) = r_3
-
         # Transform the MA parameters (theta) to be invertible
         if self.q > 0:
-            psi = unconstrained[:self.q]
-            theta = np.zeros((self.q, self.q))
-            r = psi/((1+psi**2)**0.5)
-            for k in range(self.q):
-                for i in range(k):
-                    theta[k,i] = theta[k-1,i] + r[k] * theta[k-1,k-i-1]
-                theta[k,k] = r[k]
-            constrained[:self.q] = theta[self.q-1,:]
+            constrained[:self.q] = constrain_stationary(
+                unconstrained[:self.q]
+            )
 
         # Transform the AR parameters (phi) to be stationary
         if self.p > 0:
-            psi = unconstrained[self.q:self.q+self.p]
-            phi = np.zeros((self.p, self.p))
-            r = psi/((1+psi**2)**0.5)
-            for k in range(self.p):
-                for i in range(k):
-                    phi[k,i] = phi[k-1,i] + r[k] * phi[k-1,k-i-1]
-                phi[k,k] = r[k]
-            constrained[self.q:self.q+self.p] = -phi[self.p-1,:]
+            constrained[self.q:self.q+self.p] = constrain_stationary(
+                unconstrained[self.q:self.q+self.p]
+            )
 
         # Transform the standard deviation parameters to be positive
         if self.measurement_error:
@@ -571,32 +541,15 @@ class ARMA(Model):
 
         # Untransform the MA parameters (theta) from invertible
         if self.q > 0:
-            theta = np.zeros((self.q, self.q))
-            theta[self.q-1:] = constrained[:self.q]
-            for k in range(self.q-1,0,-1):
-                for i in range(k):
-                    theta[k-1,i] = (theta[k,i] - theta[k,k]*theta[k,k-i-1]) / (1 - theta[k,k]**2)
-            r = theta.diagonal()
-            x = r / ((1 - r**2)**0.5)
-            unconstrained[:self.q] = x
+            unconstrained[:self.q] = unconstrain_stationary(
+                constrained[:self.q]
+            )
 
         # Untransform the AR parameters (phi) from stationary
         if self.p > 0:
-            phi = np.zeros((self.p, self.p))
-            phi[self.p-1:] = -constrained[self.q:self.q+self.p]
-            for k in range(self.p-1,0,-1): # 2,   1, 0
-                for i in range(k):         # 0,1; 0; None
-                    phi[k-1,i] = (phi[k,i] - phi[k,k]*phi[k,k-i-1]) / (1 - phi[k,k]**2)
-                    #phi[1,0] = (phi[2,0] - phi[2,2] * phi[2,1]) / (1 - phi[2,2]**2)
-                    #phi[1,1] = (phi[2,1] - phi[2,2] * phi[2,0]) / (1 - phi[2,2]**2)
-            r = phi.diagonal()
-            x = r / ((1 - r**2)**0.5)
-            unconstrained[self.q:self.q+self.p] = x
-            # r^2 = x^2 / (1 + x^2)
-            # r^2 = (1 - r^2) x^2
-            # x^2 = r^2 / (1 - r^2)
-            # x = r / (1 - r^2)**0.5
-
+            unconstrained[self.q:self.q+self.p] = unconstrain_stationary(
+                constrained[self.q:self.q+self.p]
+            )
 
         # Untransform the standard deviation
         if self.measurement_error:
@@ -619,3 +572,24 @@ class ARMA(Model):
             self.R[0,0] = params[-2]
 
         self.Q[0,0] = params[-1]
+
+def constrain_stationary(unconstrained):
+    n = unconstrained.shape[0]
+    y = np.zeros((n, n))
+    r = unconstrained/((1+unconstrained**2)**0.5)
+    for k in range(n):
+        for i in range(k):
+            y[k,i] = y[k-1,i] + r[k] * y[k-1,k-i-1]
+        y[k,k] = r[k]
+    return -y[n-1,:]
+
+def unconstrain_stationary(constrained):
+    n = constrained.shape[0]
+    y = np.zeros((n, n))
+    y[n-1:] = -constrained
+    for k in range(n-1,0,-1):
+        for i in range(k):
+            y[k-1,i] = (y[k,i] - y[k,k]*y[k,k-i-1]) / (1 - y[k,k]**2)
+    r = y.diagonal()
+    x = r / ((1 - r**2)**0.5)
+    return x
