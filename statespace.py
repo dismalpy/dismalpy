@@ -148,10 +148,6 @@ class Model(object):
         kalman_filter = prefix_kalman_filter_map[self.prefix]
         return Results(self, params, *kalman_filter(*self.args))
 
-    def is_stationary(self, params, transformed=False):
-        self.update(params, transformed)
-        return np.max(np.abs(np.linalg.eigvals(self.F))) < 1
-
     @property
     def args(self):
         return (
@@ -492,6 +488,11 @@ class ARMA(Model):
             sigma = np.r_[1, sigma]
 
         return np.r_[np.zeros(self.q,), phi_cmle[:,0], sigma**2]
+
+    def is_stationary(self, params=None, transformed=False):
+        if params is not None:
+            self.update(params, transformed)
+        return np.max(np.abs(np.linalg.eigvals(self.F))) < 1
 
     def transform(self, unconstrained):
         """
