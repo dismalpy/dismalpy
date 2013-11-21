@@ -45,6 +45,13 @@ class Representation(object):
         y_t = A z_t + H_t \beta_t + e_t \\
         beta_t = \mu + F \beta_t + G v_t^* \\
 
+    along with the definition of the shocks
+
+    .. math::
+
+        e_t \sim N(0, R) \\
+        v_t^* \sim N(0, Q^*) \\
+
     The dimensions of the matrices are:
 
     A  : :math:`n \times r`
