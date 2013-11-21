@@ -45,7 +45,7 @@ class TestClark1987(ss.Model):
         )
         data['lgdp'] = np.log(data['GDP'])
 
-        super(TestClark1987, self).__init__(data['lgdp'], nstates=4, init=True)
+        super(TestClark1987, self).__init__(data['lgdp'], nstates=4)
         self.H[:,:,0] = [1,1,0,0]
         self.F[([0,0,1,1,2,3], [0,3,1,2,1,3])] = [1,1,0,0,1,1]
         
@@ -149,7 +149,7 @@ class TestClark1989(ss.Model):
         data['GDP'] = np.log(data['GDP'])
         data['UNEMP'] = (data['UNEMP']/100)
 
-        super(TestClark1989, self).__init__(data, nstates=6, init=True)
+        super(TestClark1989, self).__init__(data, nstates=6)
         self.H[:,:,0] = [[1,1,0,0,0,0],[0,0,0,0,0,1]]
         self.F[([0,0,1,1,2,3,4,5], [0,4,1,2,1,2,4,5])] = [1,1,0,0,1,1,1,1]
         
@@ -259,8 +259,7 @@ class TestKimNelson1989(ss.Model):
             columns=['Qtr', 'm1', 'dint', 'inf', 'surpl', 'm1lag']
         )
 
-        super(TestKimNelson1989, self).__init__(data['m1'], nstates=5,
-                                                init=True)
+        super(TestKimNelson1989, self).__init__(data['m1'], nstates=5)
         self.H = np.c_[
             np.ones(data['dint'].shape),
             data['dint'],

@@ -17,6 +17,7 @@ Princeton, N.J.: Princeton University Press.
 """
 
 from __future__ import division
+import warnings
 import numpy as np
 from scipy.linalg.blas import find_best_blas_type
 from kalman.kalman_filter import (
@@ -32,34 +33,350 @@ prefix_kalman_filter_map = {
     'c': ckalman_filter, 'z': zkalman_filter
 }
 
-class Model(object):
+class Representation(object):
     """
-    A general state space model
+    State space representation of a time series process
+
+    A class to hold and facilitate manipulation of the matrices describing the
+    state space process:
+
+    .. math::
+
+        y_t = A z_t + H_t \beta_t + e_t \\
+        beta_t = \mu + F \beta_t + G v_t^* \\
+
+    The dimensions of the matrices are:
+
+    A  : :math:`n \times r`
+    H  : :math:`n \times k` or `n \times k \times T`
+    mu : :math:`k \times 1`
+    F  : :math:`k \times k`
+    R  : :math:`n \times n`
+    G  : :math:`k \times g`
+    Q  : :math:`g \times g`
+
+    This class does not deal with the _data_ of the state-space process.
+
+    Parameters
+    ----------
+    nobs : int
+        The length (T) of the described time-series process.
+    nendog : int
+        The dimension (n) of the endogenous vector.
+    nstates : int
+        The dimension (k) of the state vector.
+    nexog : int
+        The dimension (r) of the vector of weakly exogenous explanatory
+        variables.
+    nposdef : int
+        The dimension (g) of a guaranteed positive definite covariance matrix
+        describing the shocks in the measurement equation. It must be that
+        :math:`g \le k`.
+    dtype : data-type, optional
+        The desired data-type for the arrays.
+    A, H, mu, F, R, G, Q : array_like, optional
+        Input arrays describing the state-space process.
+    initial_state, initial_state_cov : array_like, optional
+        Initializing values for the state and covariance matrix (useful when
+        running the Kalman filter).
+
+    """
+    def __init__(self, nobs, nendog, nstates, nexog, nposdef, dtype,
+                 A=None, H=None, mu=None, F=None, R=None, G=None, Q=None,
+                 initial_state=None, initial_state_cov=None):
+        # Dimensions
+        self.T = self.nobs    = nobs
+        self.n = self.nendog  = nendog
+        self.k = self.nstates = nstates
+        self.r = self.nexog   = nexog
+        self.g = self.nposdef = nposdef
+
+        # Data type for representation matrices
+        self.dtype = dtype
+
+        # Representation matrices
+        self.A = A       # n x r
+        self.H = H       # n x k   or   n x k x nobs (for TVP)
+        self.mu = mu     # k x 0
+        self.F = F       # k x k
+        self.R = R       # n x n
+        self.G = G       # k x g
+        self.Q = Q       # g x g
+
+        # Initial values of the state vector and covariance matrix
+        self.initial_state = initial_state
+        self.initial_state_cov = initial_state_cov
+
+        # Record the shapes of all of our matrices
+        self.shapes = {
+            'A':  (self.n, self.r),
+            'H':  (self.n, self.k, self.nobs),
+            'Ht': (self.n, self.k),
+            'mu': (self.k, ),
+            'F':  (self.k, self.k),
+            'R':  (self.n, self.n),
+            'G':  (self.k, self.g),
+            'Q':  (self.g, self.g)
+        }
+
+    @property
+    def A(self):
+        # A is special because we often won't have it
+        if hasattr(self, '_A'):
+            return self._A
+        else:
+            raise None
+    @A.setter
+    def A(self, value):
+        if value is None:
+            _A = None
+        else:
+            _A = np.asarray(value, dtype=self.dtype, order="F")
+            if not _A.shape == (self.n, self.r):
+                raise ValueError('Invalid dimensions for A matrix. Requires'
+                                 ' shape (%d, %d), got shape %s' %
+                                 (self.n, self.r, str(_A.shape)))
+            if not hasattr(self, '_A') or self._A is None:
+                self._A  = np.zeros((self.n, self.r), self.dtype, order="F")
+        self._A = _A
+
+    @property
+    def H(self):
+        if hasattr(self, '_H') and self._H is not None:
+            return self._H
+        else:
+            raise NotImplementedError
+    @H.setter
+    def H(self, value):
+        if value is None:
+            _H = None
+        else:
+            _H = np.asarray(value, dtype=self.dtype, order="F")
+            if _H.ndim == 1 and self.n == 1 and _H.shape[0] == self.k:
+                _H = _H[None,:]
+            if not _H.ndim in [2,3]:
+                raise ValueError('Invalid value for H matrix. Requires a'
+                                 ' 2-dimensional array, got %d dimensions' %
+                                 _H.ndim)
+            if _H.ndim == 3 and not _H.shape[2] in [1, self.nobs]:
+                raise ValueError('Invalid dimensions for time-varying H matrix.'
+                                 ' Requires shape (*,*,%d), got %s' %
+                                 (self.nobs, str(_H.shape)))
+            if not _H.shape[0] == self.n:
+                raise ValueError('Invalid dimensions for H matrix. Requires'
+                                 ' %d rows, got %d' % (self.n, _H.shape[0]))
+            if not _H.shape[1] == self.k:
+                raise ValueError('Invalid dimensions for H matrix. Requires'
+                                 ' %d columns, got %d' % (self.k, _H.shape[1]))
+            if _H.ndim == 2:
+                _H = np.array(_H[:,:,None], order="F")
+            if not hasattr(self, '_H') or self._H is None:
+                self._H  = np.zeros((self.n, self.k), self.dtype, order="F")
+        self._H = _H
+
+    @property
+    def mu(self):
+        if hasattr(self, '_mu') and self._mu is not None:
+            return self._mu
+        else:
+            raise NotImplementedError
+    @mu.setter
+    def mu(self, value):
+        if value is None:
+            _mu = None
+        else:
+            _mu = np.asarray(value, dtype=self.dtype, order="F")
+            if _mu.ndim > 1:
+                raise ValueError('Invalid mu vector. Requires a'
+                                 ' 1-dimensional array, got %d dimensions'
+                                 % _mu.ndim)
+            if not _mu.shape[0] == self.k:
+                raise ValueError('Invalid dimensions for mu vector. Requires'
+                                 ' %d rows, got %d' % (self.k, _mu.shape[0]))
+            if not hasattr(self, '_mu') or self._mu is None:
+                self._mu = np.zeros((self.k, ), self.dtype, order="F")
+        self._mu = _mu
+
+    @property
+    def F(self):
+        if hasattr(self, '_F') and self._F is not None:
+            return self._F
+        else:
+            raise NotImplementedError
+    @F.setter
+    def F(self, value):
+        if value is None:
+            _F = None
+        else:
+            _F = np.asarray(value, dtype=self.dtype, order="F")
+            if not _F.ndim == 2:
+                raise ValueError('Invalid value for F matrix. Requires a'
+                                 ' 2-dimensional array, got %d dimensions' %
+                                 _F.ndim)
+            if not _F.shape[0] == _F.shape[1]:
+                raise ValueError('Invalid F matrix. Requires a square matrix, got'
+                                 ' shape %s.' % str(_F.shape))
+            if not _F.shape[0] == self.k:
+                raise ValueError('Invalid dimensions for F matrix. Requires'
+                                 ' %d rows and columns, got %d' %
+                                 (self.k, _F.shape[0]))
+            if not hasattr(self, '_F') or self._F is None:
+                self._F  = np.zeros((self.k, self.k), self.dtype, order="F")
+        self._F = _F
+
+    @property
+    def R(self):
+        if hasattr(self, '_R') and self._R is not None:
+            return self._R
+        else:
+            raise NotImplementedError
+    @R.setter
+    def R(self, value):
+        if value is None:
+            _R = None
+        else:
+            _R = np.asarray(value, dtype=self.dtype, order="F")
+            if not _R.ndim == 2:
+                raise ValueError('Invalid value for R matrix. Requires a'
+                                 ' 2-dimensional array, got %d dimensions' %
+                                 _R.ndim)
+            if not _R.shape[0] == _R.shape[1]:
+                raise ValueError('Invalid R matrix. Requires a square matrix, got'
+                                 ' shape %s.' % str(_R.shape))
+            if not _R.shape[0] == self.n:
+                raise ValueError('Invalid dimensions for R matrix. Requires'
+                                 ' %d rows and columns, got %d' %
+                                 (self.n, _R.shape[0]))
+            if not hasattr(self, '_R') or self._R is None:
+                self._R  = np.zeros((self.n, self.n), self.dtype, order="F")
+        self._R = _R
+
+    @property
+    def G(self):
+        if hasattr(self, '_G') and self._G is not None:
+            return self._G
+        else:
+            raise NotImplementedError
+    @G.setter
+    def G(self, value):
+        if value is None:
+            _G = None
+        else:
+            _G = np.asarray(value, dtype=self.dtype, order="F")
+            if not _G.ndim == 2:
+                raise ValueError('Invalid value for G matrix. Requires a'
+                                 ' 2-dimensional array, got %d dimensions' %
+                                 _G.ndim)
+            if not _G.shape == (self.k, self.g):
+                raise ValueError('Invalid dimensions for G matrix. Requires'
+                                 ' (%d, %d) got %s' %
+                                 (self.k, self.g, str(_G.shape)))
+            if not hasattr(self, '_G') or self._G is None:
+                self._G  = np.zeros((self.k, self.g), self.dtype, order="F")
+        self._G = _G
+
+    @property
+    def Q(self):
+        if self._Q is not None:
+            return self._Q
+        else:
+            raise NotImplementedError
+    @Q.setter
+    def Q(self, value):
+        if value is None:
+            _Q = None
+        else:
+            _Q = np.asarray(value, dtype=self.dtype, order="F")
+            if not _Q.ndim == 2:
+                raise ValueError('Invalid value for Q matrix. Requires a'
+                                 ' 2-dimensional array, got %d dimensions' %
+                                 _Q.ndim)
+            if not _Q.shape[0] == _Q.shape[1]:
+                raise ValueError('Invalid Q matrix. Requires a square matrix, got'
+                                 ' shape %s.' % str(_Q.shape))
+            if not _Q.shape[0] == self.k:
+                raise ValueError('Invalid dimensions for Q matrix. Requires'
+                                 ' %d rows and columns, got %d' %
+                                 (self.k, _Q.shape[0]))
+            if not hasattr(self, '_Q') or self._Q is None:
+                self._Q  = np.zeros((self.k, self.k), self.dtype, order="F")
+        self._Q = _Q
+
+    @property
+    def initial_state(self):
+        if hasattr(self, '_initial_state'):
+            return self._initial_state
+        else:
+            raise None
+    @initial_state.setter
+    def initial_state(self, value):
+        if value is None:
+            _initial_state = None
+        else:
+            _initial_state = np.asarray(value, dtype=self.dtype, order="F")
+            if _initial_state.ndim > 1:
+                raise ValueError('Invalid initial state vector. Requires a'
+                                 ' 1-dimensional array, got %d dimensions'
+                                 % _initial_state.ndim)
+            if not _initial_state.shape[0] == self.k:
+                raise ValueError('Invalid dimensions for initial state vector.'
+                                 ' Requires %d rows, got %d' %
+                                 (self.k, _initial_state.shape[0]))
+            if not hasattr(self, '_initial_state') or self._initial_state is None:
+                self._initial_state = np.zeros((self.k,), self.dtype, order="F")
+        self._initial_state = _initial_state
+
+    @property
+    def initial_state_cov(self):
+        if hasattr(self, '_initial_state_cov'):
+            return self._initial_state_cov
+        else:
+            raise None
+    @initial_state_cov.setter
+    def initial_state_cov(self, value):
+        if value is None:
+            _initial_state_cov = None
+        else:
+            _initial_state_cov = np.asarray(value, dtype=self.dtype, order="F")
+            if not _initial_state_cov.ndim == 2:
+                raise ValueError('Invalid value for initial state covariance'
+                                 ' matrix. Requires a 2-dimensional array, got %d'
+                                 ' dimensions' % _initial_state_cov.ndim)
+            if not _initial_state_cov.shape[0] == _initial_state_cov.shape[1]:
+                raise ValueError('Invalid initial state covariance matrix.'
+                                 ' Requires a square matrix, got shape %s.' %
+                                 str(_initial_state_cov.shape))
+            if not _initial_state_cov.shape[0] == self.k:
+                raise ValueError('Invalid dimensions for initial state covariance'
+                                 ' matrix. Requires %d rows and columns, got %d' %
+                                 (self.k, _initial_state_cov.shape[0]))
+            if not hasattr(self, '_initial_state_cov') or self._initial_state_cov is None:
+                self._initial_state_cov = np.zeros((self.k, self.k), self.dtype, order="F")
+        self._initial_state_cov = _initial_state_cov
+
+class Model(Representation):
+    """
+    Model for the estimation of the parameters of a state-space representation
 
     Parameters
     ----------
     endog : array-like
         The observed endogenous vector or matrix, with shape (nobs, n).
-    nstates : integer
-        The dimension of the state vector.
     exog : array-like, optional
         The observed (weakly) exogenous variables, with shape (nobs, r).
     nstates : integer, optional
         The length of the state vector.
-    init : bool, optional
-        Whether or not to initialize the model arrays A,H,mu,F,R,Q to be
-        arrays of zeros.
-        Defaults to False, so that if one is not specifically set, an exception
-        will be raised.
-        Requires `nstates` to be set.
     dtype : data-type, optional
         The desired data-type for the arrays.  If not given, then
         the type will be determined from the `endog` matrix.
+    fill : bool, optional
+        Whether or not to pre-fill all of the `Representation` matrices with
+        zeros. Default is True so that after instantiation, elements of the
+        matrices can be set using slice notation.
 
     Notes
     -----
-    In addition to being a holder for the state space representation values, it
-    also handles some annoyances:
+    This class handles some annoyances with holding state space data:
 
     - C vs Fortran ordering of arrays in memory. The BLAS/LAPACK functions
       called in the kalman_filter.pyx module require Fortran (column-major)
@@ -67,73 +384,58 @@ class Model(object):
     - Maximum Likelihood Estimation of a state space model via `scipy.optimize`
       functions will drift into a complex parameter space to estimate the
       gradient and hessian. This means that the log likelihood function will
-      need to intelligently call `kalman_filter.kalman_filter` vs
-      `kalman_filter.kalman_filter_complex`, and make sure the arguments (
+      need to intelligently call `kalman_filter.dkalman_filter` vs
+      `kalman_filter.zkalman_filter`, and make sure the arguments (
       including e.g. the data `y` and `z`) are of the appropriate type.
     """
-    def __init__(self, endog, exog=None, nstates=None, init=False, dtype=None,
-                 A=None, H=None, mu=None, F=None, R=None, Q=None,
-                 initial_state=None, initial_state_cov=None):
+    def __init__(self, endog, nstates, nposdef=None, exog=None, dtype=None,
+                 fill=True, **kwargs):
+
+        # Standardize endogenous variables array
         self.endog = np.array(endog, copy=True, dtype=dtype, order="C")
-        self.dtype = self.endog.dtype
-        self.prefix = find_best_blas_type((self.endog,))[0]
         if self.endog.ndim == 1:
             self.endog.shape = (self.endog.shape[0], 1)
         self.endog = self.endog.T
-        self.n, self.nobs = self.endog.shape
-        self.k = None
+        nendog, nobs = self.endog.shape
+        dtype = self.endog.dtype
 
+        # Get the BLAS prefix associated with the endog datatype: s,d,c,z
+        self.prefix = find_best_blas_type((self.endog,))[0]
+
+        # Standardize weakly exogenous explanatory variables array
         if exog is not None:
             self.exog = np.array(exog, copy=True, dtype=dtype, order="C").T
-            self.r = self.exog.shape[0]
+            nexog = self.exog.shape[0]
         else:
             self.exog = None
-            self.r = 0
+            nexog = 0
 
-        if nstates is not None:
-            self.k = nstates
+        # If we're not given the size of the positive definite covariance
+        # matrix, assume that it is equal to `nstates`, and that the G matrix
+        # is then just the identity matrix.
+        if nposdef is None and 'G' in kwargs:
+            nposdef = kwargs['G'].shape[1]
+        if nposdef is None:
+            nposdef = nstates
+            kwargs['G'] = np.eye(nposdef)
 
-        self._A = None
-        self._H = None
-        self._mu = None
-        self._F = None
-        self._R = None
-        self._Q = None
-        self._initial_state = None
-        self._initial_state_cov = None
+        # Construct the state-space representation
+        super(Model, self).__init__(nobs, nendog, nstates, nexog, nposdef,
+                                    dtype, **kwargs)
 
-        if init:
-            if nstates is None:
-                raise ValueError('Cannot initialize model variables if'
-                                 ' `nstates` has not been set.')
-            if not self.r == 0:
-                self.A  = np.zeros((self.n, self.r), self.dtype, order="F")
-            self.H  = np.zeros((self.n, self.k), self.dtype, order="F")
-            self.mu = np.zeros((self.k, ),       self.dtype, order="F")
-            self.F  = np.zeros((self.k, self.k), self.dtype, order="F")
-            self.R  = np.zeros((self.n, self.n), self.dtype, order="F")
-            self.Q  = np.zeros((self.k, self.k), self.dtype, order="F")
+        # By default, set any matrices that are not given to be appropriately
+        # sized zero matrices
+        if fill:
+            for key in ['A', 'mu', 'F', 'R', 'G', 'Q']:
+                if not key in kwargs or kwargs[key] is None:
+                    setattr(self, key, np.zeros(self.shapes[key], self.dtype,
+                                                order="F"))
+            if not 'H' in kwargs or kwargs['H'] is None:
+                setattr(self, 'H', np.zeros(self.shapes['Ht'], self.dtype,
+                                            order="F"))
 
-        if A is not None:
-            self.A = A
-        if H is not None:
-            self.H = H
-        if mu is not None:
-            self.mu = mu
-        if F is not None:
-            self.F = F
-        if R is not None:
-            self.R = R
-        if Q is not None:
-            self.Q = Q
-        if initial_state is not None:
-            self.initial_state = initial_state
-        if initial_state_cov is not None:
-            self.initial_state_cov = initial_state_cov
-
-    @property
-    def start_params(self):
-        raise NotImplementedError
+    def initialize(self):
+        pass
 
     def transform(self, params):
         return params
@@ -149,210 +451,19 @@ class Model(object):
         return Results(self, params, *kalman_filter(*self.args))
 
     @property
+    def start_params(self):
+        raise NotImplementedError
+
+    @property
     def args(self):
         return (
             self.endog, self.H, self.mu, self.F, self.R, self.Q,
             self.exog, self.A, self.initial_state, self.initial_state_cov
         )
 
-    @property
-    def A(self):
-        #if self._A is not None:
-        #    return self._A
-        #else:
-        #    raise NotImplementedError
-        return self._A
-    @A.setter
-    def A(self, value):
-        _A = np.asarray(value, dtype=self.dtype, order="F")
-        if not _A.shape == (self.n, self.r):
-            raise ValueError('Invalid dimensions for A matrix. Requires'
-                             ' shape (%d, %d), got shape %s' %
-                             (self.n, self.r, str(_A.shape)))
-        if self._A is None:
-            self._A  = np.zeros((self.n, self.r), self.dtype, order="F")
-        self._A = _A
-
-    @property
-    def H(self):
-        if self._H is not None:
-            return self._H
-        else:
-            raise NotImplementedError
-    @H.setter
-    def H(self, value):
-        _H = np.asarray(value, dtype=self.dtype, order="F")
-        if not _H.ndim in [2,3]:
-            raise ValueError('Invalid value for H matrix. Requires a'
-                             ' 2-dimensional array, got %d dimensions' %
-                             _H.ndim)
-        if _H.ndim == 3 and not _H.shape[2] in [1, self.nobs]:
-            raise ValueError('Invalid dimensions for time-varying H matrix.'
-                             ' Requires shape (*,*,%d), got %s' %
-                             (self.nobs, str(_H.shape)))
-        if not _H.shape[0] == self.n:
-            raise ValueError('Invalid dimensions for H matrix. Requires'
-                             ' %d rows, got %d' % (self.n, _H.shape[0]))
-        if self.k is not None and not _H.shape[1] == self.k:
-            raise ValueError('Invalid dimensions for H matrix. Requires'
-                             ' %d columns, got %d' % (self.k, _H.shape[1]))
-        else:
-            self.k = _H.shape[1]
-
-        if _H.ndim == 2:
-            _H = np.array(_H[:,:,None], order="F")
-
-        if self._H is None:
-            self._H  = np.zeros((self.n, self.k), self.dtype, order="F")
-        self._H = _H
-
-    @property
-    def mu(self):
-        if self._mu is not None:
-            return self._mu
-        else:
-            raise NotImplementedError
-    @mu.setter
-    def mu(self, value):
-        _mu = np.asarray(value, dtype=self.dtype, order="F")
-        if _mu.ndim > 1:
-            raise ValueError('Invalid mu vector. Requires a'
-                             ' 1-dimensional array, got %d dimensions'
-                             % _mu.ndim)
-        if self.k is not None and not _mu.shape[0] == self.k:
-            raise ValueError('Invalid dimensions for mu vector. Requires'
-                             ' %d rows, got %d' % (self.k, _mu.shape[0]))
-        else:
-            self.k = _mu.shape[0]
-
-        if self._mu is None:
-            self._mu = np.zeros((self.k, ),       self.dtype, order="F")
-        self._mu = _mu
-
-    @property
-    def F(self):
-        if self._F is not None:
-            return self._F
-        else:
-            raise NotImplementedError
-    @F.setter
-    def F(self, value):
-        _F = np.asarray(value, dtype=self.dtype, order="F")
-        if not _F.ndim == 2:
-            raise ValueError('Invalid value for F matrix. Requires a'
-                             ' 2-dimensional array, got %d dimensions' %
-                             _F.ndim)
-        if not _F.shape[0] == _F.shape[1]:
-            raise ValueError('Invalid F matrix. Requires a square matrix, got'
-                             ' shape %s.' % str(_F.shape))
-        if self.k is not None and not _F.shape[0] == self.k:
-            raise ValueError('Invalid dimensions for F matrix. Requires'
-                             ' %d rows and columns, got %d' %
-                             (self.k, _F.shape[0]))
-        else:
-            self.k = _F.shape[0]
-
-        if self._F is None:
-            self._F  = np.zeros((self.k, self.k), self.dtype, order="F")
-        self._F = _F
-
-    @property
-    def R(self):
-        if self._R is not None:
-            return self._R
-        else:
-            raise NotImplementedError
-    @R.setter
-    def R(self, value):
-        _R = np.asarray(value, dtype=self.dtype, order="F")
-        if not _R.ndim == 2:
-            raise ValueError('Invalid value for R matrix. Requires a'
-                             ' 2-dimensional array, got %d dimensions' %
-                             _R.ndim)
-        if not _R.shape[0] == _R.shape[1]:
-            raise ValueError('Invalid R matrix. Requires a square matrix, got'
-                             ' shape %s.' % str(_R.shape))
-        if not _R.shape[0] == self.n:
-            raise ValueError('Invalid dimensions for R matrix. Requires'
-                             ' %d rows and columns, got %d' %
-                             (self.n, _R.shape[0]))
-
-        if self._R is None:
-            self._R  = np.zeros((self.n, self.n), self.dtype, order="F")
-        self._R = _R
-
-    @property
-    def Q(self):
-        if self._Q is not None:
-            return self._Q
-        else:
-            raise NotImplementedError
-    @Q.setter
-    def Q(self, value):
-        _Q = np.asarray(value, dtype=self.dtype, order="F")
-        if not _Q.ndim == 2:
-            raise ValueError('Invalid value for Q matrix. Requires a'
-                             ' 2-dimensional array, got %d dimensions' %
-                             _Q.ndim)
-        if not _Q.shape[0] == _Q.shape[1]:
-            raise ValueError('Invalid Q matrix. Requires a square matrix, got'
-                             ' shape %s.' % str(_Q.shape))
-        if self.k is not None and not _Q.shape[0] == self.k:
-            raise ValueError('Invalid dimensions for Q matrix. Requires'
-                             ' %d rows and columns, got %d' %
-                             (self.k, _Q.shape[0]))
-        else:
-            self.k = _Q.shape[0]
-
-        if self._Q is None:
-            self._Q  = np.zeros((self.k, self.k), self.dtype, order="F")
-        self._Q = _Q
-
-    @property
-    def initial_state(self):
-        return self._initial_state
-
-    @initial_state.setter
-    def initial_state(self, value):
-        _initial_state = np.asarray(value, dtype=self.dtype, order="F")
-        if _initial_state.ndim > 1:
-            raise ValueError('Invalid initial state vector. Requires a'
-                             ' 1-dimensional array, got %d dimensions'
-                             % _initial_state.ndim)
-        if self.k is not None and not _initial_state.shape[0] == self.k:
-            raise ValueError('Invalid dimensions for initial state vector.'
-                             ' Requires %d rows, got %d' %
-                             (self.k, _initial_state.shape[0]))
-        else:
-            self.k = _initial_state.shape[0]
-        self._initial_state = _initial_state
-
-    @property
-    def initial_state_cov(self):
-        return self._initial_state_cov
-
-    @initial_state_cov.setter
-    def initial_state_cov(self, value):
-        _initial_state_cov = np.asarray(value, dtype=self.dtype, order="F")
-        if not _initial_state_cov.ndim == 2:
-            raise ValueError('Invalid value for initial state covariance'
-                             ' matrix. Requires a 2-dimensional array, got %d'
-                             ' dimensions' % _initial_state_cov.ndim)
-        if not _initial_state_cov.shape[0] == _initial_state_cov.shape[1]:
-            raise ValueError('Invalid initial state covariance matrix.'
-                             ' Requires a square matrix, got shape %s.' %
-                             str(_initial_state_cov.shape))
-        if self.k is not None and not _initial_state_cov.shape[0] == self.k:
-            raise ValueError('Invalid dimensions for initial state covariance'
-                             ' matrix. Requires %d rows and columns, got %d' %
-                             (self.k, _initial_state_cov.shape[0]))
-        else:
-            self.k = _initial_state_cov.shape[0]
-        self._initial_state_cov = _initial_state_cov
-
 class Estimator(object):
     """
-    A state space estimation class
+    Helper class for estimation of state space
 
     Parameters
     ----------
@@ -452,8 +563,7 @@ class ARMA(Model):
 
         self.measurement_error = measurement_error
 
-        super(ARMA, self).__init__(endog, exog, nstates=k, dtype=dtype,
-                                   A=A, init=True)
+        super(ARMA, self).__init__(endog, k, exog=exog, dtype=dtype, A=A)
 
         # Exclude VARMA cases
         if not self.n == 1:
