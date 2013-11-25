@@ -14,7 +14,10 @@ from numpy.distutils.system_info import get_info
 #              libraries=['blas','lapack']),
 #    Extension("kalman_filter", ["kalman_filter.pyx"])
 #])
-ext_modules = [Extension("kalman_filter", ["kalman_filter.pyx"])]
+ext_modules = [
+    Extension("kalman_filter", ["kalman_filter.pyx"]),
+    Extension("dkalman_filter", ["dkalman_filter.pyx"]),
+]
 
 setup(
   name = 'Markov Switching Model Tools',
