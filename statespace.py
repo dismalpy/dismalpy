@@ -464,7 +464,7 @@ class Model(Representation):
     @property
     def args(self):
         return (
-            self.endog, self.H, self.mu, self.F, self.R, self.Q,
+            self.endog, self.H, self.mu, self.F, self.R, self.G, self.Q,
             self.exog, self.A, self.initial_state, self.initial_state_cov
         )
 
@@ -537,13 +537,14 @@ class Results(object):
         self.r = model.r
         # Save the state space representation at params
         self.model.update(params, True)
-        (y, H, mu, F, R, Q, z, A,
+        (y, H, mu, F, R, G, Q, z, A,
          initial_state, initial_state_cov) = self.model.args
         self.y = y
         self.H = H.copy()
         self.mu = mu.copy()
         self.F = F.copy()
         self.R = R.copy()
+        self.G = G.copy()
         self.Q = Q.copy()
         self.z = z
         self.A = A.copy() if A is not None else None
@@ -593,6 +594,9 @@ class ARMA(Model):
         idx = (idx[0]+1, idx[1])
         F[idx] = 1
         self.F = F
+
+        # Initialize the G matrix as the identity matrix
+        self.G = np.eye(self.k)
 
     @property
     def start_params(self):
