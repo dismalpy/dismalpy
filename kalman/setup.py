@@ -16,6 +16,7 @@ from numpy.distutils.system_info import get_info
 #])
 ext_modules = [
     Extension("kalman_filter", ["kalman_filter.pyx"]),
+    Extension("kalman_smoother", ["kalman_smoother.pyx"]),
     Extension("dkalman_filter", ["dkalman_filter.pyx"]),
 ]
 
