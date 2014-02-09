@@ -525,7 +525,8 @@ class Estimator(object):
 class Results(object):
     def __init__(self, model, params, state, state_cov, est_state,
                  est_state_cov, forecast, prediction_error,
-                 prediction_error_cov, gain, loglikelihood):
+                 prediction_error_cov, inverse_prediction_error_cov,
+                 gain, loglikelihood):
         # Save the inputs
         self.model = model
         self.params = params
@@ -554,6 +555,9 @@ class Results(object):
         self.forecast = np.asarray(forecast[:,1:])
         self.prediction_error = np.asarray(prediction_error[:,1:])
         self.prediction_error_cov = np.asarray(prediction_error_cov[:,:1:])
+        self.inverse_prediction_error_cov = np.asarray(
+            inverse_prediction_error_cov[:,:1:]
+        )
         self.gain = np.asarray(gain[:,:,1:])
         self.loglikelihood = np.asarray(loglikelihood[1:])
 
