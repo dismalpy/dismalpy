@@ -54,13 +54,13 @@ class Representation(object):
 
     The dimensions of the matrices are:
 
-    A  : :math:`n \times r`
-    H  : :math:`n \times k` or `n \times k \times T`
-    mu : :math:`k \times 1`
-    F  : :math:`k \times k`
-    R  : :math:`n \times n`
-    G  : :math:`k \times g`
-    Q  : :math:`g \times g`
+    A   : :math:`n \times r`
+    H   : :math:`n \times k` or `n \times k \times T`
+    mu  : :math:`k \times 1`
+    F   : :math:`k \times k`
+    R   : :math:`n \times n`
+    G   : :math:`k \times g`
+    Q^* : :math:`g \times g`
 
     This class does not deal with the _data_ of the state-space process.
 
@@ -301,12 +301,12 @@ class Representation(object):
             if not _Q.shape[0] == _Q.shape[1]:
                 raise ValueError('Invalid Q matrix. Requires a square matrix, got'
                                  ' shape %s.' % str(_Q.shape))
-            if not _Q.shape[0] == self.k:
+            if not _Q.shape[0] == self.g:
                 raise ValueError('Invalid dimensions for Q matrix. Requires'
                                  ' %d rows and columns, got %d' %
-                                 (self.k, _Q.shape[0]))
+                                 (self.g, _Q.shape[0]))
             if not hasattr(self, '_Q') or self._Q is None:
-                self._Q  = np.zeros((self.k, self.k), self.dtype, order="F")
+                self._Q  = np.zeros((self.g, self.g), self.dtype, order="F")
         self._Q = _Q
 
     @property
@@ -575,7 +575,11 @@ class ARMA(Model):
 
         self.measurement_error = measurement_error
 
-        super(ARMA, self).__init__(endog, k, exog=exog, dtype=dtype, A=A)
+        # Initialize the G matrix shape
+        g = 1
+
+        super(ARMA, self).__init__(endog, k, exog=exog, nposdef=g, dtype=dtype,
+                                   A=A)
 
         # Exclude VARMA cases
         if not self.n == 1:
@@ -595,8 +599,10 @@ class ARMA(Model):
         F[idx] = 1
         self.F = F
 
-        # Initialize the G matrix as the identity matrix
-        self.G = np.eye(self.k)
+        # Initialize the G matrix as a (k x 1) matrix [1, 0, ..., 0]
+        G = np.zeros((k,1))
+        G[0,0] = 1
+        self.G = G
 
     @property
     def start_params(self):
