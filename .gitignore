@@ -1,5 +1,9 @@
 # Python
-.pyc
+*.pyc
+
+# Cython
+*.c
+*.so
 
 # IPython Notebooks
 .ipynb_checkpoints
