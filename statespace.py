@@ -2,6 +2,7 @@
 State Space Models
 
 Author: Chad Fulton
+License: Simplified-BSD
 
 References
 ----------

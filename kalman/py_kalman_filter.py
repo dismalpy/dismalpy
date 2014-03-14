@@ -1,3 +1,11 @@
+"""
+Multivariate Kalman Filter (Python)
+
+Author: Chad Fulton
+License: Simplified-BSD
+
+"""
+
 import numpy as np
 
 def py_kalman_filter(y,  # T+1xn    (data: endogenous, observed)

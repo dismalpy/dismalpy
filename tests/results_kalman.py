@@ -1,6 +1,9 @@
 """
 Results for Kalman Filter
 
+Author: Chad Fulton
+License: Simplified-BSD
+
 References
 ----------
 
