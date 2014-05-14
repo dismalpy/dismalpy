@@ -24,7 +24,7 @@ cdef extern from "complex.h":
 cdef extern from "capsule.h":
     void *Capsule_AsVoidPtr(object ptr)
 
-from blas_lapack cimport *
+from kalman.blas_lapack cimport *
 
 #cdef ssymm_t *ssymm = <ssymm_t*>Capsule_AsVoidPtr(scipy.linalg.blas.ssymm._cpointer)
 cdef sgemm_t *sgemm = <sgemm_t*>Capsule_AsVoidPtr(scipy.linalg.blas.sgemm._cpointer)
