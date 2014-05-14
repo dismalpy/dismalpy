@@ -34,6 +34,7 @@ prefix_kalman_filter_map = {
     'c': ckalman_filter, 'z': zkalman_filter
 }
 
+
 class Representation(object):
     """
     State space representation of a time series process
@@ -93,10 +94,10 @@ class Representation(object):
                  A=None, H=None, mu=None, F=None, R=None, G=None, Q=None,
                  initial_state=None, initial_state_cov=None):
         # Dimensions
-        self.T = self.nobs    = nobs
-        self.n = self.nendog  = nendog
+        self.T = self.nobs = nobs
+        self.n = self.nendog = nendog
         self.k = self.nstates = nstates
-        self.r = self.nexog   = nexog
+        self.r = self.nexog = nexog
         self.g = self.nposdef = nposdef
 
         # Data type for representation matrices
@@ -134,6 +135,7 @@ class Representation(object):
             return self._A
         else:
             return None
+
     @A.setter
     def A(self, value):
         if value is None:
@@ -145,7 +147,7 @@ class Representation(object):
                                  ' shape (%d, %d), got shape %s' %
                                  (self.n, self.r, str(_A.shape)))
             if not hasattr(self, '_A') or self._A is None:
-                self._A  = np.zeros((self.n, self.r), self.dtype, order="F")
+                self._A = np.zeros((self.n, self.r), self.dtype, order="F")
         self._A = _A
 
     @property
@@ -154,6 +156,7 @@ class Representation(object):
             return self._H
         else:
             raise NotImplementedError
+
     @H.setter
     def H(self, value):
         if value is None:
@@ -161,14 +164,14 @@ class Representation(object):
         else:
             _H = np.asarray(value, dtype=self.dtype, order="F")
             if _H.ndim == 1 and self.n == 1 and _H.shape[0] == self.k:
-                _H = _H[None,:]
-            if not _H.ndim in [2,3]:
+                _H = _H[None, :]
+            if _H.ndim not in [2, 3]:
                 raise ValueError('Invalid value for H matrix. Requires a'
                                  ' 2-dimensional array, got %d dimensions' %
                                  _H.ndim)
             if _H.ndim == 3 and not _H.shape[2] in [1, self.nobs]:
-                raise ValueError('Invalid dimensions for time-varying H matrix.'
-                                 ' Requires shape (*,*,%d), got %s' %
+                raise ValueError('Invalid dimensions for time-varying H'
+                                 ' matrix. Requires shape (*,*,%d), got %s' %
                                  (self.nobs, str(_H.shape)))
             if not _H.shape[0] == self.n:
                 raise ValueError('Invalid dimensions for H matrix. Requires'
@@ -177,9 +180,9 @@ class Representation(object):
                 raise ValueError('Invalid dimensions for H matrix. Requires'
                                  ' %d columns, got %d' % (self.k, _H.shape[1]))
             if _H.ndim == 2:
-                _H = np.array(_H[:,:,None], order="F")
+                _H = np.array(_H[:, :, None], order="F")
             if not hasattr(self, '_H') or self._H is None:
-                self._H  = np.zeros((self.n, self.k), self.dtype, order="F")
+                self._H = np.zeros((self.n, self.k), self.dtype, order="F")
         self._H = _H
 
     @property
@@ -188,6 +191,7 @@ class Representation(object):
             return self._mu
         else:
             raise NotImplementedError
+
     @mu.setter
     def mu(self, value):
         if value is None:
@@ -211,6 +215,7 @@ class Representation(object):
             return self._F
         else:
             raise NotImplementedError
+
     @F.setter
     def F(self, value):
         if value is None:
@@ -222,14 +227,14 @@ class Representation(object):
                                  ' 2-dimensional array, got %d dimensions' %
                                  _F.ndim)
             if not _F.shape[0] == _F.shape[1]:
-                raise ValueError('Invalid F matrix. Requires a square matrix, got'
-                                 ' shape %s.' % str(_F.shape))
+                raise ValueError('Invalid F matrix. Requires a square matrix,'
+                                 ' got shape %s.' % str(_F.shape))
             if not _F.shape[0] == self.k:
                 raise ValueError('Invalid dimensions for F matrix. Requires'
                                  ' %d rows and columns, got %d' %
                                  (self.k, _F.shape[0]))
             if not hasattr(self, '_F') or self._F is None:
-                self._F  = np.zeros((self.k, self.k), self.dtype, order="F")
+                self._F = np.zeros((self.k, self.k), self.dtype, order="F")
         self._F = _F
 
     @property
@@ -238,6 +243,7 @@ class Representation(object):
             return self._R
         else:
             raise NotImplementedError
+
     @R.setter
     def R(self, value):
         if value is None:
@@ -249,14 +255,14 @@ class Representation(object):
                                  ' 2-dimensional array, got %d dimensions' %
                                  _R.ndim)
             if not _R.shape[0] == _R.shape[1]:
-                raise ValueError('Invalid R matrix. Requires a square matrix, got'
-                                 ' shape %s.' % str(_R.shape))
+                raise ValueError('Invalid R matrix. Requires a square matrix,'
+                                 ' got shape %s.' % str(_R.shape))
             if not _R.shape[0] == self.n:
                 raise ValueError('Invalid dimensions for R matrix. Requires'
                                  ' %d rows and columns, got %d' %
                                  (self.n, _R.shape[0]))
             if not hasattr(self, '_R') or self._R is None:
-                self._R  = np.zeros((self.n, self.n), self.dtype, order="F")
+                self._R = np.zeros((self.n, self.n), self.dtype, order="F")
         self._R = _R
 
     @property
@@ -265,6 +271,7 @@ class Representation(object):
             return self._G
         else:
             raise NotImplementedError
+
     @G.setter
     def G(self, value):
         if value is None:
@@ -280,7 +287,7 @@ class Representation(object):
                                  ' (%d, %d) got %s' %
                                  (self.k, self.g, str(_G.shape)))
             if not hasattr(self, '_G') or self._G is None:
-                self._G  = np.zeros((self.k, self.g), self.dtype, order="F")
+                self._G = np.zeros((self.k, self.g), self.dtype, order="F")
         self._G = _G
 
     @property
@@ -289,6 +296,7 @@ class Representation(object):
             return self._Q
         else:
             raise NotImplementedError
+
     @Q.setter
     def Q(self, value):
         if value is None:
@@ -300,14 +308,14 @@ class Representation(object):
                                  ' 2-dimensional array, got %d dimensions' %
                                  _Q.ndim)
             if not _Q.shape[0] == _Q.shape[1]:
-                raise ValueError('Invalid Q matrix. Requires a square matrix, got'
-                                 ' shape %s.' % str(_Q.shape))
+                raise ValueError('Invalid Q matrix. Requires a square matrix,'
+                                 ' got shape %s.' % str(_Q.shape))
             if not _Q.shape[0] == self.g:
                 raise ValueError('Invalid dimensions for Q matrix. Requires'
                                  ' %d rows and columns, got %d' %
                                  (self.g, _Q.shape[0]))
             if not hasattr(self, '_Q') or self._Q is None:
-                self._Q  = np.zeros((self.g, self.g), self.dtype, order="F")
+                self._Q = np.zeros((self.g, self.g), self.dtype, order="F")
         self._Q = _Q
 
     @property
@@ -316,6 +324,7 @@ class Representation(object):
             return self._initial_state
         else:
             raise None
+
     @initial_state.setter
     def initial_state(self, value):
         if value is None:
@@ -330,8 +339,10 @@ class Representation(object):
                 raise ValueError('Invalid dimensions for initial state vector.'
                                  ' Requires %d rows, got %d' %
                                  (self.k, _initial_state.shape[0]))
-            if not hasattr(self, '_initial_state') or self._initial_state is None:
-                self._initial_state = np.zeros((self.k,), self.dtype, order="F")
+            if (not hasattr(self, '_initial_state')
+                    or self._initial_state is None):
+                self._initial_state = np.zeros((self.k,), self.dtype,
+                                               order="F")
         self._initial_state = _initial_state
 
     @property
@@ -340,6 +351,7 @@ class Representation(object):
             return self._initial_state_cov
         else:
             raise None
+
     @initial_state_cov.setter
     def initial_state_cov(self, value):
         if value is None:
@@ -348,19 +360,23 @@ class Representation(object):
             _initial_state_cov = np.asarray(value, dtype=self.dtype, order="F")
             if not _initial_state_cov.ndim == 2:
                 raise ValueError('Invalid value for initial state covariance'
-                                 ' matrix. Requires a 2-dimensional array, got %d'
-                                 ' dimensions' % _initial_state_cov.ndim)
+                                 ' matrix. Requires a 2-dimensional array, got'
+                                 ' %d dimensions' % _initial_state_cov.ndim)
             if not _initial_state_cov.shape[0] == _initial_state_cov.shape[1]:
                 raise ValueError('Invalid initial state covariance matrix.'
                                  ' Requires a square matrix, got shape %s.' %
                                  str(_initial_state_cov.shape))
             if not _initial_state_cov.shape[0] == self.k:
-                raise ValueError('Invalid dimensions for initial state covariance'
-                                 ' matrix. Requires %d rows and columns, got %d' %
+                raise ValueError('Invalid dimensions for initial state'
+                                 ' covariance matrix. Requires %d rows and'
+                                 ' columns, got %d' %
                                  (self.k, _initial_state_cov.shape[0]))
-            if not hasattr(self, '_initial_state_cov') or self._initial_state_cov is None:
-                self._initial_state_cov = np.zeros((self.k, self.k), self.dtype, order="F")
+            if (not hasattr(self, '_initial_state_cov')
+                    or self._initial_state_cov is None):
+                self._initial_state_cov = np.zeros((self.k, self.k),
+                                                   self.dtype, order="F")
         self._initial_state_cov = _initial_state_cov
+
 
 class Model(Representation):
     """
@@ -435,10 +451,10 @@ class Model(Representation):
         # sized zero matrices
         if fill:
             for key in ['A', 'mu', 'F', 'R', 'G', 'Q']:
-                if not key in kwargs or kwargs[key] is None:
+                if key not in kwargs or kwargs[key] is None:
                     setattr(self, key, np.zeros(self.shapes[key], self.dtype,
                                                 order="F"))
-            if not 'H' in kwargs or kwargs['H'] is None:
+            if 'H' not in kwargs or kwargs['H'] is None:
                 setattr(self, 'H', np.zeros(self.shapes['Ht'], self.dtype,
                                             order="F"))
 
@@ -468,6 +484,7 @@ class Model(Representation):
             self.endog, self.H, self.mu, self.F, self.R, self.G, self.Q,
             self.exog, self.A, self.initial_state, self.initial_state_cov
         )
+
 
 class Estimator(object):
     """
@@ -523,6 +540,7 @@ class Estimator(object):
         ll = np.sum(kalman_filter(*model.args)[-1][self.burn:])
         return ll
 
+
 class Results(object):
     def __init__(self, model, params, state, state_cov, est_state,
                  est_state_cov, forecast, prediction_error,
@@ -550,24 +568,25 @@ class Results(object):
         self.z = z
         self.A = A.copy() if A is not None else None
         # Save Kalman Filter output
-        self.state = np.asarray(state[:,1:])
-        self.state_cov = np.asarray(state_cov[:,:,1:])
-        self.est_state = np.asarray(est_state[:,1:])
-        self.est_state_cov = np.asarray(est_state_cov[:,:,1:])
-        self.forecast = np.asarray(forecast[:,1:])
-        self.prediction_error = np.asarray(prediction_error[:,1:])
-        self.prediction_error_cov = np.asarray(prediction_error_cov[:,:1:])
+        self.state = np.asarray(state[:, 1:])
+        self.state_cov = np.asarray(state_cov[:, :, 1:])
+        self.est_state = np.asarray(est_state[:, 1:])
+        self.est_state_cov = np.asarray(est_state_cov[:, :, 1:])
+        self.forecast = np.asarray(forecast[:, 1:])
+        self.prediction_error = np.asarray(prediction_error[:, 1:])
+        self.prediction_error_cov = np.asarray(prediction_error_cov[:, :1:])
         self.inverse_prediction_error_cov = np.asarray(
-            inverse_prediction_error_cov[:,:1:]
+            inverse_prediction_error_cov[:, :1:]
         )
-        self.gain = np.asarray(gain[:,:,1:])
+        self.gain = np.asarray(gain[:, :, 1:])
         self.loglikelihood = np.asarray(loglikelihood[1:])
 
     def loglike(self, burn=0):
         return np.sum(self.loglikelihood[burn:])
 
+
 class ARMA(Model):
-    def __init__(self, endog, exog=None, order=(1,0), dtype=None, A=None,
+    def __init__(self, endog, exog=None, order=(1, 0), dtype=None, A=None,
                  measurement_error=False):
 
         self.p = order[0]
@@ -590,7 +609,7 @@ class ARMA(Model):
 
         # Initialize the H matrix
         H = np.zeros((1, self.k), self.dtype)
-        H[0,0] = 1
+        H[0, 0] = 1
         self.H = H
 
         # Initialize the F matrix
@@ -601,8 +620,8 @@ class ARMA(Model):
         self.F = F
 
         # Initialize the G matrix as a (k x 1) matrix [1, 0, ..., 0]
-        G = np.zeros((k,1), self.dtype)
-        G[0,0] = 1
+        G = np.zeros((k, 1), self.dtype)
+        G[0, 0] = 1
         self.G = G
 
     @property
@@ -611,15 +630,17 @@ class ARMA(Model):
         Starting parameters for maximum likelihood estimation
         """
         X = np.concatenate(
-            [self.endog[:,self.p-i:-i] for i in range(1, self.p+1)], 0).T
-        phi_cmle = np.linalg.pinv(X).dot(self.endog[:,self.p:].T)
-        resids = self.endog[:,self.p:].T - X.dot(phi_cmle)
+            [self.endog[:, self.p-i:-i] for i in range(1, self.p+1)], 0).T
+        phi_cmle = np.linalg.pinv(X).dot(self.endog[:, self.p:].T)
+        resids = self.endog[:, self.p:].T - X.dot(phi_cmle)
         sigma = resids.std()
 
         if self.measurement_error:
             sigma = np.r_[1, sigma]
 
-        return np.r_[np.zeros(self.q,), phi_cmle[:,0], sigma**2].astype(self.dtype)
+        return np.r_[
+            np.zeros(self.q,), phi_cmle[:, 0], sigma**2
+        ].astype(self.dtype)
 
     def is_stationary(self, params=None, transformed=False):
         if params is not None:
@@ -701,15 +722,16 @@ class ARMA(Model):
         if not transformed:
             params = self.transform(params)
         theta = params[:self.q]
-        self.H[0,1:,0] = np.r_[theta, [0]*(self.k-self.q-1)]
+        self.H[0, 1:, 0] = np.r_[theta, [0]*(self.k-self.q-1)]
 
         phi = params[self.q:self.q+self.p]
         self.F[0] = np.r_[phi, [0]*(self.k-self.p)]
 
         if self.measurement_error:
-            self.R[0,0] = params[-2]
+            self.R[0, 0] = params[-2]
 
-        self.Q[0,0] = params[-1]
+        self.Q[0, 0] = params[-1]
+
 
 def constrain_stationary(unconstrained):
     n = unconstrained.shape[0]
@@ -717,17 +739,18 @@ def constrain_stationary(unconstrained):
     r = unconstrained/((1+unconstrained**2)**0.5)
     for k in range(n):
         for i in range(k):
-            y[k,i] = y[k-1,i] + r[k] * y[k-1,k-i-1]
-        y[k,k] = r[k]
-    return -y[n-1,:]
+            y[k, i] = y[k-1, i] + r[k] * y[k-1, k-i-1]
+        y[k, k] = r[k]
+    return -y[n-1, :]
+
 
 def unconstrain_stationary(constrained):
     n = constrained.shape[0]
     y = np.zeros((n, n))
     y[n-1:] = -constrained
-    for k in range(n-1,0,-1):
+    for k in range(n-1, 0, -1):
         for i in range(k):
-            y[k-1,i] = (y[k,i] - y[k,k]*y[k,k-i-1]) / (1 - y[k,k]**2)
+            y[k-1, i] = (y[k, i] - y[k, k]*y[k, k-i-1]) / (1 - y[k, k]**2)
     r = y.diagonal()
     x = r / ((1 - r**2)**0.5)
     return x
