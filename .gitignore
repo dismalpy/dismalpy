@@ -16,7 +16,7 @@ dist
 docs/source/generated
 
 # Egg metadata
-./*.egg-info
+*.egg-info/
 
 # Mac OS X
 .DS_Store
