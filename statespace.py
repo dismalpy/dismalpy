@@ -589,19 +589,19 @@ class ARMA(Model):
                              ' 1 column, got %d.' % self.n)
 
         # Initialize the H matrix
-        H = np.zeros((1, self.k))
+        H = np.zeros((1, self.k), self.dtype)
         H[0,0] = 1
         self.H = H
 
         # Initialize the F matrix
-        F = np.zeros((self.k, self.k))
+        F = np.zeros((self.k, self.k), self.dtype)
         idx = np.diag_indices(self.k-1)
         idx = (idx[0]+1, idx[1])
         F[idx] = 1
         self.F = F
 
         # Initialize the G matrix as a (k x 1) matrix [1, 0, ..., 0]
-        G = np.zeros((k,1))
+        G = np.zeros((k,1), self.dtype)
         G[0,0] = 1
         self.G = G
 
@@ -619,7 +619,7 @@ class ARMA(Model):
         if self.measurement_error:
             sigma = np.r_[1, sigma]
 
-        return np.r_[np.zeros(self.q,), phi_cmle[:,0], sigma**2]
+        return np.r_[np.zeros(self.q,), phi_cmle[:,0], sigma**2].astype(self.dtype)
 
     def is_stationary(self, params=None, transformed=False):
         if params is not None:
@@ -639,7 +639,7 @@ class ARMA(Model):
         Autoregressive-moving Average Models."
         Biometrika 71 (2) (August 1): 403-404.
         """
-        constrained = np.zeros(unconstrained.shape)
+        constrained = np.zeros(unconstrained.shape, self.dtype)
 
         # Transform the MA parameters (theta) to be invertible
         if self.q > 0:
@@ -675,7 +675,7 @@ class ARMA(Model):
         Biometrika 71 (2) (August 1): 403-404.
         """
 
-        unconstrained = np.zeros(constrained.shape)
+        unconstrained = np.zeros(constrained.shape, self.dtype)
 
         # Untransform the MA parameters (theta) from invertible
         if self.q > 0:
