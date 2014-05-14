@@ -21,7 +21,7 @@ from __future__ import division
 import warnings
 import numpy as np
 from scipy.linalg.blas import find_best_blas_type
-from kalman.kalman_filter import (
+from .kalman.kalman_filter import (
     skalman_filter, dkalman_filter,
     ckalman_filter, zkalman_filter
 )
