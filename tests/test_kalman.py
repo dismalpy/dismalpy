@@ -106,7 +106,7 @@ class TestClark1987(ss.Model):
         )
 
     def test_mle_standard_errors(self):
-        assert False
+        raise SkipTest('Not implemented')
 
     def test_loglike(self):
         assert_almost_equal(
@@ -128,7 +128,7 @@ class TestClark1987(ss.Model):
         )
 
     def test_smoothed_state(self):
-        assert False
+        raise SkipTest('Not implemented')
 
 
 class TestClark1989(ss.Model):
@@ -216,7 +216,7 @@ class TestClark1989(ss.Model):
         )
 
     def test_mle_standard_errors(self):
-        assert False
+        raise SkipTest('Not implemented')
 
     def test_loglike(self):
         assert_almost_equal(
@@ -242,7 +242,7 @@ class TestClark1989(ss.Model):
         )
 
     def test_smoothed_state(self):
-        assert False
+        raise SkipTest('Not implemented')
 
 
 class TestKimNelson1989(ss.Model):
@@ -325,7 +325,7 @@ class TestKimNelson1989(ss.Model):
         )
 
     def test_mle_standard_errors(self):
-        assert False
+        raise SkipTest('Not implemented')
 
     def test_loglike(self):
         assert_almost_equal(
@@ -355,4 +355,4 @@ class TestKimNelson1989(ss.Model):
         )
 
     def test_smoothed_state(self):
-        assert False
+        raise SkipTest('Not implemented')
