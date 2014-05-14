@@ -133,7 +133,7 @@ class Representation(object):
         if hasattr(self, '_A'):
             return self._A
         else:
-            raise None
+            return None
     @A.setter
     def A(self, value):
         if value is None:
