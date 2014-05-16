@@ -15,6 +15,7 @@ __import__('scipy.linalg.blas')
 __import__('scipy.linalg.lapack')
 
 from libc.math cimport log as dlog, abs as dabs
+
 cdef extern from "complex.h":
     complex clog(complex x)
     np.complex64_t clogf(np.complex64_t x)
@@ -24,7 +25,7 @@ cdef extern from "complex.h":
 cdef extern from "capsule.h":
     void *Capsule_AsVoidPtr(object ptr)
 
-from kalman.blas_lapack cimport *
+from pykf.blas_lapack cimport *
 
 #cdef ssymm_t *ssymm = <ssymm_t*>Capsule_AsVoidPtr(scipy.linalg.blas.ssymm._cpointer)
 cdef sgemm_t *sgemm = <sgemm_t*>Capsule_AsVoidPtr(scipy.linalg.blas.sgemm._cpointer)

@@ -16,12 +16,13 @@ Hamilton, James D. 1994.
 Time Series Analysis.
 Princeton, N.J.: Princeton University Press.
 """
+from __future__ import division, absolute_import, print_function
 
 import os
 import numpy as np
 import pandas as pd
 from scipy import optimize
-import statespace as ss
+import pykf.statespace as ss
 import results_kalman
 from numpy.testing import assert_allclose, assert_almost_equal
 from nose.exc import SkipTest

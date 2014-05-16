@@ -16,12 +16,12 @@ Hamilton, James D. 1994.
 Time Series Analysis.
 Princeton, N.J.: Princeton University Press.
 """
+from __future__ import division, absolute_import, print_function
 
-from __future__ import division
 import warnings
 import numpy as np
 from scipy.linalg.blas import find_best_blas_type
-from kalman.kalman_filter import (
+from pykf.kalman_filter import (
     skalman_filter, dkalman_filter,
     ckalman_filter, zkalman_filter
 )

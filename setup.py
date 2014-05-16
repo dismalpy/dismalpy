@@ -1,32 +1,57 @@
-from setuptools import setup, find_packages, Extension
-# from distutils.core import setup
-# from distutils.extension import Extension
-from Cython.Distutils import build_ext
-from Cython.Build import cythonize
-from numpy.distutils.system_info import get_info
+#!/usr/bin/env python
+"""pykf
 
-import numpy
+Kalman filter and state-space models.
+"""
+from __future__ import division, print_function
+
+DISTNAME            = 'pykf'
+DESCRIPTION         = 'Kalman filter and state-space models'
+AUTHOR              = 'Chad Fulton',
+URL                 = 'https://github.com/ChadFulton/pykalman_filter/'
+LICENSE             = 'BSD Simplified'
+VERSION             = '0.1'
+
+import os
+import sys
+
+# may need to work around setuptools bug by providing a fake Pyrex
+# sourced from scikits-sparce
+project_path = os.path.split(__file__)[0]
+sys.path.append(os.path.join(project_path, 'fake_pyrex'))
+from setuptools import setup, find_packages, Extension
+from Cython.Distutils import build_ext
+
+from numpy.distutils.misc_util import get_numpy_include_dirs
 
 ext_modules = [
-    Extension("kalman_filter", sources=[
-              "kalman/blas_lapack.pxd", "kalman/kalman_filter.pyx"],
-              include_dirs=[numpy.get_include()]),
+    Extension("pykf.kalman_filter",
+              sources=[
+                  "pykf/blas_lapack.pxd",
+                  "pykf/kalman_filter.pyx"
+              ], include_dirs=get_numpy_include_dirs()),
 ]
 
-setup(
-    name='pykalman_filter',
-    version='0.1',
-    packages=find_packages(),
 
-    author='Chad Fulton',
-    description='Multivariate Kalman Filter',
-    license='BSD Simplified',
-    url='https://github.com/ChadFulton/pykalman_filter',
+def setup_package():
+    setup(
+        name=DISTNAME,
+        version=VERSION,
+        packages=find_packages(),
 
-    install_requires=['numpy', 'scipy >= 0.13', 'Cython'],
-    setup_requires=['nose>=1.0'],
-    test_suite='nose.collector',
+        author=AUTHOR,
+        description=DESCRIPTION,
+        license=LICENSE,
+        url=URL,
 
-    cmdclass={'build_ext': build_ext},
-    ext_modules=ext_modules
-)
+        install_requires=['numpy', 'scipy'],
+        setup_requires=['nose>=1.0'],
+        test_suite='nose.collector',
+        zip_safe=False,
+
+        cmdclass={'build_ext': build_ext},
+        ext_modules=ext_modules
+    )
+
+if __name__ == '__main__':
+    setup_package()
