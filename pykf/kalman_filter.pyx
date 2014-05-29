@@ -6,64 +6,72 @@ License: Simplified-BSD
 
 """
 
+# Typical imports
 import numpy as np
 cimport numpy as np
 cimport cython
 
-import scipy
-__import__('scipy.linalg.blas')
-__import__('scipy.linalg.lapack')
-
+# Real and complex log and abs functions
 from libc.math cimport log as dlog, abs as dabs
+from numpy cimport npy_cdouble
 
-cdef extern from "complex.h":
-    complex clog(complex x)
-    np.complex64_t clogf(np.complex64_t x)
-    complex cabs(complex x)
-    np.complex64_t cabsf(np.complex64_t x)
+cdef extern from "numpy/npy_math.h":
+    double npy_cabs(npy_cdouble z)
+    npy_cdouble npy_clog(npy_cdouble z)
+
+cdef inline double zabs(complex z):
+    return npy_cabs((<npy_cdouble *> &z)[0])
+
+cdef inline complex zlog(complex z):
+    cdef npy_cdouble x
+    x = npy_clog((<npy_cdouble*> &z)[0])
+    return (<complex *> &x)[0]
 
 cdef extern from "capsule.h":
     void *Capsule_AsVoidPtr(object ptr)
 
-from pykf.blas_lapack cimport *
+# BLAS / LAPACK functions
+from statsmodels.src.blas_lapack cimport *
+from scipy.linalg import blas, lapack
 
-#cdef ssymm_t *ssymm = <ssymm_t*>Capsule_AsVoidPtr(scipy.linalg.blas.ssymm._cpointer)
-cdef sgemm_t *sgemm = <sgemm_t*>Capsule_AsVoidPtr(scipy.linalg.blas.sgemm._cpointer)
-cdef sgemv_t *sgemv = <sgemv_t*>Capsule_AsVoidPtr(scipy.linalg.blas.sgemv._cpointer)
-cdef scopy_t *scopy = <scopy_t*>Capsule_AsVoidPtr(scipy.linalg.blas.scopy._cpointer)
-cdef saxpy_t *saxpy = <saxpy_t*>Capsule_AsVoidPtr(scipy.linalg.blas.saxpy._cpointer)
-cdef sdot_t *sdot = <sdot_t*>Capsule_AsVoidPtr(scipy.linalg.blas.sdot._cpointer)
-cdef sgetrf_t *sgetrf = <sgetrf_t*>Capsule_AsVoidPtr(scipy.linalg.lapack.sgetrf._cpointer)
-cdef sgetri_t *sgetri = <sgetri_t*>Capsule_AsVoidPtr(scipy.linalg.lapack.sgetri._cpointer)
-cdef spotrf_t *spotrf = <spotrf_t*>Capsule_AsVoidPtr(scipy.linalg.lapack.spotrf._cpointer)
+#cdef ssymm_t *ssymm = <ssymm_t*>Capsule_AsVoidPtr(blas.ssymm._cpointer)
+cdef sgemm_t *sgemm = <sgemm_t*>Capsule_AsVoidPtr(blas.sgemm._cpointer)
+cdef sgemv_t *sgemv = <sgemv_t*>Capsule_AsVoidPtr(blas.sgemv._cpointer)
+cdef scopy_t *scopy = <scopy_t*>Capsule_AsVoidPtr(blas.scopy._cpointer)
+cdef saxpy_t *saxpy = <saxpy_t*>Capsule_AsVoidPtr(blas.saxpy._cpointer)
+cdef sdot_t *sdot = <sdot_t*>Capsule_AsVoidPtr(blas.sdot._cpointer)
+cdef sgetrf_t *sgetrf = <sgetrf_t*>Capsule_AsVoidPtr(lapack.sgetrf._cpointer)
+cdef sgetri_t *sgetri = <sgetri_t*>Capsule_AsVoidPtr(lapack.sgetri._cpointer)
+cdef spotrf_t *spotrf = <spotrf_t*>Capsule_AsVoidPtr(lapack.spotrf._cpointer)
 
-#cdef dsymm_t *dsymm = <dsymm_t*>Capsule_AsVoidPtr(scipy.linalg.blas.dsymm._cpointer)
-cdef dgemm_t *dgemm = <dgemm_t*>Capsule_AsVoidPtr(scipy.linalg.blas.dgemm._cpointer)
-cdef dgemv_t *dgemv = <dgemv_t*>Capsule_AsVoidPtr(scipy.linalg.blas.dgemv._cpointer)
-cdef dcopy_t *dcopy = <dcopy_t*>Capsule_AsVoidPtr(scipy.linalg.blas.dcopy._cpointer)
-cdef daxpy_t *daxpy = <daxpy_t*>Capsule_AsVoidPtr(scipy.linalg.blas.daxpy._cpointer)
-cdef ddot_t *ddot = <ddot_t*>Capsule_AsVoidPtr(scipy.linalg.blas.ddot._cpointer)
-cdef dgetrf_t *dgetrf = <dgetrf_t*>Capsule_AsVoidPtr(scipy.linalg.lapack.dgetrf._cpointer)
-cdef dgetri_t *dgetri = <dgetri_t*>Capsule_AsVoidPtr(scipy.linalg.lapack.dgetri._cpointer)
-cdef dpotrf_t *dpotrf = <dpotrf_t*>Capsule_AsVoidPtr(scipy.linalg.lapack.dpotrf._cpointer)
+#cdef dsymm_t *dsymm = <dsymm_t*>Capsule_AsVoidPtr(blas.dsymm._cpointer)
+cdef dgemm_t *dgemm = <dgemm_t*>Capsule_AsVoidPtr(blas.dgemm._cpointer)
+cdef dgemv_t *dgemv = <dgemv_t*>Capsule_AsVoidPtr(blas.dgemv._cpointer)
+cdef dcopy_t *dcopy = <dcopy_t*>Capsule_AsVoidPtr(blas.dcopy._cpointer)
+cdef daxpy_t *daxpy = <daxpy_t*>Capsule_AsVoidPtr(blas.daxpy._cpointer)
+cdef ddot_t *ddot = <ddot_t*>Capsule_AsVoidPtr(blas.ddot._cpointer)
+cdef dgetrf_t *dgetrf = <dgetrf_t*>Capsule_AsVoidPtr(lapack.dgetrf._cpointer)
+cdef dgetri_t *dgetri = <dgetri_t*>Capsule_AsVoidPtr(lapack.dgetri._cpointer)
+cdef dpotrf_t *dpotrf = <dpotrf_t*>Capsule_AsVoidPtr(lapack.dpotrf._cpointer)
 
-#cdef csymm_t *csymm = <csymm_t*>Capsule_AsVoidPtr(scipy.linalg.blas.csymm._cpointer)
-cdef cgemm_t *cgemm = <cgemm_t*>Capsule_AsVoidPtr(scipy.linalg.blas.cgemm._cpointer)
-cdef cgemv_t *cgemv = <cgemv_t*>Capsule_AsVoidPtr(scipy.linalg.blas.cgemv._cpointer)
-cdef ccopy_t *ccopy = <ccopy_t*>Capsule_AsVoidPtr(scipy.linalg.blas.ccopy._cpointer)
-cdef caxpy_t *caxpy = <caxpy_t*>Capsule_AsVoidPtr(scipy.linalg.blas.caxpy._cpointer)
-cdef cgetrf_t *cgetrf = <cgetrf_t*>Capsule_AsVoidPtr(scipy.linalg.lapack.cgetrf._cpointer)
-cdef cgetri_t *cgetri = <cgetri_t*>Capsule_AsVoidPtr(scipy.linalg.lapack.cgetri._cpointer)
-cdef cpotrf_t *cpotrf = <cpotrf_t*>Capsule_AsVoidPtr(scipy.linalg.lapack.cpotrf._cpointer)
+#cdef csymm_t *csymm = <csymm_t*>Capsule_AsVoidPtr(blas.csymm._cpointer)
+cdef cgemm_t *cgemm = <cgemm_t*>Capsule_AsVoidPtr(blas.cgemm._cpointer)
+cdef cgemv_t *cgemv = <cgemv_t*>Capsule_AsVoidPtr(blas.cgemv._cpointer)
+cdef ccopy_t *ccopy = <ccopy_t*>Capsule_AsVoidPtr(blas.ccopy._cpointer)
+cdef caxpy_t *caxpy = <caxpy_t*>Capsule_AsVoidPtr(blas.caxpy._cpointer)
+cdef cgetrf_t *cgetrf = <cgetrf_t*>Capsule_AsVoidPtr(lapack.cgetrf._cpointer)
+cdef cgetri_t *cgetri = <cgetri_t*>Capsule_AsVoidPtr(lapack.cgetri._cpointer)
+cdef cpotrf_t *cpotrf = <cpotrf_t*>Capsule_AsVoidPtr(lapack.cpotrf._cpointer)
 
-#cdef zsymm_t *zsymm = <zsymm_t*>Capsule_AsVoidPtr(scipy.linalg.blas.zsymm._cpointer)
-cdef zgemm_t *zgemm = <zgemm_t*>Capsule_AsVoidPtr(scipy.linalg.blas.zgemm._cpointer)
-cdef zgemv_t *zgemv = <zgemv_t*>Capsule_AsVoidPtr(scipy.linalg.blas.zgemv._cpointer)
-cdef zcopy_t *zcopy = <zcopy_t*>Capsule_AsVoidPtr(scipy.linalg.blas.zcopy._cpointer)
-cdef zaxpy_t *zaxpy = <zaxpy_t*>Capsule_AsVoidPtr(scipy.linalg.blas.zaxpy._cpointer)
-cdef zgetrf_t *zgetrf = <zgetrf_t*>Capsule_AsVoidPtr(scipy.linalg.lapack.zgetrf._cpointer)
-cdef zgetri_t *zgetri = <zgetri_t*>Capsule_AsVoidPtr(scipy.linalg.lapack.zgetri._cpointer)
-cdef zpotrf_t *zpotrf = <zpotrf_t*>Capsule_AsVoidPtr(scipy.linalg.lapack.zpotrf._cpointer)
+#cdef zsymm_t *zsymm = <zsymm_t*>Capsule_AsVoidPtr(blas.zsymm._cpointer)
+cdef zgemm_t *zgemm = <zgemm_t*>Capsule_AsVoidPtr(blas.zgemm._cpointer)
+cdef zgemv_t *zgemv = <zgemv_t*>Capsule_AsVoidPtr(blas.zgemv._cpointer)
+cdef zcopy_t *zcopy = <zcopy_t*>Capsule_AsVoidPtr(blas.zcopy._cpointer)
+cdef zaxpy_t *zaxpy = <zaxpy_t*>Capsule_AsVoidPtr(blas.zaxpy._cpointer)
+cdef zgetrf_t *zgetrf = <zgetrf_t*>Capsule_AsVoidPtr(lapack.zgetrf._cpointer)
+cdef zgetri_t *zgetri = <zgetri_t*>Capsule_AsVoidPtr(lapack.zgetri._cpointer)
+cdef zpotrf_t *zpotrf = <zpotrf_t*>Capsule_AsVoidPtr(lapack.zpotrf._cpointer)
+
 
 # Kalman Filter: Single Precision
 @cython.boundscheck(False)
@@ -590,7 +598,7 @@ cpdef ckalman_filter(
             #f_inv = np.linalg.inv(f_tt1[t])
             #f_inv[::1,:] = f_tt1[::1,:,t]
             if n == 1:
-                det = cabsf(f_tt1[0,0,t])
+                det = zabs(f_tt1[0,0,t])
                 f_inv[0,0,t] = 1/f_tt1[0,0,t]
             else:
                 ccopy(&n2, &f_tt1[0,0,t], &inc, &f_inv[0,0,t], &inc)
@@ -607,12 +615,12 @@ cpdef ckalman_filter(
         # Log-likelihood as byproduct
         #ll[t] -0.5*log(2*np.pi*np.linalg.det(f_tt1[:,:,t])) - 0.5*np.dot(np.dot(eta_tt1[:,t].T, f_inv), eta_tt1[:,t])
         # ^ this doesn't work, crashes for some reason; probably related to taking .T as it did above
-        ll[t] = -0.5*clogf(2*np.pi*det)
+        ll[t] = -0.5*zlog(2*np.pi*det)
         cgemv("N",&n,&n,&alpha,&f_inv[0,0,t],&n,&eta_tt1[0,t],&inc,&beta,&tmp[0,0],&inc)
         # ll[t] += -0.5*zdotu(&n, &eta_tt1[0,t], &inc, &tmp[0,0], &inc)
         # ^ zdotu, cdotu don't work, give a segfault 11, not sure why
         cgemv("N",&inc,&n,&alpha,&eta_tt1[0,t],&inc,&tmp[0,0],&inc,&beta,&work[0,0],&inc)
-        ll[t] += -0.5*work[0,0]
+        ll[t] = ll[t]-0.5*work[0,0]
 
         # Updating
         #gain[t] = np.dot(PHT, f_inv) # kxn * nxn = kxn
@@ -640,7 +648,7 @@ cpdef ckalman_filter(
             ccopy(&k2, &P_tt[0,0,t], &inc, &tmp[0,0], &inc)
             caxpy(&k2, &gamma, &P_tt[0,0,t-1], &inc, &tmp[0,0], &inc)
             cgemv("N",&inc,&k2,&alpha,&tmp[0,0],&inc,&tmp[0,0],&inc,&beta,&work[0,0],&inc)
-            if <float> cabs(work[0,0]) < tol:
+            if zabs(work[0,0]) < tol:
                 converged = 1
 
     return beta_tt, P_tt, beta_tt1, P_tt1, y_tt1, eta_tt1, f_tt1, f_inv, gain, ll
@@ -785,7 +793,7 @@ cpdef zkalman_filter(
             #f_inv = np.linalg.inv(f_tt1[t])
             #f_inv[::1,:] = f_tt1[::1,:,t]
             if n == 1:
-                det = cabs(f_tt1[0,0,t])
+                det = zabs(f_tt1[0,0,t])
                 f_inv[0,0,t] = 1/f_tt1[0,0,t]
             else:
                 zcopy(&n2, &f_tt1[0,0,t], &inc, &f_inv[0,0,t], &inc)
@@ -802,12 +810,12 @@ cpdef zkalman_filter(
         # Log-likelihood as byproduct
         #ll[t] -0.5*log(2*np.pi*np.linalg.det(f_tt1[:,:,t])) - 0.5*np.dot(np.dot(eta_tt1[:,t].T, f_inv), eta_tt1[:,t])
         # ^ this doesn't work, crashes for some reason; probably related to taking .T as it did above
-        ll[t] = -0.5*clog(2*np.pi*det)
+        ll[t] = -0.5*zlog(2*np.pi*det)
         zgemv("N",&n,&n,&alpha,&f_inv[0,0,t],&n,&eta_tt1[0,t],&inc,&beta,&tmp[0,0],&inc)
         # ll[t] += -0.5*zdotu(&n, &eta_tt1[0,t], &inc, &tmp[0,0], &inc)
         # ^ zdotu, cdotu don't work, give a segfault 11, not sure why
         zgemv("N",&inc,&n,&alpha,&eta_tt1[0,t],&inc,&tmp[0,0],&inc,&beta,&work[0,0],&inc)
-        ll[t] += -0.5*work[0,0]
+        ll[t] = ll[t]-0.5*work[0,0]
 
         # Updating
         #gain[t] = np.dot(PHT, f_inv) # kxn * nxn = kxn
@@ -835,7 +843,7 @@ cpdef zkalman_filter(
             zcopy(&k2, &P_tt[0,0,t], &inc, &tmp[0,0], &inc)
             zaxpy(&k2, &gamma, &P_tt[0,0,t-1], &inc, &tmp[0,0], &inc)
             zgemv("N",&inc,&k2,&alpha,&tmp[0,0],&inc,&tmp[0,0],&inc,&beta,&work[0,0],&inc)
-            if <float> cabs(work[0,0]) < tol:
+            if zabs(work[0,0]) < tol:
                 converged = 1
 
     return beta_tt, P_tt, beta_tt1, P_tt1, y_tt1, eta_tt1, f_tt1, f_inv, gain, ll
