@@ -22,14 +22,18 @@ sys.path.append(os.path.join(project_path, 'fake_pyrex'))
 from setuptools import setup, find_packages, Extension
 from Cython.Distutils import build_ext
 
-from numpy.distutils.misc_util import get_numpy_include_dirs
+from numpy.distutils.misc_util import get_info
+
+ext_data = {
+    'sources': [
+        "pykf/blas_lapack.pxd",
+        "pykf/kalman_filter.pyx"
+    ]
+}
+ext_data.update(get_info("npymath"))
 
 ext_modules = [
-    Extension("pykf.kalman_filter",
-              sources=[
-                  "pykf/blas_lapack.pxd",
-                  "pykf/kalman_filter.pyx"
-              ], include_dirs=get_numpy_include_dirs()),
+    Extension("pykf.kalman_filter", **ext_data),
 ]
 
 
