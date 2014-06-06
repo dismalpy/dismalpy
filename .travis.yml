@@ -21,4 +21,4 @@ install:
   - python setup.py install
 
 script:
-  - python -c "import pykf; pykf.test();"
+  - python -c "import pykf; res = pykf.test(); import sys; sys.exit(1 - res.wasSuccessful());"
