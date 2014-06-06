@@ -3,59 +3,215 @@
 
 Kalman filter and state-space models.
 """
-from __future__ import division, print_function
 
-DISTNAME            = 'pykf'
-DESCRIPTION         = 'Kalman filter and state-space models'
-AUTHOR              = 'Chad Fulton',
-URL                 = 'https://github.com/ChadFulton/pykalman_filter/'
-LICENSE             = 'BSD Simplified'
-VERSION             = '0.1'
+DOCLINES = __doc__.split("\n")
 
 import os
 import sys
+import subprocess
 
-# may need to work around setuptools bug by providing a fake Pyrex
-# sourced from scikits-sparce
-project_path = os.path.split(__file__)[0]
-sys.path.append(os.path.join(project_path, 'fake_pyrex'))
-from setuptools import setup, find_packages, Extension
-from Cython.Distutils import build_ext
 
-from numpy.distutils.misc_util import get_info
+if sys.version_info[:2] < (2, 6) or (3, 0) <= sys.version_info[0:2] < (3, 2):
+    raise RuntimeError("Python version 2.6, 2.7 or >= 3.2 required.")
 
-ext_data = {
-    'sources': [
-        "pykf/blas_lapack.pxd",
-        "pykf/kalman_filter.pyx"
-    ]
-}
-ext_data.update(get_info("npymath"))
+if sys.version_info[0] < 3:
+    import __builtin__ as builtins
+else:
+    import builtins
 
-ext_modules = [
-    Extension("pykf.kalman_filter", **ext_data),
-]
+CLASSIFIERS = """\
+"""
 
+MAJOR               = 0
+MINOR               = 1
+MICRO               = 0
+ISRELEASED          = False
+VERSION             = '%d.%d.%d' % (MAJOR, MINOR, MICRO)
+
+
+# Return the git revision as a string
+def git_version():
+    def _minimal_ext_cmd(cmd):
+        # construct minimal environment
+        env = {}
+        for k in ['SYSTEMROOT', 'PATH']:
+            v = os.environ.get(k)
+            if v is not None:
+                env[k] = v
+        # LANGUAGE is used on win32
+        env['LANGUAGE'] = 'C'
+        env['LANG'] = 'C'
+        env['LC_ALL'] = 'C'
+        out = subprocess.Popen(cmd, stdout = subprocess.PIPE, env=env).communicate()[0]
+        return out
+
+    try:
+        out = _minimal_ext_cmd(['git', 'rev-parse', 'HEAD'])
+        GIT_REVISION = out.strip().decode('ascii')
+    except OSError:
+        GIT_REVISION = "Unknown"
+
+    return GIT_REVISION
+
+
+# BEFORE importing distutils, remove MANIFEST. distutils doesn't properly
+# update it when the contents of directories change.
+if os.path.exists('MANIFEST'):
+    os.remove('MANIFEST')
+
+def get_version_info():
+    # Adding the git rev number needs to be done inside
+    # write_version_py(), otherwise the import of pykf.version messes
+    # up the build under Python 3.
+    FULLVERSION = VERSION
+    if os.path.exists('.git'):
+        GIT_REVISION = git_version()
+    elif os.path.exists('pykf/version.py'):
+        # must be a source distribution, use existing version file
+        # load it as a separate module to not load pykf/__init__.py
+        import imp
+        version = imp.load_source('pykf.version', 'pykf/version.py')
+        GIT_REVISION = version.git_revision
+    else:
+        GIT_REVISION = "Unknown"
+
+    if not ISRELEASED:
+        FULLVERSION += '.dev-' + GIT_REVISION[:7]
+
+    return FULLVERSION, GIT_REVISION
+
+
+def write_version_py(filename='pykf/version.py'):
+    cnt = """
+# THIS FILE IS GENERATED FROM PYKF SETUP.PY
+short_version = '%(version)s'
+version = '%(version)s'
+full_version = '%(full_version)s'
+git_revision = '%(git_revision)s'
+release = %(isrelease)s
+
+if not release:
+    version = full_version
+"""
+    FULLVERSION, GIT_REVISION = get_version_info()
+
+    a = open(filename, 'w')
+    try:
+        a.write(cnt % {'version': VERSION,
+                       'full_version' : FULLVERSION,
+                       'git_revision' : GIT_REVISION,
+                       'isrelease': str(ISRELEASED)})
+    finally:
+        a.close()
+
+try:
+    from sphinx.setup_command import BuildDoc
+    HAVE_SPHINX = True
+except:
+    HAVE_SPHINX = False
+
+if HAVE_SPHINX:
+    class ScipyBuildDoc(BuildDoc):
+        """Run in-place build before Sphinx doc build"""
+        def run(self):
+            ret = subprocess.call([sys.executable, sys.argv[0], 'build_ext', '-i'])
+            if ret != 0:
+                raise RuntimeError("Building Scipy failed!")
+            BuildDoc.run(self)
+
+def generate_cython():
+    cwd = os.path.abspath(os.path.dirname(__file__))
+    print("Cythonizing sources")
+    p = subprocess.call([sys.executable,
+                          os.path.join(cwd, 'tools', 'cythonize.py'),
+                          'pykf'],
+                         cwd=cwd)
+    if p != 0:
+        raise RuntimeError("Running cythonize failed!")
+
+
+def configuration(parent_package='',top_path=None):
+    from numpy.distutils.misc_util import Configuration
+    config = Configuration(None, parent_package, top_path)
+    config.set_options(ignore_setup_xxx_py=True,
+                       assume_default_configuration=True,
+                       delegate_options_to_subpackages=True,
+                       quiet=True)
+
+    config.add_subpackage('pykf')
+    config.add_data_files(('pykf','*.txt'))
+
+    config.get_version('pykf/version.py')
+
+    return config
 
 def setup_package():
-    setup(
-        name=DISTNAME,
-        version=VERSION,
-        packages=find_packages(),
 
-        author=AUTHOR,
-        description=DESCRIPTION,
-        license=LICENSE,
-        url=URL,
+    # Rewrite the version file every time
+    write_version_py()
 
-        install_requires=['numpy', 'scipy'],
-        setup_requires=['nose>=1.0'],
+    if HAVE_SPHINX:
+        cmdclass = {'build_sphinx': ScipyBuildDoc}
+    else:
+        cmdclass = {}
+
+    # Figure out whether to add ``*_requires = ['numpy']``.
+    # We don't want to do that unconditionally, because we risk updating
+    # an installed numpy which fails too often.  Just if it's not installed, we
+    # may give it a try.  See gh-3379.
+    build_requires = []
+    try:
+        import numpy
+    except:
+        build_requires = ['numpy>=1.5.1']
+
+    metadata = dict(
+        name = 'pykf',
+        maintainer = "Chad Fulton",
+        # maintainer_email = "",
+        description = DOCLINES[0],
+        long_description = "\n".join(DOCLINES[2:]),
+        url = "http://github.com/ChadFulton/pykalman_filter",
+        # download_url = "",
+        license = 'Simplified-BSD',
+        cmdclass=cmdclass,
+        classifiers=[_f for _f in CLASSIFIERS.split('\n') if _f],
+        platforms = ["Windows", "Linux", "Solaris", "Mac OS-X", "Unix"],
         test_suite='nose.collector',
-        zip_safe=False,
-
-        cmdclass={'build_ext': build_ext},
-        ext_modules=ext_modules
+        setup_requires = build_requires,
+        install_requires = build_requires,
     )
+
+    if len(sys.argv) >= 2 and ('--help' in sys.argv[1:] or
+            sys.argv[1] in ('--help-commands', 'egg_info', '--version',
+                            'clean')):
+        # For these actions, NumPy is not required.
+        #
+        # They are required to succeed without Numpy for example when
+        # pip is used to install pykf when Numpy is not yet present in
+        # the system.
+        try:
+            from setuptools import setup
+        except ImportError:
+            from distutils.core import setup
+
+        FULLVERSION, GIT_REVISION = get_version_info()
+        metadata['version'] = FULLVERSION
+    else:
+        if len(sys.argv) >= 2 and sys.argv[1] == 'bdist_wheel':
+            # bdist_wheel needs setuptools
+            import setuptools
+
+        from numpy.distutils.core import setup
+
+        cwd = os.path.abspath(os.path.dirname(__file__))
+        if not os.path.exists(os.path.join(cwd, 'PKG-INFO')):
+            # Generate Cython sources, unless building from source release
+            generate_cython()
+
+        metadata['configuration'] = configuration
+
+    setup(**metadata)
 
 if __name__ == '__main__':
     setup_package()
