@@ -51,26 +51,36 @@ cdef extern from "capsule.h":
 
 # BLAS / LAPACK functions
 from blas_lapack cimport *
-from scipy.linalg import blas, lapack
 
-dtype_array = np.zeros((2,1), order="F")
+try:
+    from scipy.linalg.blas import cgerc
+except:
+    from scipy.linalg.blas import fblas as blas
+else:
+    from scipy.linalg import blas
+
+try:
+    from scipy.linalg.lapack import cgbsv
+except:
+    from scipy.linalg.lapack import flapack as lapack
+else:
+    from scipy.linalg import lapack
 
 {{for prefix, types in TYPES.items()}}
-{{py:cython_type, dtype = types}}
 {{for function in BLAS_FUNCTIONS}}
 {{py: name = prefix + function}}
-cdef {{name}}_t *{{name}} = <{{name}}_t*>Capsule_AsVoidPtr(blas.get_blas_funcs('{{function}}', dtype={{dtype}})._cpointer)
+cdef {{name}}_t *{{name}} = <{{name}}_t*>Capsule_AsVoidPtr(blas.{{name}}._cpointer)
 {{endfor}}
 {{for function in LAPACK_FUNCTIONS}}
 {{py: name = prefix + function}}
-cdef {{name}}_t *{{name}} = <{{name}}_t*>Capsule_AsVoidPtr(lapack.get_lapack_funcs(('{{function}}',), (dtype_array.astype({{dtype}}),))[0]._cpointer)
+cdef {{name}}_t *{{name}} = <{{name}}_t*>Capsule_AsVoidPtr(lapack.{{name}}._cpointer)
 {{endfor}}
 {{endfor}}
 
-cdef sdot_t *sdot = <sdot_t*>Capsule_AsVoidPtr(blas.get_blas_funcs('dot', dtype=np.float32)._cpointer)
-cdef ddot_t *ddot = <ddot_t*>Capsule_AsVoidPtr(blas.get_blas_funcs('dot', dtype=float)._cpointer)
-cdef cdotu_t *cdot = <cdotu_t*>Capsule_AsVoidPtr(blas.get_blas_funcs('dotu', dtype=np.complex64)._cpointer)
-cdef zdotu_t *zdot = <zdotu_t*>Capsule_AsVoidPtr(blas.get_blas_funcs('dotu', dtype=complex)._cpointer)
+cdef sdot_t *sdot = <sdot_t*>Capsule_AsVoidPtr(blas.sdot._cpointer)
+cdef ddot_t *ddot = <ddot_t*>Capsule_AsVoidPtr(blas.ddot._cpointer)
+cdef cdotu_t *cdot = <cdotu_t*>Capsule_AsVoidPtr(blas.cdotu._cpointer)
+cdef zdotu_t *zdot = <zdotu_t*>Capsule_AsVoidPtr(blas.zdotu._cpointer)
 
 {{for prefix, types in TYPES.items()}}
 {{py:cython_type, dtype = types}}
