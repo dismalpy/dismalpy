@@ -15,9 +15,9 @@ License: Simplified-BSD
 
 TYPES = {
     "s": ("np.float32_t", "np.float32"),
-    "d": ("double", "float"),
+    "d": ("double", "np.float64"),
     "c": ("np.complex64_t", "np.complex64"),
-    "z": ("complex", "complex"),
+    "z": ("complex", "np.complex128"),
 }
 
 BLAS_FUNCTIONS = ["gemm", "gemv", "copy", "axpy"]
