@@ -8,7 +8,8 @@ def configuration(parent_package='', top_path=None):
     info = get_info("npymath")
     config.add_extension('kalman_filter',
                          sources=['kalman_filter.c'], extra_info=info)
-
+    config.add_extension('_statespace',
+                         sources=['_statespace.c'], extra_info=info)
     config.add_data_dir('tests')
 
     config.make_config_py()
