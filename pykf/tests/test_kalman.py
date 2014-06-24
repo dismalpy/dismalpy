@@ -1,5 +1,5 @@
 """
-Tests for Kalman Filter
+Tests for _statespace module
 
 Author: Chad Fulton
 License: Simplified-BSD
@@ -18,17 +18,41 @@ Princeton, N.J.: Princeton University Press.
 """
 from __future__ import division, absolute_import, print_function
 
-import os
 import numpy as np
 import pandas as pd
-from scipy import optimize
-import pykf.statespace as ss
-import results_kalman
-from numpy.testing import assert_allclose, assert_almost_equal
+import os
+
+try:
+    from scipy.linalg.blas import find_best_blas_type
+except ImportError:
+    # Shim for SciPy 0.11, derived from tag=0.11 scipy.linalg.blas
+    _type_conv = {'f': 's', 'd': 'd', 'F': 'c', 'D': 'z', 'G': 'z'}
+
+    def find_best_blas_type(arrays):
+        dtype, index = max(
+            [(ar.dtype, i) for i, ar in enumerate(arrays)])
+        prefix = _type_conv.get(dtype.char, 'd')
+        return prefix
+
+
+from pykf import _statespace as ss
+import results_kalman as results_kalman_filter
+from numpy.testing import assert_almost_equal
 from nose.exc import SkipTest
 
+prefix_statespace_map = {
+    's': ss.sStatespace, 'd': ss.dStatespace,
+    'c': ss.cStatespace, 'z': ss.zStatespace
+}
+prefix_kalman_filter_map = {
+    's': ss.sKalmanFilter, 'd': ss.dKalmanFilter,
+    'c': ss.cKalmanFilter, 'z': ss.zKalmanFilter
+}
 
-class TestClark1987(ss.Model):
+current_path = os.path.dirname(os.path.abspath(__file__))
+
+
+class Clark1987(object):
     """
     Clark's (1987) univariate unobserved components model of real GDP (as
     presented in Kim and Nelson, 1999)
@@ -36,10 +60,10 @@ class TestClark1987(ss.Model):
     Test data produced using GAUSS code described in Kim and Nelson (1999) and
     found at http://econ.korea.ac.kr/~cjkim/SSMARKOV.htm
 
-    See `results.results_kalman` for more information.
+    See `results.results_kalman_filter` for more information.
     """
-    def __init__(self):
-        self.true = results_kalman.uc_uni
+    def __init__(self, dtype=float):
+        self.true = results_kalman_filter.uc_uni
         self.true_states = pd.DataFrame(self.true['states'])
 
         # GDP, Quarterly, 1947.1 - 1995.3
@@ -50,100 +74,151 @@ class TestClark1987(ss.Model):
         )
         data['lgdp'] = np.log(data['GDP'])
 
-        super(TestClark1987, self).__init__(data['lgdp'], nstates=4)
-        self.H[:, :, 0] = [1, 1, 0, 0]
-        self.F[([0, 0, 1, 1, 2, 3], [0, 3, 1, 2, 1, 3])] = [1, 1, 0, 0, 1, 1]
+        # Observed data
+        obs = np.array(data['lgdp'], ndmin=2, dtype=dtype, order="F")
 
-        # Initial Values
-        self.initial_state = np.zeros((self.k,))
-        self.initial_state_cov = np.eye(self.k)*100
+        # Measurement equation
+        nendog = 1  # dimension of observed data
+        # design matrix
+        design = np.zeros((nendog, 4, 1), dtype=dtype, order="F")
+        design[:, :, 0] = [1, 1, 0, 0]
+        # observation intercept
+        obs_intercept = np.zeros((nendog, 1), dtype=dtype, order="F")
+        # observation covariance matrix
+        obs_cov = np.zeros((nendog, nendog, 1), dtype=dtype, order="F")
 
-        # Given parameters
-        self.result = self.estimate(self.true['parameters'], True)
+        # Transition equation
+        nstates = 4  # dimension of state space
+        # transition matrix
+        transition = np.zeros((nstates, nstates, 1), dtype=dtype, order="F")
+        transition[([0, 0, 1, 1, 2, 3],
+                    [0, 3, 1, 2, 1, 3],
+                    [0, 0, 0, 0, 0, 0])] = [1, 1, 0, 0, 1, 1]
+        # state intercept
+        state_intercept = np.zeros((nstates, 1), dtype=dtype, order="F")
+        # selection matrix
+        selection = np.asfortranarray(np.eye(nstates)[:, :, None], dtype=dtype)
+        # state covariance matrix
+        state_cov = np.zeros((nstates, nstates, 1), dtype=dtype, order="F")
 
-        # Only run MLE if necessary (long run-time)
-        self.mle_fit = None
+        # Initialization: Diffuse priors
+        initial_state = np.zeros((nstates,), dtype=dtype, order="F")
+        initial_state_cov = np.asfortranarray(np.eye(nstates)*100, dtype=dtype)
 
-    def mle(self):
-        if self.mle_fit is None:
-            # Maximize Likelihood
-            # (start parameters match those in uc_uni.opt, although this class
-            # uses a different transformation method so they appear different)
-            start_params = self.untransform(np.array([
-                0.013534, 0.013534, 0.013534, 1.166667, -0.333333
-            ]))
-            f = lambda params: -est.loglike(params)
-            est = ss.Estimator(self, self.true['start'])
-            self.mle_fit = optimize.fmin_bfgs(f, start_params,
-                                              full_output=True)
-
-    def transform(self, unconstrained):
-        constrained = np.zeros(unconstrained.shape)
-        constrained[0:3] = unconstrained[0:3]**2
-        constrained[3:] = ss.constrain_stationary(unconstrained[3:])
-        return constrained
-
-    def untransform(self, constrained):
-        unconstrained = np.zeros(constrained.shape)
-        unconstrained[0:3] = constrained[0:3]**0.5
-        unconstrained[3:] = ss.unconstrain_stationary(constrained[3:])
-        return unconstrained
-
-    def update(self, params, transformed=False):
-        if not transformed:
-            params = self.transform(params)
-        (sigma_v, sigma_e, sigma_w, phi_1, phi_2) = params
-
-        # Matrices
-        self.F[([1, 1], [1, 2])] = [phi_1, phi_2]
-        self.Q[np.diag_indices(self.k)] = [
+        # Update matrices with given parameters
+        (sigma_v, sigma_e, sigma_w, phi_1, phi_2) = np.array(
+            self.true['parameters'], dtype=dtype
+        )
+        transition[([1, 1], [1, 2], [0, 0])] = [phi_1, phi_2]
+        state_cov[np.diag_indices(nstates)+(np.zeros(nstates, dtype=int),)] = [
             sigma_v**2, sigma_e**2, 0, sigma_w**2
         ]
 
-    def test_mle_parameters(self):
-        self.mle()
-        assert_allclose(
-            self.transform(self.mle_fit[0]), self.true['parameters'], rtol=0.05
+        # Initialization: modification
+        # Due to the difference in the way Kim and Nelson (1999) and Drubin
+        # and Koopman (2012) define the order of the Kalman filter routines,
+        # we need to modify the initial state covariance matrix to match
+        # Kim and Nelson's results, since the *Statespace models follow Durbin
+        # and Koopman.
+        initial_state_cov = np.asfortranarray(
+            np.dot(
+                np.dot(transition[:, :, 0], initial_state_cov),
+                transition[:, :, 0].T
+            )
         )
 
-    def test_mle_standard_errors(self):
-        raise SkipTest('Not implemented')
+        # Use the appropriate Statespace model
+        prefix = find_best_blas_type((obs,))
+        cls = prefix_statespace_map[prefix[0]]
+
+        # Instantiate the statespace model
+        self.model = cls(obs, design, obs_intercept, obs_cov, transition,
+                         state_intercept, selection, state_cov)
+        self.model.initialize(initial_state, initial_state_cov)
+
+        # Initialize the appropriate Kalman filter
+        cls = prefix_kalman_filter_map[prefix[0]]
+        self.filter = cls(self.model)
+
+        # Filter the data
+        self.filter()
+
+        # Get results
+        self.result = {
+            'loglike': lambda burn: np.sum(self.model.loglikelihood[burn:]),
+            'state': np.array(self.model.filtered_state),
+        }
 
     def test_loglike(self):
         assert_almost_equal(
-            self.result.loglike(self.true['start']), self.true['loglike'], 5
+            self.result['loglike'](self.true['start']), self.true['loglike'], 5
         )
 
     def test_filtered_state(self):
         assert_almost_equal(
-            self.result.state[0][self.true['start']:],
+            self.result['state'][0][self.true['start']:],
             self.true_states.iloc[:, 0], 4
         )
         assert_almost_equal(
-            self.result.state[1][self.true['start']:],
+            self.result['state'][1][self.true['start']:],
             self.true_states.iloc[:, 1], 4
         )
         assert_almost_equal(
-            self.result.state[3][self.true['start']:],
+            self.result['state'][3][self.true['start']:],
             self.true_states.iloc[:, 2], 4
         )
 
-    def test_smoothed_state(self):
+
+class TestClark1987Single(Clark1987):
+    """
+    Basic single precision test for the loglikelihood and filtered states.
+    """
+    def __init__(self):
         raise SkipTest('Not implemented')
+        super(TestClark1987Single, self).__init__(dtype=np.float32)
 
 
-class TestClark1989(ss.Model):
+class TestClark1987Double(Clark1987):
+    """
+    Basic double precision test for the loglikelihood and filtered states.
+    """
+    def __init__(self):
+        super(TestClark1987Double, self).__init__(dtype=float)
+
+
+class TestClark1987SingleComplex(Clark1987):
+    """
+    Basic single precision complex test for the loglikelihood and filtered
+    states.
+    """
+    def __init__(self):
+        raise SkipTest('Not implemented')
+        super(TestClark1987SingleComplex, self).__init__(dtype=np.complex64)
+
+
+class TestClark1987DoubleComplex(Clark1987):
+    """
+    Basic double precision complex test for the loglikelihood and filtered
+    states.
+    """
+    def __init__(self):
+        super(TestClark1987DoubleComplex, self).__init__(dtype=complex)
+
+
+class TestClark1989(object):
     """
     Clark's (1989) bivariate unobserved components model of real GDP (as
     presented in Kim and Nelson, 1999)
 
+    Tests two-dimensional observation data.
+
     Test data produced using GAUSS code described in Kim and Nelson (1999) and
     found at http://econ.korea.ac.kr/~cjkim/SSMARKOV.htm
 
-    See `results.results_kalman` for more information.
+    See `results.results_kalman_filter` for more information.
     """
-    def __init__(self):
-        self.true = results_kalman.uc_bi
+    def __init__(self, dtype=float):
+        self.true = results_kalman_filter.uc_bi
         self.true_states = pd.DataFrame(self.true['states'])
 
         # GDP and Unemployment, Quarterly, 1948.1 - 1995.3
@@ -155,205 +230,107 @@ class TestClark1989(ss.Model):
         data['GDP'] = np.log(data['GDP'])
         data['UNEMP'] = (data['UNEMP']/100)
 
-        super(TestClark1989, self).__init__(data, nstates=6)
-        self.H[:, :, 0] = [[1, 1, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1]]
-        self.F[([0, 0, 1, 1, 2, 3, 4, 5],
-                [0, 4, 1, 2, 1, 2, 4, 5])] = [1, 1, 0, 0, 1, 1, 1, 1]
+        # Observed data
+        obs = np.array(data, ndmin=2, dtype=dtype, order="C").T
 
-        # Initial Values
-        self.initial_state = np.zeros((self.k,))
-        self.initial_state_cov = np.eye(self.k)*100
+        # Parameters
+        nendog = 2  # dimension of observed data
+        nstates = 6  # dimension of state space
 
-        # Given parameters
-        self.result = self.estimate(self.true['parameters'], True)
+        # Measurement equation
 
-        # Only run MLE if necessary (long run-time)
-        self.mle_fit = None
+        # design matrix
+        design = np.zeros((nendog, nstates, 1), dtype=dtype, order="F")
+        design[:, :, 0] = [[1, 1, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1]]
+        # observation intercept
+        obs_intercept = np.zeros((nendog, 1), dtype=dtype, order="F")
+        # observation covariance matrix
+        obs_cov = np.zeros((nendog, nendog, 1), dtype=dtype, order="F")
 
-    def mle(self):
-        if self.mle_fit is None:
-            # Maximize Likelihood
-            # (start parameters match those in uc_bi.opt, although this class
-            # uses a different transformation method so they appear different)
-            # (uc_bi.opt starts at the optimizing parameters)
-            start_params = self.untransform(np.r_[self.true['parameters']])
-            f = lambda params: -est.loglike(params)
-            est = ss.Estimator(self, self.true['start'])
-            self.mle_fit = optimize.fmin_bfgs(f, start_params,
-                                              full_output=True)
+        # Transition equation
 
-    def transform(self, unconstrained):
-        constrained = np.zeros(unconstrained.shape)
-        constrained[0:5] = unconstrained[0:5]**2
-        constrained[5:7] = ss.constrain_stationary(unconstrained[5:7])
-        constrained[7:] = unconstrained[7:]
-        return constrained
+        # transition matrix
+        transition = np.zeros((nstates, nstates, 1), dtype=dtype, order="F")
+        transition[([0, 0, 1, 1, 2, 3, 4, 5],
+                    [0, 4, 1, 2, 1, 2, 4, 5],
+                    [0, 0, 0, 0, 0, 0, 0, 0])] = [1, 1, 0, 0, 1, 1, 1, 1]
+        # state intercept
+        state_intercept = np.zeros((nstates, 1), dtype=dtype, order="F")
+        # selection matrix
+        selection = np.asfortranarray(np.eye(nstates)[:, :, None], dtype=dtype)
+        # state covariance matrix
+        state_cov = np.zeros((nstates, nstates, 1), dtype=dtype, order="F")
 
-    def untransform(self, constrained):
-        unconstrained = np.zeros(constrained.shape)
-        unconstrained[0:5] = constrained[0:5]**0.5
-        unconstrained[5:7] = ss.unconstrain_stationary(constrained[5:7])
-        unconstrained[7:] = constrained[7:]
-        return unconstrained
+        # Initialization: Diffuse priors
+        initial_state = np.zeros((nstates,), dtype=dtype)
+        initial_state_cov = np.asfortranarray(np.eye(nstates)*100, dtype=dtype)
 
-    def update(self, params, transformed=False):
-        if not transformed:
-            params = self.transform(params)
+        # Update matrices with given parameters
         (sigma_v, sigma_e, sigma_w, sigma_vl, sigma_ec,
-         phi_1, phi_2, alpha_1, alpha_2, alpha_3) = params
-
-        # Matrices
-        self.H[([1, 1, 1], [1, 2, 3], [0, 0, 0])] = [alpha_1, alpha_2, alpha_3]
-        self.F[([1, 1], [1, 2])] = [phi_1, phi_2]
-        self.R[1, 1] = sigma_ec**2
-        self.Q[np.diag_indices(self.k)] = [
+         phi_1, phi_2, alpha_1, alpha_2, alpha_3) = np.array(
+            self.true['parameters'], dtype=dtype
+        )
+        design[([1, 1, 1], [1, 2, 3], [0, 0, 0])] = [alpha_1, alpha_2, alpha_3]
+        transition[([1, 1], [1, 2], [0, 0])] = [phi_1, phi_2]
+        obs_cov[1, 1, 0] = sigma_ec**2
+        state_cov[np.diag_indices(nstates)+(np.zeros(nstates, dtype=int),)] = [
             sigma_v**2, sigma_e**2, 0, 0, sigma_w**2, sigma_vl**2
         ]
 
-    def test_mle_parameters(self):
-        self.mle()
-        assert_allclose(
-            self.transform(self.mle_fit[0]), self.true['parameters'], rtol=0.05
+        # Initialization: modification
+        # Due to the difference in the way Kim and Nelson (1999) and Drubin
+        # and Koopman (2012) define the order of the Kalman filter routines,
+        # we need to modify the initial state covariance matrix to match
+        # Kim and Nelson's results, since the *Statespace models follow Durbin
+        # and Koopman.
+        initial_state_cov = np.asfortranarray(
+            np.dot(
+                np.dot(transition[:, :, 0], initial_state_cov),
+                transition[:, :, 0].T
+            )
         )
 
-    def test_mle_standard_errors(self):
-        raise SkipTest('Not implemented')
+        # Use the appropriate Statespace model
+        prefix = find_best_blas_type((obs,))
+        cls = prefix_statespace_map[prefix[0]]
+
+        # Instantiate the statespace model
+        self.model = cls(obs, design, obs_intercept, obs_cov, transition,
+                         state_intercept, selection, state_cov)
+        self.model.initialize(initial_state, initial_state_cov)
+
+        # Initialize the appropriate Kalman filter
+        cls = prefix_kalman_filter_map[prefix[0]]
+        self.filter = cls(self.model)
+
+        # Filter the data
+        self.filter()
+
+        # Get results
+        self.result = {
+            'loglike': lambda burn: np.sum(self.model.loglikelihood[burn:]),
+            'state': np.array(self.model.filtered_state),
+        }
 
     def test_loglike(self):
         assert_almost_equal(
-            self.result.loglike(self.true['start']), self.true['loglike'], 5
+            self.result['loglike'](self.true['start']), self.true['loglike'], 2
         )
 
     def test_filtered_state(self):
         assert_almost_equal(
-            self.result.state[0][self.true['start']:],
+            self.result['state'][0][self.true['start']:],
             self.true_states.iloc[:, 0], 4
         )
         assert_almost_equal(
-            self.result.state[1][self.true['start']:],
+            self.result['state'][1][self.true['start']:],
             self.true_states.iloc[:, 1], 4
         )
         assert_almost_equal(
-            self.result.state[4][self.true['start']:],
+            self.result['state'][4][self.true['start']:],
             self.true_states.iloc[:, 2], 4
         )
         assert_almost_equal(
-            self.result.state[5][self.true['start']:],
+            self.result['state'][5][self.true['start']:],
             self.true_states.iloc[:, 3], 4
         )
-
-    def test_smoothed_state(self):
-        raise SkipTest('Not implemented')
-
-
-class TestKimNelson1989(ss.Model):
-    """
-    Kim and Nelson's (1989) time-varying parameters model of monetary growth
-    (as presented in Kim and Nelson, 1999)
-
-    Test data produced using GAUSS code described in Kim and Nelson (1999) and
-    found at http://econ.korea.ac.kr/~cjkim/SSMARKOV.htm
-
-    See `results.results_kalman` for more information.
-    """
-    def __init__(self):
-        self.true = results_kalman.tvp
-        self.true_states = pd.DataFrame(self.true['states'])
-
-        # Quarterly, 1959.3--1985.4
-        data = pd.DataFrame(
-            self.true['data'],
-            index=pd.date_range(
-                start='1959-07-01', end='1985-10-01', freq='QS'),
-            columns=['Qtr', 'm1', 'dint', 'inf', 'surpl', 'm1lag']
-        )
-
-        super(TestKimNelson1989, self).__init__(data['m1'], nstates=5)
-        self.H = np.c_[
-            np.ones(data['dint'].shape),
-            data['dint'],
-            data['inf'],
-            data['surpl'],
-            data['m1lag']
-        ].T[None, :]
-        self.F = np.eye(self.k)
-
-        # Initial Values
-        self.initial_state = np.zeros((self.k,))
-        self.initial_state_cov = np.eye(self.k)*50
-
-        # Given parameters
-        self.result = self.estimate(self.true['parameters'], True)
-
-        # Only run MLE if necessary (long run-time)
-        self.mle_fit = None
-
-    def mle(self):
-        if self.mle_fit is None:
-            # Maximize Likelihood
-            # (start parameters match those in tvp.opt)
-            start_params = np.array([0.5, 0.1, 0.1, 0.1, 0.1, 0.1])
-            f = lambda params: -est.loglike(params)
-            est = ss.Estimator(self, self.true['start'])
-            self.mle_fit = optimize.fmin_bfgs(f, start_params,
-                                              full_output=True)
-
-    def transform(self, unconstrained):
-        constrained = unconstrained.copy()**2
-        return constrained
-
-    def untransform(self, constrained):
-        unconstrained = constrained.copy()**0.5
-        return unconstrained
-
-    def update(self, params, transformed=False):
-        if not transformed:
-            params = self.transform(params)
-        (sigma_e, sigma_v0, sigma_v1, sigma_v2, sigma_v3, sigma_v4) = params
-
-        # Matrices
-        self.R[0, 0] = sigma_e**2
-        self.Q[np.diag_indices(self.k)] = [
-            sigma_v0**2, sigma_v1**2,
-            sigma_v2**2, sigma_v3**2,
-            sigma_v4**2
-        ]
-
-    def test_mle_parameters(self):
-        self.mle()
-        assert_allclose(
-            self.transform(self.mle_fit[0]), self.true['parameters'], rtol=0.1
-        )
-
-    def test_mle_standard_errors(self):
-        raise SkipTest('Not implemented')
-
-    def test_loglike(self):
-        assert_almost_equal(
-            self.result.loglike(self.true['start']), self.true['loglike'], 5
-        )
-
-    def test_filtered_state(self):
-        assert_almost_equal(
-            self.result.state[0][self.true['start']-1:-1],
-            self.true_states.iloc[:, 0], 3
-        )
-        assert_almost_equal(
-            self.result.state[1][self.true['start']-1:-1],
-            self.true_states.iloc[:, 1], 3
-        )
-        assert_almost_equal(
-            self.result.state[2][self.true['start']-1:-1],
-            self.true_states.iloc[:, 2], 3
-        )
-        assert_almost_equal(
-            self.result.state[3][self.true['start']-1:-1],
-            self.true_states.iloc[:, 3], 3
-        )
-        assert_almost_equal(
-            self.result.state[4][self.true['start']-1:-1],
-            self.true_states.iloc[:, 4], 3
-        )
-
-    def test_smoothed_state(self):
-        raise SkipTest('Not implemented')
