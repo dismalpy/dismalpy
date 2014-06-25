@@ -134,7 +134,7 @@ class Clark1987(object):
         # Instantiate the statespace model
         self.model = cls(obs, design, obs_intercept, obs_cov, transition,
                          state_intercept, selection, state_cov)
-        self.model.initialize(initial_state, initial_state_cov)
+        self.model.initialize_known(initial_state, initial_state_cov)
 
         # Initialize the appropriate Kalman filter
         cls = prefix_kalman_filter_map[prefix[0]]
@@ -297,7 +297,7 @@ class TestClark1989(object):
         # Instantiate the statespace model
         self.model = cls(obs, design, obs_intercept, obs_cov, transition,
                          state_intercept, selection, state_cov)
-        self.model.initialize(initial_state, initial_state_cov)
+        self.model.initialize_known(initial_state, initial_state_cov)
 
         # Initialize the appropriate Kalman filter
         cls = prefix_kalman_filter_map[prefix[0]]

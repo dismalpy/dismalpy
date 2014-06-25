@@ -1,3 +1,6 @@
+#cython: boundscheck=False
+#cython: wraparound=False
+#cython: cdivision=False
 """
 State Space Models
 
@@ -23,27 +26,27 @@ LAPACK_FUNCTIONS = ["getrf", "getri", "getrs", "potrf", "potri", "potrs"]
 
 # ### Filters
 # TODO note that only the conventional filter is implemented
-FILTER_CONVENTIONAL = 0x01     # Durbin and Koopman (2012), Chapter 4
-FILTER_EXACT_INITIAL = 0x02    # ibid., Chapter 5.6
-FILTER_AUGMENTED = 0x04        # ibid., Chapter 5.7
-FILTER_SQUARE_ROOT = 0x08      # ibid., Chapter 6.3
-FILTER_UNIVARIATE = 0x10       # ibid., Chapter 6.4
-FILTER_COLLAPSED = 0x20        # ibid., Chapter 6.5
-FILTER_EXTENDED = 0x40         # ibid., Chapter 10.2
-FILTER_UNSCENTED = 0x80        # ibid., Chapter 10.3
+cdef int FILTER_CONVENTIONAL = 0x01     # Durbin and Koopman (2012), Chapter 4
+cdef int FILTER_EXACT_INITIAL = 0x02    # ibid., Chapter 5.6
+cdef int FILTER_AUGMENTED = 0x04        # ibid., Chapter 5.7
+cdef int FILTER_SQUARE_ROOT = 0x08      # ibid., Chapter 6.3
+cdef int FILTER_UNIVARIATE = 0x10       # ibid., Chapter 6.4
+cdef int FILTER_COLLAPSED = 0x20        # ibid., Chapter 6.5
+cdef int FILTER_EXTENDED = 0x40         # ibid., Chapter 10.2
+cdef int FILTER_UNSCENTED = 0x80        # ibid., Chapter 10.3
 
 # ### Inversion methods
 # Methods by which the terms using the inverse of the forecast error
 # covariance matrix are solved.
-INVERT_UNIVARIATE = 0x01
-SOLVE_LU = 0x02
-INVERT_LU = 0x04
-SOLVE_CHOLESKY = 0x08
-INVERT_CHOLESKY = 0x10
+cdef int INVERT_UNIVARIATE = 0x01
+cdef int SOLVE_LU = 0x02
+cdef int INVERT_LU = 0x04
+cdef int SOLVE_CHOLESKY = 0x08
+cdef int INVERT_CHOLESKY = 0x10
 
 # ### Numerical Stability methods
 # Methods to improve numerical stability
-STABILITY_FORCE_SYMMETRY = 0x01
+cdef int STABILITY_FORCE_SYMMETRY = 0x01
 
 # Typical imports
 import numpy as np
@@ -204,6 +207,14 @@ cdef class {{prefix}}Statespace(object):
     # *Old notation: H, R, F, G, Q*, G Q* G'*
     cdef readonly {{cython_type}} [::1,:,:] design, obs_cov, transition, selection, state_cov, selected_state_cov
 
+    # `missing` is a $(p \times T)$ boolean matrix where a row is a $(p \times 1)$ vector
+    # in which the $i$th position is $1$ if y_{i,t} is to be considered a missing value.  
+    # *Note:* This is created as the output of np.isnan(obs).
+    cdef readonly int [::1,:] missing
+    # `nmissing` is an `T \times 0` integer vector holding the number of *missing* observations
+    # $p - p_t$
+    cdef readonly int [:] nmissing
+
     # Flag for a time-invariant model, which requires that *all* of the
     # possibly time-varying arrays are time-invariant.
     cdef readonly int time_invariant
@@ -330,12 +341,16 @@ cdef class {{prefix}}Statespace(object):
         dim1[0] = self.nobs
         self.loglikelihood = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
 
+        # Handle missing data
+        self.missing = np.array(np.isnan(obs), dtype = np.int32, order="F")
+        self.nmissing = np.array(np.sum(self.missing, axis=0), dtype = np.int32)
+
     # ## Initialize: user-provided
     #
     # Initialize the filter with specific values.
-    def initialize(self, {{cython_type}} [:] initial_state, {{cython_type}} [::1,:] initial_state_cov):
+    def initialize_known(self, {{cython_type}} [:] initial_state, {{cython_type}} [::1,:] initial_state_cov):
         """
-        initialize(initial_state, initial_state_cov)
+        initialize_known(initial_state, initial_state_cov)
         """
         validate_vector_shape('inital state', &initial_state.shape[0], self.nstates, None)
         validate_matrix_shape('initial state covariance', &initial_state_cov.shape[0], self.nstates, self.nstates, None)
@@ -345,16 +360,16 @@ cdef class {{prefix}}Statespace(object):
 
         self.initialized = True
 
-    # ## Initialize: diffuse priors
+    # ## Initialize: approximate diffuse priors
     #
     # Durbin and Koopman note that this initialization should only be coupled
     # with the standard Kalman filter for "approximate exploratory work" and
     # can lead to "large rounding errors" (p. 125).
     # 
     # *Note:* see Durbin and Koopman section 5.6.1
-    def initialize_diffuse(self, variance=1e2):
+    def initialize_approximate_diffuse(self, variance=1e2):
         """
-        initialize_diffuse(variance=1e2)
+        initialize_approximate_diffuse(variance=1e2)
         """
         cdef np.npy_intp dim[1]
         dim[0] = self.nstates
@@ -365,8 +380,22 @@ cdef class {{prefix}}Statespace(object):
 
     # ## Initialize: stationary process
     # *Note:* see Durbin and Koopman section 5.6.2
+    # TODO improve efficiency with direct BLAS / LAPACK calls
     def initialize_stationary(self):
-        raise NotImplementedError
+        cdef np.npy_intp dim[1]
+
+        from scipy.linalg import solve_discrete_lyapunov
+
+        dim[0] = self.nstates
+        self.initial_state = np.PyArray_ZEROS(1, dim, {{typenum}}, FORTRAN)
+        self.initial_state_cov =  np.asfortranarray(
+            solve_discrete_lyapunov(
+                np.array(self.transition[:,:,0]),
+                np.array(self.state_cov[:,:,0])
+            ), dtype={{dtype}}
+        )
+
+        self.initialized = True
 
 
 cdef void {{prefix}}select_state_cov({{prefix}}KalmanFilter kfilter):
@@ -852,6 +881,16 @@ cdef class {{prefix}}KalmanFilter(object):
     cdef public int stability_method
 
     # ### Temporary arrays
+    # These matrices are used to temporarily hold selected observation vectors,
+    # design matrices, and observation covariance matrices in the case of
+    # missing data.  
+    cdef readonly {{cython_type}} [:] selected_obs
+    cdef readonly {{cython_type}} [::1,:] _selected_design
+    cdef readonly {{cython_type}} [::1,:] _selected_obs_cov
+    # The following are contiguous memory segments which are then used to
+    # store the data in the above matrices.
+    cdef readonly {{cython_type}} [:] selected_design
+    cdef readonly {{cython_type}} [:] selected_obs_cov
     # `forecast_error_fac` is a forecast error covariance matrix **factorization** $(p \times p)$.
     # Depending on the method for handling the inverse of the forecast error covariance matrix, it may be:
     # - a Cholesky factorization if `cholesky_solve` is used
@@ -994,6 +1033,14 @@ cdef class {{prefix}}KalmanFilter(object):
         self._tmp3 = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
         self.tmp3 = &self._tmp3[0, 0]
 
+        # Arrays for missing data
+        dim1[0] = self.nendog;
+        self.selected_obs = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+        dim1[0] = self.nendog * self.nstates;
+        self.selected_design = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+        dim1[0] = self.nendog2;
+        self.selected_obs_cov = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+
         # Initialize time and convergence status
         self.seek(0)
 
@@ -1034,6 +1081,11 @@ cdef class {{prefix}}KalmanFilter(object):
         # Initialize pointers to appropriate Kalman filtering functions
         self.initialize_function_pointers()
         # print "function pointers"
+
+        # Convert base arrays into "selected" arrays  
+        # - State covariance matrix? $Q_t \to R_t Q_t R_t`$
+        # - Missing values: $y_t \to W_t y_t$, $Z_t \to W_t Z_t$, $H_t \to W_t H_t$
+        self.select_arrays()
 
         # Post-convergence: copy previous iteration arrays
         self.post_convergence()
@@ -1084,7 +1136,6 @@ cdef class {{prefix}}KalmanFilter(object):
             int state_intercept_t = 0
             int selection_t = 0
             int state_cov_t = 0
-            int selected_state_cov_t = 0
 
         # Get indices for possibly time-varying arrays
         if not self.model.time_invariant:
@@ -1135,14 +1186,6 @@ cdef class {{prefix}}KalmanFilter(object):
         self.predicted_state = &self.model.predicted_state[0, t+1]
         self.predicted_state_cov = &self.model.predicted_state_cov[0, 0, t+1]
 
-        # ### Get selected state covariance matrix
-        if t == 0 or self.model.selected_state_cov.shape[2] > 1:
-            selected_state_cov_t = t
-            self.selected_state_cov = &self.model.selected_state_cov[0, 0, selected_state_cov_t]
-            self.select_state_cov()
-        else:
-            self.selected_state_cov = &self.model.selected_state_cov[0, 0, 0]
-
     cdef void initialize_function_pointers(self) except *:
         if self.filter_method & FILTER_CONVENTIONAL:
             self.forecasting = {{prefix}}forecast_conventional
@@ -1172,33 +1215,97 @@ cdef class {{prefix}}KalmanFilter(object):
         else:
             raise NotImplementedError("Invalid filtering method")
 
-    cdef void select_state_cov(self):
-        # Constants
+    cdef void select_arrays(self) except *:
+        cdef:
+            int i, j, k, l
+            int inc = 1
+            int design_t = 0
+            int obs_cov_t = 0
+            int selected_state_cov_t = 0
         cdef:
             {{cython_type}} alpha = 1.0
             {{cython_type}} beta = 0.0
+        cdef:
+            np.npy_intp dim1[1]
+            np.npy_intp dim2[2]
 
-        # #### Calculate selected state covariance matrix  
-        # $Q_t^* = R_t Q_t R_t'$
-        # 
-        # Combine the selection matrix and the state covariance matrix to get
-        # the simplified (but possibly singular) "selected" state covariance
-        # matrix (see e.g. Durbin and Koopman p. 43)
+        # ### Get selected state covariance matrix
+        if self.t == 0 or self.model.selected_state_cov.shape[2] > 1:
+            selected_state_cov_t = self.t
+            self.selected_state_cov = &self.model.selected_state_cov[0, 0, selected_state_cov_t]
+            
+            # #### Calculate selected state covariance matrix  
+            # $Q_t^* = R_t Q_t R_t'$
+            # 
+            # Combine the selection matrix and the state covariance matrix to get
+            # the simplified (but possibly singular) "selected" state covariance
+            # matrix (see e.g. Durbin and Koopman p. 43)
 
-        # `tmp0` array used here, dimension $(m \times r)$  
+            # `tmp0` array used here, dimension $(m \times r)$  
 
-        # $\\#_0 = 1.0 * R_t Q_t$  
-        # $(m \times r) = (m \times r) (r \times r)$
-        {{prefix}}gemm("N", "N", &self.nstates, &self.nposdef, &self.nposdef,
-              &alpha, self.selection, &self.nstates,
-                      self.state_cov, &self.nposdef,
-              &beta, self.tmp0, &self.nstates)
-        # $Q_t^* = 1.0 * \\#_0 R_t'$  
-        # $(m \times m) = (m \times r) (m \times r)'$
-        {{prefix}}gemm("N", "T", &self.nstates, &self.nposdef, &self.nposdef,
-              &alpha, self.tmp0, &self.nstates,
-                      self.selection, &self.nstates,
-              &beta, self.selected_state_cov, &self.nstates)
+            # $\\#_0 = 1.0 * R_t Q_t$  
+            # $(m \times r) = (m \times r) (r \times r)$
+            {{prefix}}gemm("N", "N", &self.nstates, &self.nposdef, &self.nposdef,
+                  &alpha, self.selection, &self.nstates,
+                          self.state_cov, &self.nposdef,
+                  &beta, self.tmp0, &self.nstates)
+            # $Q_t^* = 1.0 * \\#_0 R_t'$  
+            # $(m \times m) = (m \times r) (m \times r)'$
+            {{prefix}}gemm("N", "T", &self.nstates, &self.nposdef, &self.nposdef,
+                  &alpha, self.tmp0, &self.nstates,
+                          self.selection, &self.nstates,
+                  &beta, self.selected_state_cov, &self.nstates)
+        else:
+            self.selected_state_cov = &self.model.selected_state_cov[0, 0, 0]
+
+        # ### Perform missing selections
+        # In Durbin and Koopman (2012), these are represented as matrix
+        # multiplications, i.e. $Z_t^* = W_t Z_t$ where $W_t$ is a row
+        # selection matrix (it contains a subset of rows of the identity
+        # matrix).
+        #
+        # It's more efficient, though, to just copy over the data directly,
+        # which is what is done here. Note that the `selected_*` arrays are
+        # defined as single-dimensional, so the assignment indexes below are
+        # set such that the arrays can be interpreted by the BLAS and LAPACK
+        # functions as two-dimensional, column-major arrays.
+        if self.model.nmissing[self.t] > 0:
+            # Set dimensions
+            self.nendog = self.model.nendog - self.model.nmissing[self.t]
+            self.nendog2 = self.nendog**2
+            self.nendogstates = self.nendog * self.nstates
+
+            if self.model.design.shape[2] > 1: design_t = self.t
+            if self.model.obs_cov.shape[2] > 1: obs_cov_t = self.t
+
+            k = 0
+            for i in range(self.model.nendog):
+                if not self.model.missing[i, self.t]:
+
+                    self.selected_obs[k] = self.model.obs[i, self.t]
+
+                    # i is rows
+                    # k is rows
+                    {{prefix}}copy(&self.model.nstates,
+                          &self.model.design[i, 0, design_t], &self.model.nendog,
+                          &self.selected_design[k], &self.nendog)
+
+                    # i, k is columns
+                    # j, l is rows
+                    l = 0
+                    for j in range(self.model.nendog):
+                        if not self.model.missing[j, self.t]:
+                            self.selected_obs_cov[l + k*self.nendog] = self.model.obs_cov[j, i, obs_cov_t]
+                            l += 1
+                    k += 1
+            self.obs = &self.selected_obs[0]
+            self.design = &self.selected_design[0]
+            self.obs_cov = &self.selected_obs_cov[0]
+        else:
+            # Reset dimensions
+            self.nendog = self.model.nendog
+            self.nendog2 = self.nendog**2
+            self.nendogstates = self.nendog * self.nstates
 
     cdef void post_convergence(self):
         # Constants
