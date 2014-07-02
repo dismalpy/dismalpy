@@ -145,8 +145,8 @@ class Clark1987(object):
 
         # Get results
         self.result = {
-            'loglike': lambda burn: np.sum(self.model.loglikelihood[burn:]),
-            'state': np.array(self.model.filtered_state),
+            'loglike': lambda burn: np.sum(self.filter.loglikelihood[burn:]),
+            'state': np.array(self.filter.filtered_state),
         }
 
     def test_loglike(self):
@@ -308,8 +308,8 @@ class TestClark1989(object):
 
         # Get results
         self.result = {
-            'loglike': lambda burn: np.sum(self.model.loglikelihood[burn:]),
-            'state': np.array(self.model.filtered_state),
+            'loglike': lambda burn: np.sum(self.filter.loglikelihood[burn:]),
+            'state': np.array(self.filter.filtered_state),
         }
 
     def test_loglike(self):
