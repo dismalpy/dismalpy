@@ -36,7 +36,7 @@ except ImportError:
 
 
 from pykf import _statespace as ss
-import results_kalman as results_kalman_filter
+import pykf.tests.results_kalman as results_kalman_filter
 from numpy.testing import assert_almost_equal
 from nose.exc import SkipTest
 
