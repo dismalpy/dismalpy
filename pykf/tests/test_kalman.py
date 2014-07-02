@@ -62,7 +62,7 @@ class Clark1987(object):
 
     See `results.results_kalman_filter` for more information.
     """
-    def __init__(self, dtype=float):
+    def __init__(self, dtype=float, conserve_memory=False):
         self.true = results_kalman_filter.uc_uni
         self.true_states = pd.DataFrame(self.true['states'])
 
@@ -138,7 +138,7 @@ class Clark1987(object):
 
         # Initialize the appropriate Kalman filter
         cls = prefix_kalman_filter_map[prefix[0]]
-        self.filter = cls(self.model)
+        self.filter = cls(self.model, conserve_memory=conserve_memory)
 
         # Filter the data
         self.filter()
@@ -175,7 +175,9 @@ class TestClark1987Single(Clark1987):
     """
     def __init__(self):
         raise SkipTest('Not implemented')
-        super(TestClark1987Single, self).__init__(dtype=np.float32)
+        super(TestClark1987Single, self).__init__(
+            dtype=np.float32, conserve_memory=False
+        )
 
 
 class TestClark1987Double(Clark1987):
@@ -183,7 +185,9 @@ class TestClark1987Double(Clark1987):
     Basic double precision test for the loglikelihood and filtered states.
     """
     def __init__(self):
-        super(TestClark1987Double, self).__init__(dtype=float)
+        super(TestClark1987Double, self).__init__(
+            dtype=float, conserve_memory=False
+        )
 
 
 class TestClark1987SingleComplex(Clark1987):
@@ -193,7 +197,9 @@ class TestClark1987SingleComplex(Clark1987):
     """
     def __init__(self):
         raise SkipTest('Not implemented')
-        super(TestClark1987SingleComplex, self).__init__(dtype=np.complex64)
+        super(TestClark1987SingleComplex, self).__init__(
+            dtype=np.complex64, conserve_memory=False
+        )
 
 
 class TestClark1987DoubleComplex(Clark1987):
@@ -202,10 +208,22 @@ class TestClark1987DoubleComplex(Clark1987):
     states.
     """
     def __init__(self):
-        super(TestClark1987DoubleComplex, self).__init__(dtype=complex)
+        super(TestClark1987DoubleComplex, self).__init__(
+            dtype=complex, conserve_memory=False
+        )
 
 
-class TestClark1989(object):
+class TestClark1987Conserve(Clark1987):
+    """
+    Memory conservation test for the loglikelihood and filtered states.
+    """
+    def __init__(self):
+        super(TestClark1987Conserve, self).__init__(
+            dtype=float, conserve_memory=True
+        )
+
+
+class Clark1989(object):
     """
     Clark's (1989) bivariate unobserved components model of real GDP (as
     presented in Kim and Nelson, 1999)
@@ -217,7 +235,7 @@ class TestClark1989(object):
 
     See `results.results_kalman_filter` for more information.
     """
-    def __init__(self, dtype=float):
+    def __init__(self, dtype=float, conserve_memory=False):
         self.true = results_kalman_filter.uc_bi
         self.true_states = pd.DataFrame(self.true['states'])
 
@@ -301,7 +319,7 @@ class TestClark1989(object):
 
         # Initialize the appropriate Kalman filter
         cls = prefix_kalman_filter_map[prefix[0]]
-        self.filter = cls(self.model)
+        self.filter = cls(self.model, conserve_memory=conserve_memory)
 
         # Filter the data
         self.filter()
@@ -333,4 +351,24 @@ class TestClark1989(object):
         assert_almost_equal(
             self.result['state'][5][self.true['start']:],
             self.true_states.iloc[:, 3], 4
+        )
+
+
+class TestClark1989(Clark1989):
+    """
+    Basic double precision test for the loglikelihood and filtered
+    states with two-dimensional observation vector.
+    """
+    def __init__(self):
+        super(TestClark1989, self).__init__(dtype=float, conserve_memory=False)
+
+
+class TestClark1989Conserve(Clark1989):
+    """
+    Memory conservation test for the loglikelihood and filtered states with
+    two-dimensional observation vector.
+    """
+    def __init__(self):
+        super(TestClark1989Conserve, self).__init__(
+            dtype=float, conserve_memory=True
         )
