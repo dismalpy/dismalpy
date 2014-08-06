@@ -746,9 +746,9 @@ class FilterResults(object):
 
         # Copy the model dimensions
         self.nobs = model.nobs
-        self.nendog = model.nendog
-        self.nstates = model.nstates
-        self.nposdef = model.nposdef
+        self.k_endog = model.k_endog
+        self.k_states = model.k_states
+        self.k_posdef = model.k_posdef
         self.time_invariant = model.time_invariant
         self.nvarying = model.nvarying
 
