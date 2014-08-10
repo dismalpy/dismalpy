@@ -7,6 +7,8 @@ License: Simplified-BSD
 from __future__ import division, absolute_import, print_function
 
 import numpy as np
+import pandas as pd
+from statsmodels.tools.data import _is_using_pandas
 from pykf import _statespace
 
 try:
@@ -46,7 +48,8 @@ def companion_matrix(n, values=None):
 
 
 def diff(series, diff=1, seasonal_diff=None, k_seasons=1):
-    differenced = np.asanyarray(series)
+    pandas = _is_using_pandas(series, None)
+    differenced = np.asanyarray(series) if not pandas else series
 
     # Seasonal differencing
     if seasonal_diff is not None:
@@ -55,7 +58,15 @@ def diff(series, diff=1, seasonal_diff=None, k_seasons=1):
             seasonal_diff -= 1
 
     # Simple differencing
-    return np.diff(differenced, diff, axis=0)
+    if not pandas:
+        differenced = np.diff(differenced, diff, axis=0)
+    else:
+        differenced = differenced.diff(diff)[diff:]
+    return differenced
+
+
+def is_invertible(params):
+    return np.all(np.abs(np.roots(np.r_[1, params])) < 1)
 
 
 def constrain_stationary_univariate(unconstrained):
