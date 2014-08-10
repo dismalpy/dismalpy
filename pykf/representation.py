@@ -779,9 +779,10 @@ class FilterResults(object):
 
         # Save the state space initialization
         self.initialization = model.initialization
-        self.inital_state = np.asarray(kalman_filter.model.initial_state)
-        self.inital_state_cov = np.asarray(
-            kalman_filter.model.initial_state_cov
+        self.initial_state = np.array(kalman_filter.model.initial_state,
+                                      copy=True)
+        self.initial_state_cov = np.array(
+            kalman_filter.model.initial_state_cov, copy=True
         )
 
         # Save Kalman filter parameters
@@ -796,13 +797,13 @@ class FilterResults(object):
         self.converged = bool(kalman_filter.converged)
         self.period_converged = kalman_filter.period_converged
 
-        self.filtered_state = np.asarray(kalman_filter.filtered_state)
-        self.filtered_state_cov = np.asarray(kalman_filter.filtered_state_cov)
-        self.predicted_state = np.asarray(kalman_filter.predicted_state)
-        self.predicted_state_cov = np.asarray(
-            kalman_filter.predicted_state_cov
+        self.filtered_state = np.array(kalman_filter.filtered_state, copy=True)
+        self.filtered_state_cov = np.array(kalman_filter.filtered_state_cov, copy=True)
+        self.predicted_state = np.array(kalman_filter.predicted_state, copy=True)
+        self.predicted_state_cov = np.array(
+            kalman_filter.predicted_state_cov, copy=True
         )
-        self.forecast = np.asarray(kalman_filter.forecast)
-        self.forecast_error = np.asarray(kalman_filter.forecast_error)
-        self.forecast_error_cov = np.asarray(kalman_filter.forecast_error_cov)
-        self.loglikelihood = np.asarray(kalman_filter.loglikelihood)
+        self.forecast = np.array(kalman_filter.forecast, copy=True)
+        self.forecast_error = np.array(kalman_filter.forecast_error, copy=True)
+        self.forecast_error_cov = np.array(kalman_filter.forecast_error_cov, copy=True)
+        self.loglikelihood = np.array(kalman_filter.loglikelihood, copy=True)
