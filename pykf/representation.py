@@ -125,7 +125,7 @@ class Representation(object):
        Time Series Analysis by State Space Methods: Second Edition.
        Oxford University Press.
     """
-    def __init__(self, endog, k_states, k_posdef=None, time_invariant=True,
+    def __init__(self, endog, k_states, k_posdef=None,
                  design=None, obs_intercept=None, obs_cov=None,
                  transition=None, state_intercept=None, selection=None,
                  state_cov=None, *args, **kwargs):
@@ -147,8 +147,6 @@ class Representation(object):
                              ' positive number.')
         self.k_states = k_states
         self.k_posdef = k_posdef if k_posdef is not None else k_states
-        self.time_invariant = time_invariant
-        self.nvarying = 1 if time_invariant else self.nobs
 
         # Parameters
         self.initialization = None
@@ -157,31 +155,31 @@ class Representation(object):
         self.shapes = {
             'obs': self.endog.shape,
             'design': (
-                (self.k_endog, self.k_states, self.nvarying)
+                (self.k_endog, self.k_states, 1)
                 if design is None else design.shape
             ),
             'obs_intercept': (
-                (self.k_endog, self.nvarying)
+                (self.k_endog, 1)
                 if obs_intercept is None else obs_intercept.shape
             ),
             'obs_cov': (
-                (self.k_endog, self.k_endog, self.nvarying)
+                (self.k_endog, self.k_endog, 1)
                 if obs_cov is None else obs_cov.shape
             ),
             'transition': (
-                (self.k_states, self.k_states, self.nvarying)
+                (self.k_states, self.k_states, 1)
                 if transition is None else transition.shape
             ),
             'state_intercept': (
-                (self.k_states, self.nvarying)
+                (self.k_states, 1)
                 if state_intercept is None else state_intercept.shape
             ),
             'selection': (
-                (self.k_states, self.k_posdef, self.nvarying)
+                (self.k_states, self.k_posdef, 1)
                 if selection is None else selection.shape
             ),
             'state_cov': (
-                (self.k_posdef, self.k_posdef, self.nvarying)
+                (self.k_posdef, self.k_posdef, 1)
                 if state_cov is None else state_cov.shape
             )
         }
@@ -307,6 +305,15 @@ class Representation(object):
     @property
     def dtype(self):
         return prefix_dtype_map[self.prefix]
+
+    @property
+    def time_invariant(self):
+        return (
+            self._design.shape[2] == self._obs_intercept.shape[1] ==
+            self._obs_cov.shape[2] == self._transition.shape[2] ==
+            self._state_intercept.shape[1] == self._selection.shape[2] ==
+            self._state_cov.shape[2]
+        )
 
     @property
     def obs(self):
@@ -750,7 +757,6 @@ class FilterResults(object):
         self.k_states = model.k_states
         self.k_posdef = model.k_posdef
         self.time_invariant = model.time_invariant
-        self.nvarying = model.nvarying
 
         # Save the state space representation at the time
         self.endog = model.endog
