@@ -772,6 +772,11 @@ class FilterResults(object):
         self.selection = model._selection.copy()
         self.state_cov = model._state_cov.copy()
 
+        self.missing = np.array(model._statespaces[self.prefix].missing,
+                                copy=True)
+        self.nmissing = np.array(model._statespaces[self.prefix].nmissing,
+                                 copy=True)
+
         # Save the state space initialization
         self.initialization = model.initialization
         self.inital_state = np.asarray(kalman_filter.model.initial_state)
