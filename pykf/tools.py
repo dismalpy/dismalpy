@@ -60,6 +60,9 @@ def diff(series, diff=1, seasonal_diff=None, k_seasons=1):
 
 def constrain_stationary_univariate(unconstrained):
     """
+    Transform unconstrained parameters used by the optimizer to constrained
+    parameters used in likelihood evaluation
+
     References
     ----------
 
@@ -81,6 +84,9 @@ def constrain_stationary_univariate(unconstrained):
 
 def unconstrain_stationary_univariate(constrained):
     """
+    Transform constrained parameters used in likelihood evaluation
+    to unconstrained parameters used by the optimizer
+
     References
     ----------
 
