@@ -243,6 +243,7 @@ class Representation(object):
         # Options
         self.initial_variance = kwargs.get('initial_variance', 1e6)
         self.loglikelihood_burn = kwargs.get('loglikelihood_burn', 0)
+        self.filter_results_class = kwargs.get('filter_results_class', FilterResults)
 
         self.filter_method = kwargs.get(
             'filter_method', FILTER_CONVENTIONAL
@@ -555,7 +556,8 @@ class Representation(object):
     def filter(self, filter_method=None, inversion_method=None,
                stability_method=None, conserve_memory=None, tolerance=None,
                loglikelihood_burn=None,
-               recreate=True, return_loglike=False):
+               recreate=True, return_loglike=False, results_class=None,
+               *args, **kwargs):
         """
         Apply the Kalman filter to the statespace model.
 
@@ -599,6 +601,8 @@ class Representation(object):
             loglikelihood_burn = self.loglikelihood_burn
         if tolerance is None:
             tolerance = self.tolerance
+        if results_class is None:
+            results_class = self.filter_results_class
 
         # Determine which filter to call
         prefix = self.prefix
@@ -714,7 +718,7 @@ class Representation(object):
         if return_loglike:
             return np.array(self._kalman_filters[prefix].loglikelihood)
         else:
-            return FilterResults(self, self._kalman_filters[prefix])
+            return results_class(self, self._kalman_filters[prefix])
 
     def loglike(self, loglikelihood_burn=None, *args, **kwargs):
         """
