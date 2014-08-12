@@ -9,7 +9,7 @@ from __future__ import division, absolute_import, print_function
 import numpy as np
 from .tools import (
     find_best_blas_type, prefix_dtype_map, prefix_statespace_map,
-    prefix_kalman_filter_map
+    prefix_kalman_filter_map, validate_matrix_shape, validate_vector_shape
 )
 
 # Define constants
@@ -257,44 +257,6 @@ class Representation(object):
         self.conserve_memory = kwargs.get('conserve_memory', 0)
         self.tolerance = kwargs.get('tolerance', 1e-19)
 
-    def _validate_matrix_shape(self, name, shape, nrows, ncols, nobs):
-        ndim = len(shape)
-
-        # Enforce dimension
-        if ndim not in [2, 3]:
-            raise ValueError('Invalid value for %s matrix. Requires a'
-                             ' 2- or 3-dimensional array, got %d dimensions' %
-                             (name, ndim))
-        # Enforce the shape of the matrix
-        if not shape[0] == nrows:
-            raise ValueError('Invalid dimensions for %s matrix: requires %d'
-                             ' rows, got %d' % (name, nrows, shape[0]))
-        if not shape[1] == ncols:
-            raise ValueError('Invalid dimensions for %s matrix: requires %d'
-                             ' columns, got %d' % (name, ncols, shape[1]))
-        # Enforce time-varying array size
-        if ndim == 3 and not shape[2] in [1, nobs]:
-            raise ValueError('Invalid dimensions for time-varying %s'
-                             ' matrix. Requires shape (*,*,%d), got %s' %
-                             (name, nobs, str(shape)))
-
-    def _validate_vector_shape(self, name, shape, nrows, nobs):
-        ndim = len(shape)
-        # Enforce dimension
-        if ndim not in [1, 2]:
-            raise ValueError('Invalid value for %s vector. Requires a'
-                             ' 1- or 2-dimensional array, got %d dimensions' %
-                             (name, ndim))
-        # Enforce the shape of the vector
-        if not shape[0] == nrows:
-            raise ValueError('Invalid dimensions for %s vector: requires %d'
-                             ' rows, got %d' % (name, nrows, shape[0]))
-        # Enforce time-varying array size
-        if ndim == 2 and not shape[1] in [1, nobs]:
-            raise ValueError('Invalid dimensions for time-varying %s'
-                             ' vector. Requires shape (*,%d), got %s' %
-                             (name, nobs, str(shape)))
-
     @property
     def prefix(self):
         return find_best_blas_type((
@@ -334,7 +296,7 @@ class Representation(object):
             design = design[None, :]
 
         # Enforce that the design matrix is k_endog by k_states
-        self._validate_matrix_shape(
+        validate_matrix_shape(
             'design', design.shape, self.k_endog, self.k_states, self.nobs
         )
 
@@ -354,7 +316,7 @@ class Representation(object):
         obs_intercept = np.asarray(value, order="F")
 
         # Enforce that the observation intercept has length k_endog
-        self._validate_vector_shape(
+        validate_vector_shape(
             'observation intercept', obs_intercept.shape, self.k_endog,
             self.nobs
         )
@@ -380,9 +342,9 @@ class Representation(object):
             obs_cov = obs_cov[None, :]
 
         # Enforce that the observation covariance matrix is k_endog by k_endog
-        self._validate_matrix_shape(
-            'observation covariance', obs_cov.shape, self.k_endog, self.k_endog,
-            self.nobs
+        validate_matrix_shape(
+            'observation covariance', obs_cov.shape, self.k_endog,
+            self.k_endog, self.nobs
         )
 
         # Expand time-invariant obs_cov matrix
@@ -405,7 +367,7 @@ class Representation(object):
             transition = transition[None, :]
 
         # Enforce that the transition matrix is k_states by k_states
-        self._validate_matrix_shape(
+        validate_matrix_shape(
             'transition', transition.shape, self.k_states, self.k_states,
             self.nobs
         )
@@ -432,7 +394,7 @@ class Representation(object):
                              % state_intercept.ndim)
 
         # Enforce that the state intercept has length k_endog
-        self._validate_vector_shape(
+        validate_vector_shape(
             'state intercept', state_intercept.shape, self.k_states,
             self.nobs
         )
@@ -458,7 +420,7 @@ class Representation(object):
             selection = selection[None, :]
 
         # Enforce that the selection matrix is k_states by k_posdef
-        self._validate_matrix_shape(
+        validate_matrix_shape(
             'selection', selection.shape, self.k_states, self.k_posdef,
             self.nobs
         )
@@ -483,7 +445,7 @@ class Representation(object):
             state_cov = state_cov[None, :]
 
         # Enforce that the state covariance matrix is k_states by k_states
-        self._validate_matrix_shape(
+        validate_matrix_shape(
             'state covariance', state_cov.shape, self.k_posdef, self.k_posdef,
             self.nobs
         )
