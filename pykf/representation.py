@@ -531,42 +531,11 @@ class Representation(object):
         """
         self.initialization = 'stationary'
 
-    def filter(self, filter_method=None, inversion_method=None,
-               stability_method=None, conserve_memory=None, tolerance=None,
-               loglikelihood_burn=None,
-               recreate=True, return_loglike=False, results_class=None,
-               *args, **kwargs):
-        """
-        Apply the Kalman filter to the statespace model.
-
-        Parameters
-        ----------
-        filter_method : int, optional
-            Determines which Kalman filter to use. Default is conventional.
-        inversion_method : int, optional
-            Determines which inversion technique to use. Default is by Cholesky
-            decomposition.
-        stability_method : int, optional
-            Determines which numerical stability techniques to use. Default is
-            to enforce symmetry of the predicted state covariance matrix.
-        conserve_memory : int, optional
-            Determines what output from the filter to store. Default is to
-            store everything.
-        tolerance : float, optional
-            The tolerance at which the Kalman filter determines convergence to
-            steady-state. Default is 1e-19.
-        loglikelihood_burn : int, optional
-            The number of initial periods during which the loglikelihood is not
-            recorded. Default is 0.
-        recreate : bool, optional
-            Whether or not to consider re-creating the underlying _statespace
-            or filter objects (e.g. due to changing parameters, etc.). Often
-            set to false during maximum likelihood estimation. Default is true.
-        return_loglike : bool, optional
-            Whether to only return the loglikelihood rather than a full
-            `FilterResults` object. Default is False.
-        """
-
+    def _initialize_filter(self, filter_method=None, inversion_method=None,
+                           stability_method=None, conserve_memory=None,
+                           tolerance=None, loglikelihood_burn=None,
+                           recreate=True, return_loglike=False,
+                           *args, **kwargs):
         if filter_method is None:
             filter_method = self.filter_method
         if inversion_method is None:
@@ -579,8 +548,6 @@ class Representation(object):
             loglikelihood_burn = self.loglikelihood_burn
         if tolerance is None:
             tolerance = self.tolerance
-        if results_class is None:
-            results_class = self.filter_results_class
 
         # Determine which filter to call
         prefix = self.prefix
@@ -593,19 +560,21 @@ class Representation(object):
             self._representations[prefix] = {}
             for matrix in self.shapes.keys():
                 if matrix == 'obs':
-                    continue
-                # Note: this always makes a copy
-                self._representations[prefix][matrix] = (
-                    getattr(self, '_' + matrix).astype(dtype)
-                )
+                    self._representations[prefix][matrix] = self.obs.astype(dtype)
+                else:
+                    # Note: this always makes a copy
+                    self._representations[prefix][matrix] = (
+                        getattr(self, '_' + matrix).astype(dtype)
+                    )
         # If they do exist, update them
         else:
             for matrix in self.shapes.keys():
                 if matrix == 'obs':
-                    continue
-                self._representations[prefix][matrix][:] = (
-                    getattr(self, '_' + matrix).astype(dtype)[:]
-                )
+                    self._representations[prefix][matrix] = self.obs.astype(dtype)[:]
+                else:
+                    self._representations[prefix][matrix][:] = (
+                        getattr(self, '_' + matrix).astype(dtype)[:]
+                    )
 
         # Determine if we need to re-create the _statespace models
         # (if time-varying matrices changed)
@@ -629,7 +598,7 @@ class Representation(object):
             # Setup the base statespace object
             cls = prefix_statespace_map[prefix]
             self._statespaces[prefix] = cls(
-                self.endog.astype(dtype),
+                self._representations[prefix]['obs'],
                 self._representations[prefix]['design'],
                 self._representations[prefix]['obs_intercept'],
                 self._representations[prefix]['obs_cov'],
@@ -688,6 +657,54 @@ class Representation(object):
             self._statespaces[prefix].initialize_stationary()
         else:
             raise RuntimeError('Statespace model not initialized.')
+
+        return prefix, dtype
+
+    def filter(self, filter_method=None, inversion_method=None,
+               stability_method=None, conserve_memory=None, tolerance=None,
+               loglikelihood_burn=None,
+               recreate=True, return_loglike=False, results_class=None,
+               *args, **kwargs):
+        """
+        Apply the Kalman filter to the statespace model.
+
+        Parameters
+        ----------
+        filter_method : int, optional
+            Determines which Kalman filter to use. Default is conventional.
+        inversion_method : int, optional
+            Determines which inversion technique to use. Default is by Cholesky
+            decomposition.
+        stability_method : int, optional
+            Determines which numerical stability techniques to use. Default is
+            to enforce symmetry of the predicted state covariance matrix.
+        conserve_memory : int, optional
+            Determines what output from the filter to store. Default is to
+            store everything.
+        tolerance : float, optional
+            The tolerance at which the Kalman filter determines convergence to
+            steady-state. Default is 1e-19.
+        loglikelihood_burn : int, optional
+            The number of initial periods during which the loglikelihood is not
+            recorded. Default is 0.
+        recreate : bool, optional
+            Whether or not to consider re-creating the underlying _statespace
+            or filter objects (e.g. due to changing parameters, etc.). Often
+            set to false during maximum likelihood estimation. Default is true.
+        return_loglike : bool, optional
+            Whether to only return the loglikelihood rather than a full
+            `FilterResults` object. Default is False.
+        """
+
+        if results_class is None:
+            results_class = self.filter_results_class
+
+        # Initialize the filter
+        prefix, dtype = self._initialize_filter(
+            filter_method, inversion_method, stability_method, conserve_memory,
+            tolerance, loglikelihood_burn, recreate, return_loglike,
+            *args, **kwargs
+        )
 
         # Run the filter
         self._kalman_filters[prefix]()
