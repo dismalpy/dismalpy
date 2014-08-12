@@ -279,6 +279,20 @@ class Representation(object):
         )
 
     @property
+    def _statespace(self):
+        prefix = self.prefix
+        if prefix in self._statespaces:
+            return self._statespaces[prefix]
+        return None
+
+    @property
+    def _kalman_filter(self):
+        prefix = self.prefix
+        if prefix in self._kalman_filters:
+            return self._kalman_filters[prefix]
+        return None
+
+    @property
     def obs(self):
         return self.endog
 
