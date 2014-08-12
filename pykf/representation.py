@@ -771,6 +771,14 @@ class FilterResults(object):
         self.nmissing = np.array(model._statespaces[self.prefix].nmissing,
                                  copy=True)
 
+        # Save the final shapes of the matrices
+        self.shapes = dict(model.shapes)
+        for name in self.shapes.keys():
+            if name == 'obs':
+                continue
+            self.shapes[name] = getattr(self, name).shape
+        self.shapes['obs'] = self.endog.shape
+
         # Save the state space initialization
         self.initialization = model.initialization
         self.initial_state = np.array(kalman_filter.model.initial_state,
