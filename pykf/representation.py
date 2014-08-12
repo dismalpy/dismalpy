@@ -152,6 +152,8 @@ class Representation(object):
         self.initialization = None
 
         # Record the shapes of all of our matrices
+        # Note: these are time-invariant shapes; in practice the last dimension
+        # may also be `self.nobs` for any or all of these.
         self.shapes = {
             'obs': self.endog.shape,
             'design': (
@@ -656,7 +658,6 @@ class Representation(object):
         # to recreate it), create it
         if prefix not in self._kalman_filters or recreate_filter:
             if recreate_filter:
-                print('recreate')
                 # Delete the old filter
                 del self._kalman_filters[prefix]
             # Setup the filter
