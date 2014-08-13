@@ -16,7 +16,7 @@ install:
   # Useful for debugging any issues with conda
   - conda info -a
 
-  - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION Cython>=0.20 setuptools numpy scipy pandas nose
+  - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION Cython>=0.20 setuptools numpy scipy pandas nose statsmodels
   - source activate test-environment
   - python setup.py install
 
