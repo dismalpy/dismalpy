@@ -807,9 +807,11 @@ class FilterResults(object):
         self.predicted_state_cov = np.array(
             kalman_filter.predicted_state_cov, copy=True
         )
-        self.forecast = np.array(kalman_filter.forecast, copy=True)
-        self.forecast_error = np.array(kalman_filter.forecast_error, copy=True)
-        self.forecast_error_cov = np.array(kalman_filter.forecast_error_cov, copy=True)
+        # Note: use forecasts rather than forecast, so as not to interfer
+        # with the `forecast` methods in subclasses
+        self.forecasts = np.array(kalman_filter.forecast, copy=True)
+        self.forecasts_error = np.array(kalman_filter.forecast_error, copy=True)
+        self.forecasts_error_cov = np.array(kalman_filter.forecast_error_cov, copy=True)
         self.loglikelihood = np.array(kalman_filter.loglikelihood, copy=True)
 
         # Fill in missing values in the forecast, forecast error, and
@@ -825,16 +827,19 @@ class FilterResults(object):
             if self.nmissing[t] < self.k_endog:
                 continue
 
-            self.forecast[:, t] = np.dot(
+            self.forecasts[:, t] = np.dot(
                 self.design[:, :, design_t], self.predicted_state[:, t]
             ) + self.obs_intercept[:, obs_intercept_t]
-            self.forecast_error[:, t] = np.nan
-            self.forecast_error_cov[:, :, t] = np.dot(
+            self.forecasts_error[:, t] = np.nan
+            self.forecasts_error_cov[:, :, t] = np.dot(
                 np.dot(self.design[:, :, design_t],
                        self.predicted_state_cov[:, :, t]),
                 self.design[:, :, design_t].T
             ) + self.obs_cov[:, :, obs_cov_t]
-    def predict(self, start=None, end=None, dynamic=None, *args, **kwargs):
+
+
+    def predict(self, start=None, end=None, dynamic=None, full_results=False,
+                *args, **kwargs):
         """
         Statespace model in-sample and out-of-sample prediction.
 
@@ -900,7 +905,7 @@ class FilterResults(object):
                  % (dynamic, nsample, nsample))
             dynamic = nsample
 
-        if dynamic is None:
+        if dynamic is None or dynamic is False:
             dynamic = nsample
         ndynamic = nsample - dynamic
 
@@ -954,14 +959,14 @@ class FilterResults(object):
                     mat = np.asarray(kwargs[name])
                     if len(shape) == 2:
                         validate_vector_shape('obs_intercept', mat.shape,
-                                              shape[0], self.nobs)
-                        if mat.ndim < 2 or mat.shape[1] == 1:
+                                              shape[0], nforecast)
+                        if mat.ndim < 2 or not mat.shape[1] == nforecast:
                             raise ValueError(exception % name)
                         representation[name] = np.c_[representation[name], mat]
                     else:
                         validate_matrix_shape(name, mat.shape, shape[0],
-                                              shape[1], self.nobs)
-                        if mat.ndim < 3 or mat.shape[2] == 1:
+                                              shape[1], nforecast)
+                        if mat.ndim < 3 or not mat.shape[2] == nforecast:
                             raise ValueError(exception % name)
                         representation[name] = np.c_[representation[name], mat]
 
@@ -1004,8 +1009,14 @@ class FilterResults(object):
 
             result = self._predict(ninsample, ndynamic, nforecast, model)
 
-        return (result.forecast[:, npadded:],
-                result.forecast_error_cov[:, :, npadded:])
+        if full_results:
+            return result
+        else:
+            return (
+                result.forecasts[:, npadded:],
+                result.forecasts_error[:, npadded:],
+                result.forecasts_error_cov[:, :, npadded:]
+            )
 
     def _predict(self, ninsample, ndynamic, nforecast, model, *args, **kwargs):
         # Get the underlying filter
@@ -1040,6 +1051,4 @@ class FilterResults(object):
                 next(kfilter)
 
         # Return the predicted state and predicted state covariance matrices
-        # return (np.array(kfilter.predicted_state, copy=True),
-        #         np.array(kfilter.predicted_state_cov, copy=True))
         return FilterResults(model, kfilter)
