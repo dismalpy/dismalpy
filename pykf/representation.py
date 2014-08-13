@@ -818,24 +818,26 @@ class FilterResults(object):
         # forecast error covariance matrix (this is required due to how the
         # Kalman filter implements observations that are completely missing)
         # Construct the predictions, forecasts
-        for t in range(self.nobs):
-            design_t = 0 if self.design.shape[2] == 1 else t
-            obs_cov_t = 0 if self.obs_cov.shape[2] == 1 else t
-            obs_intercept_t = 0 if self.obs_intercept.shape[1] == 1 else t
+        if self.conserve_memory ^ (MEMORY_NO_FORECAST | MEMORY_NO_PREDICTED):
+            for t in range(self.nobs):
+                design_t = 0 if self.design.shape[2] == 1 else t
+                obs_cov_t = 0 if self.obs_cov.shape[2] == 1 else t
+                obs_intercept_t = 0 if self.obs_intercept.shape[1] == 1 else t
 
-            # Skip anything that is less than completely missing
-            if self.nmissing[t] < self.k_endog:
-                continue
+                # Skip anything that is less than completely missing
+                if self.nmissing[t] < self.k_endog:
+                    continue
 
-            self.forecasts[:, t] = np.dot(
-                self.design[:, :, design_t], self.predicted_state[:, t]
-            ) + self.obs_intercept[:, obs_intercept_t]
-            self.forecasts_error[:, t] = np.nan
-            self.forecasts_error_cov[:, :, t] = np.dot(
-                np.dot(self.design[:, :, design_t],
-                       self.predicted_state_cov[:, :, t]),
-                self.design[:, :, design_t].T
-            ) + self.obs_cov[:, :, obs_cov_t]
+                self.forecasts[:, t] = np.dot(
+                    self.design[:, :, design_t], self.predicted_state[:, t]
+                ) + self.obs_intercept[:, obs_intercept_t]
+                self.forecasts_error[:, t] = np.nan
+                self.forecasts_error_cov[:, :, t] = np.dot(
+                    np.dot(self.design[:, :, design_t],
+                           self.predicted_state_cov[:, :, t]),
+                    self.design[:, :, design_t].T
+                ) + self.obs_cov[:, :, obs_cov_t]
+
 
 
     def predict(self, start=None, end=None, dynamic=None, full_results=False,
@@ -868,6 +870,12 @@ class FilterResults(object):
         Out-of-sample prediction first applies the Kalman filter to missing
         data for the number of periods desired to obtain the predicted states.
         """
+        # Cannot predict if we do not have appropriate arrays
+        if self.conserve_memory ^ (MEMORY_NO_FORECAST | MEMORY_NO_PREDICTED):
+            raise ValueError('Predict is not possible if memory conservation'
+                             ' has been used to avoid storing forecasts or'
+                             ' predicted values.')
+
         # Get the start and the end of the entire prediction range
         if start is None:
             start = 0
