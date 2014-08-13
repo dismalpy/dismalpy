@@ -818,7 +818,7 @@ class FilterResults(object):
         # forecast error covariance matrix (this is required due to how the
         # Kalman filter implements observations that are completely missing)
         # Construct the predictions, forecasts
-        if self.conserve_memory ^ (MEMORY_NO_FORECAST | MEMORY_NO_PREDICTED):
+        if self.conserve_memory & (MEMORY_NO_FORECAST | MEMORY_NO_PREDICTED):
             for t in range(self.nobs):
                 design_t = 0 if self.design.shape[2] == 1 else t
                 obs_cov_t = 0 if self.obs_cov.shape[2] == 1 else t
@@ -882,7 +882,7 @@ class FilterResults(object):
         data for the number of periods desired to obtain the predicted states.
         """
         # Cannot predict if we do not have appropriate arrays
-        if self.conserve_memory ^ (MEMORY_NO_FORECAST | MEMORY_NO_PREDICTED):
+        if self.conserve_memory & (MEMORY_NO_FORECAST | MEMORY_NO_PREDICTED):
             raise ValueError('Predict is not possible if memory conservation'
                              ' has been used to avoid storing forecasts or'
                              ' predicted values.')
