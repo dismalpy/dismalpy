@@ -7,7 +7,7 @@ except ImportError:
     __version__ = 'not-yet-built'
 
 from .representation import (
-    Representation,
+    Representation, FilterResults,
 
     FILTER_CONVENTIONAL,
     FILTER_EXACT_INITIAL,
@@ -34,9 +34,14 @@ from .representation import (
     MEMORY_CONSERVE
 )
 
+from .model import Model, StatespaceResults
+from .sarimax import SARIMAX
 from .tools import (
     find_best_blas_type, prefix_dtype_map,
     prefix_statespace_map, prefix_kalman_filter_map,
 
-    constrain_stationary, unconstrain_stationary,
+    diff, companion_matrix,
+
+    is_invertible,
+    constrain_stationary_univariate, unconstrain_stationary_univariate,
 )
