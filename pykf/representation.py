@@ -838,7 +838,18 @@ class FilterResults(object):
                     self.design[:, :, design_t].T
                 ) + self.obs_cov[:, :, obs_cov_t]
 
+    @property
+    def standardized_forecast_error(self):
+        standardized_forecast_error = np.zeros(self.forecasts_error.shape,
+                                               dtype=self.dtype)
 
+        for t in range(self.forecasts_error_cov.shape[2]):
+            upper = np.linalg.cholesky(self.forecasts_error_cov[:, :, t]).T
+            standardized_forecast_error[:, t] = np.dot(
+                upper, self.forecasts_error[:, t]
+            )
+
+        return standardized_forecast_error
 
     def predict(self, start=None, end=None, dynamic=None, full_results=False,
                 *args, **kwargs):
