@@ -950,7 +950,7 @@ class FilterResults(object):
         # model, then they will be copied over if none are provided in
         # `kwargs`. Otherwise additional matrices must be provided in `kwargs`.
         representation = {}
-        for name, shape in self.shapes.iteritems():
+        for name, shape in self.shapes.items():
             if name == 'obs':
                 continue
             mat = getattr(self, name)
@@ -968,7 +968,7 @@ class FilterResults(object):
                      ' requires an updated time-varying matrix for the'
                      ' period to be forecasted.')
         if nforecast > 0:
-            for name, shape in self.shapes.iteritems():
+            for name, shape in self.shapes.items():
                 if name == 'obs':
                     continue
                 if representation[name].shape[-1] == 1:
