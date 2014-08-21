@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 import os
 
-from pykf import sarimax
-from pykf.tests import results_sarimax
+from dismalpy.ssm import sarimax
+from dismalpy.ssm.tests import results_sarimax
 from statsmodels.tools import add_constant
 from numpy.testing import assert_almost_equal
 from nose.exc import SkipTest

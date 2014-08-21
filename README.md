@@ -1,7 +1,10 @@
-Python Kalman Filter
-====================
+DismalPy
+========
 
-A Cython implementation of a general Kalman Filter, using Scipy-bundled BLAS/LAPACK for speed improvements. Also includes a Python wrapper StateSpace model.
+A collection of utilities for conducting economic research in Python.
+This package contains
+
+- a Python wrapper for state space models along with a fast Kalman filter
 
 License
 -------

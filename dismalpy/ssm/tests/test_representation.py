@@ -18,8 +18,8 @@ import numpy as np
 import pandas as pd
 import os
 
-import pykf
-import pykf.tests.results_kalman as results_kalman_filter
+from dismalpy.ssm import Representation
+import dismalpy.ssm.tests.results_kalman as results_kalman_filter
 from numpy.testing import assert_almost_equal
 from nose.exc import SkipTest
 
@@ -50,8 +50,7 @@ class Clark1987(object):
 
         # Construct the statespace representation
         k_states = 4
-        self.model = pykf.Representation(data['lgdp'], k_states=k_states,
-                                         **kwargs)
+        self.model = Representation(data['lgdp'], k_states=k_states, **kwargs)
 
         self.model.design[:, :, 0] = [1, 1, 0, 0]
         self.model.transition[([0, 0, 1, 1, 2, 3],
@@ -284,7 +283,7 @@ class Clark1989(object):
         data['UNEMP'] = (data['UNEMP']/100)
 
         k_states = 6
-        self.model = pykf.Representation(data, k_states=k_states, **kwargs)
+        self.model = Representation(data, k_states=k_states, **kwargs)
 
         # Statespace representation
         self.model.design[:, :, 0] = [[1, 1, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1]]

@@ -5,7 +5,7 @@ Cythonize pyx files into C files as needed.
 
 Usage: cythonize [root_dir]
 
-Default [root_dir] is 'statsmodels'.
+Default [root_dir] is 'dismalpy'.
 
 Checks pyx files to see if they have been changed relative to their
 corresponding C files.  If they have, then runs cython on these files to
@@ -22,9 +22,13 @@ For now, this script should be run by developers when changing Cython files
 only, and the resulting C files checked in, so that end-users (and Python-only
 developers) do not get the Cython/Tempita dependencies.
 
-Originally written by Dag Sverre Seljebotn, and copied here from:
+Originally written by Dag Sverre Seljebotn, and copied [to statsmodels] from:
 
 https://raw.github.com/dagss/private-scipy-refactor/cythonize/cythonize.py
+
+Later copied here from:
+
+https://raw.github.com/statsmodels/statsmodels/master/tools/cythonize.py
 
 Note: this script does not check any of the dependent C libraries; it only
 operates on the Cython .pyx files.
@@ -39,7 +43,7 @@ import hashlib
 import subprocess
 
 HASH_FILE = 'cythonize.dat'
-DEFAULT_ROOT = 'statsmodels'
+DEFAULT_ROOT = 'dismalpy'
 
 # WindowsError is not defined on unix systems
 try:
@@ -55,7 +59,7 @@ def process_pyx(fromfile, tofile):
         from Cython.Compiler.Version import version as cython_version
         from distutils.version import LooseVersion
         if LooseVersion(cython_version) < LooseVersion('0.19'):
-            raise Exception('Building Statsmodels requires Cython >= 0.19')
+            raise Exception('Building DismalPy requires Cython >= 0.19')
 
     except ImportError:
         pass
@@ -88,7 +92,7 @@ def process_tempita_pyx(fromfile, tofile):
         except ImportError:
             import tempita
     except ImportError:
-        raise Exception('Building Statsmodels requires Tempita: '
+        raise Exception('Building DismalPy requires Tempita: '
                         'pip install --user Tempita')
     with open(fromfile, "r") as f:
         tmpl = f.read()

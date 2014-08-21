@@ -91,7 +91,7 @@ cdef extern from "capsule.h":
 # ## BLAS / LAPACK functions
 
 # `blas_lapack.pxd` contains typedef statements for BLAS and LAPACK functions
-from blas_lapack cimport *
+from dismalpy.src.blas_lapack cimport *
 
 try:
     # Scipy >= 0.12.0 exposes Fortran BLAS functions directly

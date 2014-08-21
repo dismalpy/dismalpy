@@ -1,7 +1,5 @@
 #!/usr/bin/env python
-"""pykf
-
-Kalman filter and state-space models.
+"""DismalPy: tools for economic research
 """
 
 DOCLINES = __doc__.split("\n")
@@ -20,6 +18,18 @@ else:
     import builtins
 
 CLASSIFIERS = """\
+Development Status :: 3 - Alpha
+Intended Audience :: Science/Research
+License :: OSI Approved :: BSD License
+Programming Language :: Cython
+Programming Language :: Python
+Programming Language :: Python :: 3
+Topic :: Scientific/Engineering
+Topic :: Scientific/Engineering :: Economics
+Operating System :: Microsoft :: Windows
+Operating System :: POSIX
+Operating System :: Unix
+Operating System :: MacOS
 """
 
 MAJOR               = 0
@@ -61,16 +71,16 @@ if os.path.exists('MANIFEST'):
 
 def get_version_info():
     # Adding the git rev number needs to be done inside
-    # write_version_py(), otherwise the import of pykf.version messes
+    # write_version_py(), otherwise the import of dismalpy.version messes
     # up the build under Python 3.
     FULLVERSION = VERSION
     if os.path.exists('.git'):
         GIT_REVISION = git_version()
-    elif os.path.exists('pykf/version.py'):
+    elif os.path.exists('dismalpy/version.py'):
         # must be a source distribution, use existing version file
-        # load it as a separate module to not load pykf/__init__.py
+        # load it as a separate module to not load dismalpy/__init__.py
         import imp
-        version = imp.load_source('pykf.version', 'pykf/version.py')
+        version = imp.load_source('dismalpy.version', 'dismalpy/version.py')
         GIT_REVISION = version.git_revision
     else:
         GIT_REVISION = "Unknown"
@@ -81,9 +91,9 @@ def get_version_info():
     return FULLVERSION, GIT_REVISION
 
 
-def write_version_py(filename='pykf/version.py'):
+def write_version_py(filename='dismalpy/version.py'):
     cnt = """
-# THIS FILE IS GENERATED FROM PYKF SETUP.PY
+# THIS FILE IS GENERATED FROM dismalpy SETUP.PY
 short_version = '%(version)s'
 version = '%(version)s'
 full_version = '%(full_version)s'
@@ -111,12 +121,12 @@ except:
     HAVE_SPHINX = False
 
 if HAVE_SPHINX:
-    class ScipyBuildDoc(BuildDoc):
+    class DismalpyBuildDoc(BuildDoc):
         """Run in-place build before Sphinx doc build"""
         def run(self):
             ret = subprocess.call([sys.executable, sys.argv[0], 'build_ext', '-i'])
             if ret != 0:
-                raise RuntimeError("Building Scipy failed!")
+                raise RuntimeError("Building Dismalpy failed!")
             BuildDoc.run(self)
 
 def generate_cython():
@@ -124,7 +134,7 @@ def generate_cython():
     print("Cythonizing sources")
     p = subprocess.call([sys.executable,
                           os.path.join(cwd, 'tools', 'cythonize.py'),
-                          'pykf'],
+                          'dismalpy'],
                          cwd=cwd)
     if p != 0:
         raise RuntimeError("Running cythonize failed!")
@@ -138,10 +148,10 @@ def configuration(parent_package='',top_path=None):
                        delegate_options_to_subpackages=True,
                        quiet=True)
 
-    config.add_subpackage('pykf')
-    config.add_data_files(('pykf','*.txt'))
+    config.add_subpackage('dismalpy')
+    config.add_data_files(('dismalpy','*.txt'))
 
-    config.get_version('pykf/version.py')
+    config.get_version('dismalpy/version.py')
 
     return config
 
@@ -151,7 +161,7 @@ def setup_package():
     write_version_py()
 
     if HAVE_SPHINX:
-        cmdclass = {'build_sphinx': ScipyBuildDoc}
+        cmdclass = {'build_sphinx': DismalpyBuildDoc}
     else:
         cmdclass = {}
 
@@ -166,12 +176,12 @@ def setup_package():
         build_requires = ['numpy>=1.5.1']
 
     metadata = dict(
-        name = 'pykf',
+        name = 'dismalpy',
         maintainer = "Chad Fulton",
         # maintainer_email = "",
         description = DOCLINES[0],
         long_description = "\n".join(DOCLINES[2:]),
-        url = "http://github.com/ChadFulton/pykalman_filter",
+        url = "http://github.com/ChadFulton/dismalpy",
         # download_url = "",
         license = 'Simplified-BSD',
         cmdclass=cmdclass,
@@ -188,7 +198,7 @@ def setup_package():
         # For these actions, NumPy is not required.
         #
         # They are required to succeed without Numpy for example when
-        # pip is used to install pykf when Numpy is not yet present in
+        # pip is used to install dismalpy when Numpy is not yet present in
         # the system.
         try:
             from setuptools import setup

@@ -1,33 +1,96 @@
-# Python
-*.pyc
+# Copied from https://github.com/numpy/numpy/blob/master/.gitignore
 
-# Cython
-*.c
+# Editor temporary/working/backup files #
+#########################################
+.#*
+[#]*#
+*~
+*$
+*.bak
+*.diff
+*.org
+.project
+*.rej
+.settings/
+.*.sw[nop]
+.sw[nop]
+*.tmp
+*.vim
+tags
+cscope.out
+# gnu global
+GPATH
+GRTAGS
+GSYMS
+GTAGS
+
+# Compiled source #
+###################
+*.a
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.py[ocd]
 *.so
 
-# IPython Notebooks
-.ipynb_checkpoints
+# Packages #
+############
+# it's better to unpack these files and commit the raw source
+# git has its own built in compression methods
+*.7z
+*.bz2
+*.bzip2
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.tbz2
+*.tgz
+*.zip
 
-# Setup.py
+# Python files #
+################
+# setup.py working directory
 build
+# sphinx build directory
+_build
+# setup.py dist directory
 dist
-
-# Documentation
-docs/source/generated
-
+doc/build
+doc/cdoc/build
 # Egg metadata
-*.egg-info/
+*.egg-info
+# The shelf plugin uses this dir
+./.shelf
+MANIFEST
+# IPython Notebook metadata
+*.ipynb_checkpoints
 
-# Mac OS X
-.DS_Store
+# Paver generated files #
+#########################
+/release
 
-# LaTeX metadata
-*.aux
-*.fdb_latexmk
-*.fls
-*.idx
-*.ilg
-*.ind
+# Logs and databases #
+######################
 *.log
-*.out
-*.synctex.gz
+*.sql
+*.sqlite
+
+# Patches #
+###########
+*.patch
+*.diff
+
+# OS generated files #
+######################
+.DS_Store*
+.VolumeIcon.icns
+.fseventsd
+Icon?
+.gdb_history
+ehthumbs.db
+Thumbs.db

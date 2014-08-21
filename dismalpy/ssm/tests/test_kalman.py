@@ -35,8 +35,8 @@ except ImportError:
         return (prefix, dtype, None)
 
 
-from pykf import _statespace as ss
-import pykf.tests.results_kalman as results_kalman_filter
+from dismalpy.ssm import _statespace as ss
+import dismalpy.ssm.tests.results_kalman as results_kalman_filter
 from numpy.testing import assert_almost_equal
 from nose.exc import SkipTest
 

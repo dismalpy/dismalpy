@@ -22,4 +22,4 @@ install:
 
 script:
   - mkdir -p tests; cd tests
-  - python -c "import pykf; res = pykf.test(); import sys; sys.exit(1 - res.wasSuccessful());"
+  - python -c "import dismalpy; res = dismalpy.test(); import sys; sys.exit(1 - res.wasSuccessful());"
