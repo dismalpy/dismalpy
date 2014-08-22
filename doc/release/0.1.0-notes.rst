@@ -1,0 +1,42 @@
+DismalPy 0.1.0 Release Notes
+****************************
+
+This release supports Python 2.6 - 2.7 and 3.2 - 3.4.
+
+
+Highlights
+==========
+Initial version. Includes features from
+https://github.com/statsmodels/statsmodels/pull/1698/commits
+through 8/21/2014 (commit #94e089d).
+
+
+Dropped Support
+===============
+
+
+Future Changes
+==============
+
+
+Compatibility notes
+===================
+
+
+New Features
+============
+
+- State space models
+- Kalman filter
+- Parameter estimation via MLE (and statsmodels project)
+
+Improvements
+============
+
+
+Changes
+=======
+
+
+Deprecations
+============
