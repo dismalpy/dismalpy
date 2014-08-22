@@ -241,9 +241,15 @@ class StatespaceResults(FilterResults, tsbase.TimeSeriesModelResults):
     @cache_readonly
     def cov_params(self):
         # Uses Delta method (method of propagation of errors)
+
         unconstrained = self.model.untransform_params(self._params)
         jacobian = self.model.transform_jacobian(unconstrained)
-        hessian = self.model.hessian(unconstrained)
+        hessian = self.model.hessian(unconstrained, set_params=False)
+
+        # Reset the matrices to the saved parameters (since they were
+        # overwritten in the hessian call)
+        self.model.update(self.model.params)
+
         return jacobian.dot(-np.linalg.inv(hessian*self.nobs)).dot(jacobian.T)
 
     @cache_readonly
