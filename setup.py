@@ -208,9 +208,10 @@ def setup_package():
         FULLVERSION, GIT_REVISION = get_version_info()
         metadata['version'] = FULLVERSION
     else:
-        if len(sys.argv) >= 2 and sys.argv[1] == 'bdist_wheel':
-            # bdist_wheel needs setuptools
-            import setuptools
+        # if len(sys.argv) >= 2 and sys.argv[1] == 'bdist_wheel':
+        #     # bdist_wheel needs setuptools
+        #     import setuptools
+        import setuptools
 
         from numpy.distutils.core import setup
 
