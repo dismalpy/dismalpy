@@ -23,6 +23,9 @@ GPATH
 GRTAGS
 GSYMS
 GTAGS
+# R
+*.Rapp.history
+*.Rhistory
 
 # Compiled source #
 ###################
@@ -94,3 +97,12 @@ Icon?
 .gdb_history
 ehthumbs.db
 Thumbs.db
+
+# DismalPy specific #
+#####################
+*__config__.py
+*version.py
+cythonize.dat
+dismalpy/ssm/_statespace.c
+dismalpy/ssm/_statespace.pyx
+examples
