@@ -12,7 +12,7 @@ DismalPy Reference
 
 This reference manual details functions, modules, and objects
 included in DismalPy, describing what they are and what they do.
-For learning how to use NumPy, see also :ref:`user`.
+For learning how to use DismalPy, see also :ref:`user`.
 
 .. toctree::
    :maxdepth: 2
