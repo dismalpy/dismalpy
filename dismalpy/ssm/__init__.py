@@ -18,6 +18,7 @@ from .representation import (
     INVERT_LU,
     SOLVE_CHOLESKY,
     INVERT_CHOLESKY,
+    INVERT_NUMPY,
 
     STABILITY_FORCE_SYMMETRY,
 
