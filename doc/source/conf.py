@@ -208,6 +208,8 @@ latex_elements = {
 latex_documents = [
   ('reference/index', 'dismalpy-ref.tex', u'DismalPy Reference',
    u'Chad Fulton', 'manual'),
+  ('user/index', 'dismalpy-user.tex', u'DismalPy User Guide',
+   u'Chad Fulton', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
