@@ -124,17 +124,29 @@ if HAVE_SPHINX:
     class DismalpyBuildDoc(BuildDoc):
         """Run in-place build before Sphinx doc build"""
         def run(self):
+            # Make sure dismalpy is built for autodoc features
             ret = subprocess.call([sys.executable, sys.argv[0], 'build_ext', '-i'])
             if ret != 0:
                 raise RuntimeError("Building Dismalpy failed!")
+
+            # Regenerate notebooks
+            cwd = os.path.abspath(os.path.dirname(__file__))
+            print("Re-generating notebooks")
+            p = subprocess.call([sys.executable,
+                                 os.path.join(cwd, 'tools', 'sphinxify_notebooks.py'),
+                                 ], cwd=cwd)
+            if p != 0:
+                raise RuntimeError("Notebook generation failed!")
+
+            # Build the documentation
             BuildDoc.run(self)
 
 def generate_cython():
     cwd = os.path.abspath(os.path.dirname(__file__))
     print("Cythonizing sources")
     p = subprocess.call([sys.executable,
-                          os.path.join(cwd, 'tools', 'cythonize.py'),
-                          'dismalpy'],
+                         os.path.join(cwd, 'tools', 'cythonize.py'),
+                         'dismalpy'],
                          cwd=cwd)
     if p != 0:
         raise RuntimeError("Running cythonize failed!")

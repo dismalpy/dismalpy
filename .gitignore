@@ -106,3 +106,9 @@ cythonize.dat
 dismalpy/ssm/_statespace.c
 dismalpy/ssm/_statespace.pyx
 examples
+
+# lbfgs output
+*iterate.dat
+
+# compiled doc notebooks
+doc/source/user/_notebooks/
