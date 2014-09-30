@@ -20,6 +20,7 @@ This manual contains many examples of use, usually prefixed with the
 Python prompt ``>>>`` (which is not a part of the example code). The
 examples assume that you have first entered::
 
+>>> import numpy as np
 >>> import dismalpy as dp
 
 before running the examples.

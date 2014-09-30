@@ -7,7 +7,6 @@ License: Simplified-BSD
 from __future__ import division, absolute_import, print_function
 
 import numpy as np
-import pandas as pd
 from statsmodels.tools.data import _is_using_pandas
 from . import _statespace
 
@@ -38,6 +37,35 @@ prefix_kalman_filter_map = {
 
 
 def companion_matrix(n, values=None):
+    r"""
+    Create a companion matrix
+
+    Returns a matrix of the form
+
+    .. math::
+        \begin{bmatrix}
+            \phi_1 & 1      & 0 & \cdots & 0 \\
+            \phi_2 & 0      & 1 &        & 0 \\
+            \vdots &        &   & \ddots & 0 \\
+                   &        &   &        & 1 \\
+            \phi_n & 0      & 0 & \cdots & 0 \\
+        \end{bmatrix}
+
+    where some or all of the :math:`\phi_i` may be non-zero (if `values` is
+    None, then all are equal to zero).
+
+    Parameters
+    ----------
+    n : int
+        The size of the companion matrix.
+    values : array_like, optional.
+        The values to use in the first column of the companion matrix. Default
+        is zeros.
+
+    Returns
+    -------
+    companion_matrix : array
+    """
     matrix = np.zeros((n, n))
     idx = np.diag_indices(n-1)
     idx = (idx[0], idx[1]+1)
@@ -48,6 +76,36 @@ def companion_matrix(n, values=None):
 
 
 def diff(series, diff=1, seasonal_diff=None, k_seasons=1):
+    """
+    Difference a series simply and / or seasonally along the zero-th axis.
+
+    Given a series (denoted :math:`y_t`), performs the differencing operation
+
+    .. math::
+
+        \Delta^d \Delta_s^D y_t
+
+    where :math:`d = diff`, :math:`s = k\_seasons`, :math:`D = seasonal\_diff`,
+    and :math:`\Delta` is the lag operator.
+
+    Parameters
+    ----------
+    series : array_like
+        The series to be differenced.
+    diff : int, optional
+        The number of simple differences to perform. Default is 1.
+    seasonal_diff : int or None, optional
+        The number of seasonal differences to perform. Default is no seasonal
+        differencing.
+    k_seasons : int, optional
+        The seasonal lag. Default is 1. Unused if there is no seasonal
+        differencing.
+
+    Returns
+    -------
+    differenced : array
+        The differenced array.
+    """
     pandas = _is_using_pandas(series, None)
     differenced = np.asanyarray(series) if not pandas else series
 
@@ -66,13 +124,47 @@ def diff(series, diff=1, seasonal_diff=None, k_seasons=1):
 
 
 def is_invertible(params):
-    return np.all(np.abs(np.roots(np.r_[1, params])) < 1)
+    """
+    Determine if a set of parameters (corresponding to the coefficients to the
+    non-constant terms of a polynomial) represents an invertible lag
+    polynomial. Requires all roots of the polynomial to lie outside the unit
+    circle.
+
+    Parameters
+    ----------
+    params : array_like
+        Coefficients of the non-constant terms of a polynomial. For example,
+        `params=[0.5]` corresponds to the polynomial :math:`1 + 0.5x` which
+        has root :math:`-2`.
+
+    Examples
+    --------
+    >>> dp.ssm.is_invertible([0.5])
+    True
+    >>> dp.ssm.is_invertible([1])
+    False
+    """
+    return np.all(np.abs(np.roots(np.r_[1, params][::-1])) > 1)
 
 
 def constrain_stationary_univariate(unconstrained):
     """
     Transform unconstrained parameters used by the optimizer to constrained
     parameters used in likelihood evaluation
+
+    Parameters
+    ----------
+    unconstrained : array_like
+        Unconstrained parameters used by the optimizer, to be transformed to
+        stationary coefficients of, e.g., an autoregressive or moving average
+        component.
+
+    Returns
+    -------
+    constrained : array_like
+        Constrained parameters of, e.g., an autoregressive or moving average
+        component, to be transformed to arbitrary parameters used by the
+        optimizer.
 
     References
     ----------
@@ -98,6 +190,20 @@ def unconstrain_stationary_univariate(constrained):
     Transform constrained parameters used in likelihood evaluation
     to unconstrained parameters used by the optimizer
 
+    Parameters
+    ----------
+    constrained : array_like
+        Constrained parameters of, e.g., an autoregressive or moving average
+        component, to be transformed to arbitrary parameters used by the
+        optimizer.
+
+    Returns
+    -------
+    unconstrained : array_like
+        Unconstrained parameters used by the optimizer, to be transformed to
+        stationary coefficients of, e.g., an autoregressive or moving average
+        component.
+
     References
     ----------
 
@@ -118,6 +224,29 @@ def unconstrain_stationary_univariate(constrained):
 
 
 def validate_matrix_shape(name, shape, nrows, ncols, nobs):
+    """
+    Validate the shape of a possibly time-varing matrix, or raise an exception
+
+    Parameters
+    ----------
+    name : str
+        The name of the matrix being validated (used in exception messages)
+    shape : array_like
+        The shape of the matrix to be validated. May be of size 2 or (if
+        the matrix is time-varying) 3.
+    nrows : int
+        The expected number of rows.
+    ncols : int
+        The expected number of columns.
+    nobs : int
+        The number of observations (used to validate the last dimension of a
+        time-varying matrix)
+
+    Raises
+    ------
+    ValueError
+        If the matrix is not of the desired shape.
+    """
     ndim = len(shape)
 
     # Enforce dimension
@@ -140,6 +269,27 @@ def validate_matrix_shape(name, shape, nrows, ncols, nobs):
 
 
 def validate_vector_shape(name, shape, nrows, nobs):
+    """
+    Validate the shape of a possibly time-varing vector, or raise an exception
+
+    Parameters
+    ----------
+    name : str
+        The name of the vector being validated (used in exception messages)
+    shape : array_like
+        The shape of the vector to be validated. May be of size 1 or (if
+        the vector is time-varying) 2.
+    nrows : int
+        The expected number of rows (elements of the vector).
+    nobs : int
+        The number of observations (used to validate the last dimension of a
+        time-varying vector)
+
+    Raises
+    ------
+    ValueError
+        If the vector is not of the desired shape.
+    """
     ndim = len(shape)
     # Enforce dimension
     if ndim not in [1, 2]:
