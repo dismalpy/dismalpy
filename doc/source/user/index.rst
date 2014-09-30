@@ -10,3 +10,5 @@ see the :ref:`reference`.
 
 .. toctree::
    :maxdepth: 2
+
+   ssm
