@@ -1,5 +1,5 @@
 """
-ARMA Model
+SARIMAX Model
 
 Author: Chad Fulton
 License: Simplified-BSD
