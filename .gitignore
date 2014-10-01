@@ -113,3 +113,5 @@ examples
 
 # compiled doc notebooks
 doc/source/user/_notebooks/
+# generated doc files
+doc/source/*/_generated
