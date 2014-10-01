@@ -1,8 +1,7 @@
 cimport numpy as np
 
-#
-# BLAS
-#
+cdef extern from "capsule.h":
+    void *Capsule_AsVoidPtr(object ptr)
 
 ctypedef int sgemm_t(
     # Compute C := alpha*A*B + beta*C
@@ -19,7 +18,7 @@ ctypedef int sgemm_t(
     np.float32_t *beta,   # Scalar multiple
     np.float32_t *c,      # Matrix C: mxn
     int *ldc              # The size of the first dimension of C (in memory)
-)
+) nogil
 
 ctypedef int sgemv_t(
     # Compute C := alpha*A*x + beta*y
@@ -34,7 +33,7 @@ ctypedef int sgemv_t(
     np.float32_t *beta,   # Scalar multiple
     np.float32_t *y,      # Vector y, min(len(y)) = m
     int *incy             # The increment between elements of y (usually 1)
-)
+) nogil
 
 ctypedef int ssymm_t(
     # SSYMM - perform one of the matrix-matrix operations   C :=
@@ -51,7 +50,7 @@ ctypedef int ssymm_t(
     np.float32_t *beta,   # Scalar multiple
     np.float32_t *c,      # Matrix C
     int *ldc,             # The size of the first dimension of C (in memory)
-)
+) nogil
 
 ctypedef int ssymv_t(
     # SSYMV - perform the matrix-vector operation   y := alpha*A*x
@@ -66,7 +65,7 @@ ctypedef int ssymv_t(
     np.float32_t *beta,   # Scalar multiple
     np.float32_t *y,      # Vector y, min(len(y)) = n
     int *incy,            # The increment between elements of y (usually 1)
-)
+) nogil
 
 ctypedef int strmm_t(
     # STRMM - perform one of the matrix-matrix operations   B :=
@@ -82,7 +81,7 @@ ctypedef int strmm_t(
     int *lda,             # The size of the first dimension of A (in memory)
     np.float32_t *b,      # Matrix B
     int *ldb,             # The size of the first dimension of B (in memory)
-)
+) nogil
 
 ctypedef int strmv_t(
     # STRMV - perform one of the matrix-vector operations   x :=
@@ -95,7 +94,7 @@ ctypedef int strmv_t(
     int *lda,             # The size of the first dimension of A (in memory)
     np.float32_t *x,      # Vector x, min(len(x)) = n
     int *incx,            # The increment between elements of x (usually 1)
-)
+) nogil
 
 ctypedef int scopy_t(
     int *n,           # Number of vector elements to be copied.
@@ -103,7 +102,7 @@ ctypedef int scopy_t(
     int *incx,        # Increment between elements of x.
     np.float32_t *y,  # array of dimension (n-1) * |incy| + 1, result vector.
     int *incy         # Increment between elements of y.
-)
+) nogil
 
 ctypedef int sscal_t(
     # SSCAL - BLAS level one, scales a double precision vector
@@ -111,7 +110,7 @@ ctypedef int sscal_t(
     np.float32_t *alpha,  # scalar alpha
     np.float32_t *x,      # Array of dimension (n-1) * |incx| + 1. Vector to be scaled.
     int *incx             # Increment between elements of x.
-)
+) nogil
 
 ctypedef int saxpy_t(
     # Compute y := alpha*x + y
@@ -121,7 +120,7 @@ ctypedef int saxpy_t(
     int *incx,            # The increment between elements of x (usually 1)
     np.float32_t *y,      # Vector y, min(len(y)) = m
     int *incy             # The increment between elements of y (usually 1)
-)
+) nogil
 
 ctypedef np.float64_t sdot_t(
     # Compute DDOT := x.T * y
@@ -130,7 +129,7 @@ ctypedef np.float64_t sdot_t(
     int *incx,        # The increment between elements of x (usually 1)
     np.float32_t *y,  # Vector y, min(len(y)) = m
     int *incy         # The increment between elements of y (usually 1)
-)
+) nogil
 
 ctypedef int dgemm_t(
     # Compute C := alpha*A*B + beta*C
@@ -147,7 +146,7 @@ ctypedef int dgemm_t(
     np.float64_t *beta,  # Scalar multiple
     np.float64_t *c,     # Matrix C: mxn
     int *ldc             # The size of the first dimension of C (in memory)
-)
+) nogil
 
 ctypedef int dgemv_t(
     # Compute y := alpha*A*x + beta*y
@@ -162,7 +161,7 @@ ctypedef int dgemv_t(
     np.float64_t *beta,  # Scalar multiple
     np.float64_t *y,     # Vector y, min(len(y)) = m
     int *incy            # The increment between elements of y (usually 1)
-)
+) nogil
 
 ctypedef int dsymm_t(
     # DSYMM - perform one of the matrix-matrix operations   C :=
@@ -179,7 +178,7 @@ ctypedef int dsymm_t(
     np.float64_t *beta,   # Scalar multiple
     np.float64_t *c,      # Matrix C
     int *ldc,             # The size of the first dimension of C (in memory)
-)
+) nogil
 
 ctypedef int dsymv_t(
     # DSYMV - perform the matrix-vector operation   y := alpha*A*x
@@ -194,7 +193,7 @@ ctypedef int dsymv_t(
     np.float64_t *beta,   # Scalar multiple
     np.float64_t *y,      # Vector y, min(len(y)) = n
     int *incy,            # The increment between elements of y (usually 1)
-)
+) nogil
 
 ctypedef int dtrmm_t(
     # DTRMM - perform one of the matrix-matrix operations   B :=
@@ -210,7 +209,7 @@ ctypedef int dtrmm_t(
     int *lda,             # The size of the first dimension of A (in memory)
     np.float64_t *b,      # Matrix B
     int *ldb,             # The size of the first dimension of B (in memory)
-)
+) nogil
 
 ctypedef int dtrmv_t(
     # DTRMV - perform one of the matrix-vector operations   x :=
@@ -223,7 +222,7 @@ ctypedef int dtrmv_t(
     int *lda,             # The size of the first dimension of A (in memory)
     np.float64_t *x,      # Vector x, min(len(x)) = n
     int *incx,            # The increment between elements of x (usually 1)
-)
+) nogil
 
 ctypedef int dcopy_t(
     int *n,              # Number of vector elements to be copied.
@@ -231,7 +230,7 @@ ctypedef int dcopy_t(
     int *incx,           # Increment between elements of x.
     np.float64_t *y,     # array of dimension (n-1) * |incy| + 1, result vector.
     int *incy            # Increment between elements of y.
-)
+) nogil
 
 ctypedef int dscal_t(
     # DSCAL - BLAS level one, scales a double precision vector
@@ -239,7 +238,7 @@ ctypedef int dscal_t(
     np.float64_t *alpha,  # scalar alpha
     np.float64_t *x,      # Array of dimension (n-1) * |incx| + 1. Vector to be scaled.
     int *incx             # Increment between elements of x.
-)
+) nogil
 
 ctypedef int daxpy_t(
     # Compute y := alpha*x + y
@@ -249,7 +248,7 @@ ctypedef int daxpy_t(
     int *incx,           # The increment between elements of x (usually 1)
     np.float64_t *y,     # Vector y, min(len(y)) = m
     int *incy            # The increment between elements of y (usually 1)
-)
+) nogil
 
 ctypedef double ddot_t(
     # Compute DDOT := x.T * y
@@ -258,7 +257,7 @@ ctypedef double ddot_t(
     int *incx,           # The increment between elements of x (usually 1)
     np.float64_t *y,     # Vector y, min(len(y)) = m
     int *incy            # The increment between elements of y (usually 1)
-)
+) nogil
 
 ctypedef int cgemm_t(
     # Compute C := alpha*A*B + beta*C
@@ -275,7 +274,7 @@ ctypedef int cgemm_t(
     np.complex64_t *beta,   # Scalar multiple
     np.complex64_t *c,      # Matrix C: mxn
     int *ldc                # The size of the first dimension of C (in memory)
-)
+) nogil
 
 ctypedef int cgemv_t(
     # Compute C := alpha*A*x + beta*y
@@ -290,7 +289,7 @@ ctypedef int cgemv_t(
     np.complex64_t *beta,   # Scalar multiple
     np.complex64_t *y,      # Vector y, min(len(y)) = m
     int *incy               # The increment between elements of y (usually 1)
-)
+) nogil
 
 ctypedef int csymm_t(
     # CSYMM - perform one of the matrix-matrix operations   C :=
@@ -307,7 +306,7 @@ ctypedef int csymm_t(
     np.complex64_t *beta,   # Scalar multiple
     np.complex64_t *c,      # Matrix C
     int *ldc,               # The size of the first dimension of C (in memory)
-)
+) nogil
 
 ctypedef int csymv_t(
     # CSYMV - perform the matrix-vector operation   y := alpha*A*x
@@ -322,7 +321,7 @@ ctypedef int csymv_t(
     np.complex64_t *beta,   # Scalar multiple
     np.complex64_t *y,      # Vector y, min(len(y)) = n
     int *incy,              # The increment between elements of y (usually 1)
-)
+) nogil
 
 ctypedef int ctrmm_t(
     # CTRMM - perform one of the matrix-matrix operations   B :=
@@ -338,7 +337,7 @@ ctypedef int ctrmm_t(
     int *lda,               # The size of the first dimension of A (in memory)
     np.complex64_t *b,      # Matrix B
     int *ldb,               # The size of the first dimension of B (in memory)
-)
+) nogil
 
 ctypedef int ctrmv_t(
     # CTRMV - perform one of the matrix-vector operations   x :=
@@ -351,7 +350,7 @@ ctypedef int ctrmv_t(
     int *lda,             # The size of the first dimension of A (in memory)
     np.complex64_t *x,    # Vector x, min(len(x)) = n
     int *incx,            # The increment between elements of x (usually 1)
-)
+) nogil
 
 ctypedef int ccopy_t(
     int *n,             # Number of vector elements to be copied.
@@ -359,7 +358,7 @@ ctypedef int ccopy_t(
     int *incx,          # Increment between elements of x.
     np.complex64_t *y,  # array of dimension (n-1) * |incy| + 1, result vector.
     int *incy           # Increment between elements of y.
-)
+) nogil
 
 ctypedef int cscal_t(
     # CSCAL - BLAS level one, scales a double precision vector
@@ -367,7 +366,7 @@ ctypedef int cscal_t(
     np.complex64_t *alpha,  # scalar alpha
     np.complex64_t *x,      # Array of dimension (n-1) * |incx| + 1. Vector to be scaled.
     int *incx               # Increment between elements of x.
-)
+) nogil
 
 ctypedef int caxpy_t(
     # Compute y := alpha*x + y
@@ -377,7 +376,7 @@ ctypedef int caxpy_t(
     int *incx,              # The increment between elements of x (usually 1)
     np.complex64_t *y,      # Vector y, min(len(y)) = m
     int *incy               # The increment between elements of y (usually 1)
-)
+) nogil
 
 ctypedef np.complex64_t cdotu_t(
     # Compute CDOTU := x.T * y
@@ -386,7 +385,7 @@ ctypedef np.complex64_t cdotu_t(
     int *incx,          # The increment between elements of x (usually 1)
     np.complex64_t *y,  # Vector y, min(len(y)) = m
     int *incy           # The increment between elements of y (usually 1)
-)
+) nogil
 
 ctypedef int zgemm_t(
     # Compute C := alpha*A*B + beta*C
@@ -403,7 +402,7 @@ ctypedef int zgemm_t(
     np.complex128_t *beta,  # Scalar multiple
     np.complex128_t *c,     # Matrix C: mxn
     int *ldc                # The size of the first dimension of C (in memory)
-)
+) nogil
 
 ctypedef int zgemv_t(
     # Compute C := alpha*A*x + beta*y
@@ -418,7 +417,7 @@ ctypedef int zgemv_t(
     np.complex128_t *beta,  # Scalar multiple
     np.complex128_t *y,     # Vector y, min(len(y)) = m
     int *incy       # The increment between elements of y (usually 1)
-)
+) nogil
 
 ctypedef int zsymm_t(
     # ZSYMM - perform one of the matrix-matrix operations   C :=
@@ -435,7 +434,7 @@ ctypedef int zsymm_t(
     np.complex128_t *beta,  # Scalar multiple
     np.complex128_t *c,     # Matrix C
     int *ldc,               # The size of the first dimension of C (in memory)
-)
+) nogil
 
 ctypedef int zsymv_t(
     # ZSYMV - perform the matrix-vector operation   y := alpha*A*x
@@ -450,7 +449,7 @@ ctypedef int zsymv_t(
     np.complex128_t *beta,  # Scalar multiple
     np.complex128_t *y,     # Vector y, min(len(y)) = n
     int *incy,              # The increment between elements of y (usually 1)
-)
+) nogil
 
 ctypedef int ztrmm_t(
     # ZTRMM - perform one of the matrix-matrix operations   B :=
@@ -466,7 +465,7 @@ ctypedef int ztrmm_t(
     int *lda,               # The size of the first dimension of A (in memory)
     np.complex128_t *b,     # Matrix B
     int *ldb,               # The size of the first dimension of B (in memory)
-)
+) nogil
 
 ctypedef int ztrmv_t(
     # ZTRMV - perform one of the matrix-vector operations   x :=
@@ -479,7 +478,7 @@ ctypedef int ztrmv_t(
     int *lda,             # The size of the first dimension of A (in memory)
     np.complex128_t *x,   # Vector x, min(len(x)) = n
     int *incx,            # The increment between elements of x (usually 1)
-)
+) nogil
 
 ctypedef int zcopy_t(
     int *n,         # Number of vector elements to be copied.
@@ -487,7 +486,7 @@ ctypedef int zcopy_t(
     int *incx,      # Increment between elements of x.
     np.complex128_t *y,     # array of dimension (n-1) * |incy| + 1, result vector.
     int *incy       # Increment between elements of y.
-)
+) nogil
 
 ctypedef int zscal_t(
     # ZSCAL - BLAS level one, scales a double np.complex128_t precision vector
@@ -495,7 +494,7 @@ ctypedef int zscal_t(
     np.complex128_t *alpha,  # scalar alpha
     np.complex128_t *x,      # Array of dimension (n-1) * |incx| + 1. Vector to be scaled.
     int *incx        # Increment between elements of x.
-)
+) nogil
 
 ctypedef int zaxpy_t(
     # Compute y := alpha*x + y
@@ -505,7 +504,7 @@ ctypedef int zaxpy_t(
     int *incx,      # The increment between elements of x (usually 1)
     np.complex128_t *y,     # Vector y, min(len(y)) = m
     int *incy       # The increment between elements of y (usually 1)
-)
+) nogil
 
 ctypedef np.complex128_t zdotu_t(
     # Compute ZDOTU := x.T * y
@@ -514,300 +513,30 @@ ctypedef np.complex128_t zdotu_t(
     int *incx,   # The increment between elements of x (usually 1)
     np.complex128_t *y,  # Vector y, min(len(y)) = m
     int *incy    # The increment between elements of y (usually 1)
-)
+) nogil
 
-#
-# LAPACK
-#
-
-ctypedef int sgetrf_t(
-    # SGETRF - compute an LU factorization of a general M-by-N
-    # matrix A using partial pivoting with row interchanges
-    int *m,          # Rows of A
-    int *n,          # Columns of A
-    np.float32_t *a, # Matrix A: mxn
-    int *lda,        # The size of the first dimension of A (in memory)
-    int *ipiv,       # Matrix P: mxn (the pivot indices)
-    int *info        # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int sgetri_t(
-    # SGETRI - compute the inverse of a matrix using the LU fac-
-    # torization computed by SGETRF
-    int *n,             # Order of A
-    np.float32_t *a,    # Matrix A: nxn (the LUP decomposed matrix from dgetrf)
-    int *lda,           # The size of the first dimension of A (in memory)
-    int *ipiv,          # Matrix P: nxn (the pivot indices from the LUP decomposition)
-    np.float32_t *work, # Matrix: nxn (a workspace for the inversion, optimal size=nxn)
-    int *lwork,         # Number of elements in the workspace: optimal is n**2
-    int *info           # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int sgetrs_t(
-    # SGETRS - solve a system of linear equations  A * X = B or A'
-    # * X = B with a general N-by-N matrix A using the LU factori-
-    # zation computed by SGETRF
-    char *trans,        # Specifies the form of the system of equations
-    int *n,             # Order of A
-    int *nrhs,          # The number of right hand sides
-    np.float32_t *a,    # Matrix A: nxn (the LUP decomposed matrix from dgetrf)
-    int *lda,           # The size of the first dimension of A (in memory)
-    int *ipiv,          # Matrix P: nxn (the pivot indices from the LUP decomposition)
-    np.float32_t *b,    # Matrix B: nxnrhs
-    int *ldb,           # The size of the first dimension of B (in memory)
-    int *info           # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int spotrf_t(
-    # Compute the Cholesky factorization of a
-    # real  symmetric positive definite matrix A
-    char *uplo,       # 'U':  A = U'U and U is stored, 'L': A = LL' and L is stored
-    int *n,           # The order of the matrix A.  n >= 0.
-    np.float32_t *a,  # Matrix A: nxn
-    int *lda,         # The size of the first dimension of A (in memory)
-    int *info         # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int spotri_t(
-    # SPOTRI - compute the inverse of a real symmetric positive
-    # definite matrix A using the Cholesky factorization A =
-    # U**T*U or A = L*L**T computed by SPOTRF
-    char *uplo,       # 'U':  A = U'U and U is stored, 'L': A = LL' and L is stored
-    int *n,           # The order of the matrix A.  n >= 0.
-    np.float32_t *a,  # Matrix A: nxn
-    int *lda,         # The size of the first dimension of A (in memory)
-    int *info         # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int spotrs_t(
-    # SPOTRS - solve a system of linear equations A*X = B with a
-    # symmetric positive definite matrix A using the Cholesky fac-
-    # torization A = U**T*U or A = L*L**T computed by SPOTRF
-    char *uplo,       # 'U':  A = U'U and U is stored, 'L': A = LL' and L is stored
-    int *n,           # The order of the matrix A.  n >= 0.
-    int *nrhs,        # The number of right hand sides
-    np.float32_t *a,  # Matrix A: nxn
-    int *lda,         # The size of the first dimension of A (in memory)
-    np.float32_t *b,  # Matrix B: nxnrhs
-    int *ldb,         # The size of the first dimension of B (in memory)
-    int *info         # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int dgetrf_t(
-    # DGETRF - compute an LU factorization of a general M-by-N
-    # matrix A using partial pivoting with row interchanges
-    int *m,          # Rows of A
-    int *n,          # Columns of A
-    np.float64_t *a, # Matrix A: mxn
-    int *lda,        # The size of the first dimension of A (in memory)
-    int *ipiv,       # Matrix P: mxn (the pivot indices)
-    int *info        # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int dgetri_t(
-    # DGETRI - compute the inverse of a matrix using the LU fac-
-    # torization computed by DGETRF
-    int *n,              # Order of A
-    np.float64_t *a,     # Matrix A: nxn (the LUP decomposed matrix from dgetrf)
-    int *lda,            # The size of the first dimension of A (in memory)
-    int *ipiv,           # Matrix P: nxn (the pivot indices from the LUP decomposition)
-    np.float64_t *work,  # Matrix: nxn (a workspace for the inversion, optimal size=nxn)
-    int *lwork,          # Number of elements in the workspace: optimal is n**2
-    int *info            # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int dgetrs_t(
-    # DGETRS - solve a system of linear equations  A * X = B or A'
-    # * X = B with a general N-by-N matrix A using the LU factori-
-    # zation computed by DGETRF
-    char *trans,        # Specifies the form of the system of equations
-    int *n,             # Order of A
-    int *nrhs,          # The number of right hand sides
-    np.float64_t *a,    # Matrix A: nxn (the LUP decomposed matrix from dgetrf)
-    int *lda,           # The size of the first dimension of A (in memory)
-    int *ipiv,          # Matrix P: nxn (the pivot indices from the LUP decomposition)
-    np.float64_t *b,    # Matrix B: nxnrhs
-    int *ldb,           # The size of the first dimension of B (in memory)
-    int *info           # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int dpotrf_t(
-    # Compute the Cholesky factorization of a
-    # real  symmetric positive definite matrix A
-    char *uplo,      # 'U':  A = U'U and U is stored, 'L': A = LL' and L is stored
-    int *n,          # The order of the matrix A.  n >= 0.
-    np.float64_t *a, # Matrix A: nxn
-    int *lda,        # The size of the first dimension of A (in memory)
-    int *info        # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int dpotri_t(
-    # DPOTRI - compute the inverse of a real symmetric positive
-    # definite matrix A using the Cholesky factorization A =
-    # U**T*U or A = L*L**T computed by DPOTRF
-    char *uplo,      # 'U':  A = U'U and U is stored, 'L': A = LL' and L is stored
-    int *n,          # The order of the matrix A.  n >= 0.
-    np.float64_t *a, # Matrix A: nxn
-    int *lda,        # The size of the first dimension of A (in memory)
-    int *info        # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int dpotrs_t(
-    # DPOTRS - solve a system of linear equations A*X = B with a
-    # symmetric positive definite matrix A using the Cholesky fac-
-    # torization A = U**T*U or A = L*L**T computed by DPOTRF
-    char *uplo,       # 'U':  A = U'U and U is stored, 'L': A = LL' and L is stored
-    int *n,           # The order of the matrix A.  n >= 0.
-    int *nrhs,        # The number of right hand sides
-    np.float64_t *a,  # Matrix A: nxn
-    int *lda,         # The size of the first dimension of A (in memory)
-    np.float64_t *b,  # Matrix B: nxnrhs
-    int *ldb,         # The size of the first dimension of B (in memory)
-    int *info         # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int cgetrf_t(
-    # CGETRF - compute an LU factorization of a general M-by-N
-    # matrix A using partial pivoting with row interchanges
-    int *m,             # Rows of A
-    int *n,             # Columns of A
-    np.complex64_t *a,  # Matrix A: mxn
-    int *lda,           # The size of the first dimension of A (in memory)
-    int *ipiv,          # Matrix P: mxn (the pivot indices)
-    int *info           # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int cgetri_t(
-    # CGETRI - compute the inverse of a matrix using the LU fac-
-    # torization computed by CGETRF
-    int *n,               # Order of A
-    np.complex64_t *a,    # Matrix A: nxn (the LUP decomposed matrix from dgetrf)
-    int *lda,             # The size of the first dimension of A (in memory)
-    int *ipiv,            # Matrix P: nxn (the pivot indices from the LUP decomposition)
-    np.complex64_t *work, # Matrix: nxn (a workspace for the inversion, optimal size=nxn)
-    int *lwork,           # Number of elements in the workspace: optimal is n**2
-    int *info             # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int cgetrs_t(
-    # CGETRS - solve a system of linear equations  A * X = B, A**T
-    # * X = B, or A**H * X = B with a general N-by-N matrix A
-    # using the LU factorization computed by CGETRF
-    char *trans,          # Specifies the form of the system of equations
-    int *n,               # Order of A
-    int *nrhs,            # The number of right hand sides
-    np.complex64_t *a,    # Matrix A: nxn (the LUP decomposed matrix from dgetrf)
-    int *lda,             # The size of the first dimension of A (in memory)
-    int *ipiv,            # Matrix P: nxn (the pivot indices from the LUP decomposition)
-    np.complex64_t *b,    # Matrix B: nxnrhs
-    int *ldb,             # The size of the first dimension of B (in memory)
-    int *info             # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int cpotrf_t(
-    # Compute the Cholesky factorization of a
-    # np.complex128_t Hermitian positive definite matrix A
-    char *uplo,         # 'U':  A = U'U and U is stored, 'L': A = LL' and L is stored
-    int *n,             # The order of the matrix A.  n >= 0.
-    np.complex64_t *a,  # Matrix A: nxn
-    int *lda,           # The size of the first dimension of A (in memory)
-    int *info           # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int cpotri_t(
-    # CPOTRI - compute the inverse of a np.complex128_t Hermitian positive
-    # definite matrix A using the Cholesky factorization A =
-    # U**T*U or A = L*L**T computed by CPOTRF
-    char *uplo,        # 'U':  A = U'U and U is stored, 'L': A = LL' and L is stored
-    int *n,            # The order of the matrix A.  n >= 0.
-    np.complex64_t *a, # Matrix A: nxn
-    int *lda,          # The size of the first dimension of A (in memory)
-    int *info          # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int cpotrs_t(
-    # ZPOTRS - solve a system of linear equations A*X = B with a
-    # Hermitian positive definite matrix A using the Cholesky fac-
-    # torization A = U**H*U or A = L*L**H computed by ZPOTRF
-    char *uplo,         # 'U':  A = U'U and U is stored, 'L': A = LL' and L is stored
-    int *n,             # The order of the matrix A.  n >= 0.
-    int *nrhs,          # The number of right hand sides
-    np.complex64_t *a,  # Matrix A: nxn
-    int *lda,           # The size of the first dimension of A (in memory)
-    np.complex64_t *b,  # Matrix B: nxnrhs
-    int *ldb,           # The size of the first dimension of B (in memory)
-    int *info           # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int zgetrf_t(
-    # ZGETRF - compute an LU factorization of a general M-by-N
-    # matrix A using partial pivoting with row interchanges
-    int *m,                # Rows of A
-    int *n,                # Columns of A
-    np.complex128_t *a,    # Matrix A: mxn
-    int *lda,              # The size of the first dimension of A (in memory)
-    int *ipiv,             # Matrix P: mxn (the pivot indices)
-    int *info              # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int zgetri_t(
-    # ZGETRI - compute the inverse of a matrix using the LU fac-
-    # torization computed by ZGETRF
-    int *n,                # Order of A
-    np.complex128_t *a,    # Matrix A: nxn (the LUP decomposed matrix from dgetrf)
-    int *lda,              # The size of the first dimension of A (in memory)
-    int *ipiv,             # Matrix P: nxn (the pivot indices from the LUP decomposition)
-    np.complex128_t *work, # Matrix: nxn (a workspace for the inversion, optimal size=nxn)
-    int *lwork,            # Number of elements in the workspace: optimal is n**2
-    int *info              # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int zgetrs_t(
-    # ZGETRS - solve a system of linear equations  A * X = B, A**T
-    # * X = B, or A**H * X = B with a general N-by-N matrix A
-    # using the LU factorization computed by ZGETRF
-    char *trans,           # Specifies the form of the system of equations
-    int *n,                # Order of A
-    int *nrhs,             # The number of right hand sides
-    np.complex128_t *a,    # Matrix A: nxn (the LUP decomposed matrix from dgetrf)
-    int *lda,              # The size of the first dimension of A (in memory)
-    int *ipiv,             # Matrix P: nxn (the pivot indices from the LUP decomposition)
-    np.complex128_t *b,    # Matrix B: nxnrhs
-    int *ldb,              # The size of the first dimension of B (in memory)
-    int *info              # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int zpotrf_t(
-    # Compute the Cholesky factorization of a
-    # np.complex128_t Hermitian positive definite matrix A
-    char *uplo,         # 'U':  A = U'U and U is stored, 'L': A = LL' and L is stored
-    int *n,             # The order of the matrix A.  n >= 0.
-    np.complex128_t *a, # Matrix A: nxn
-    int *lda,           # The size of the first dimension of A (in memory)
-    int *info           # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int zpotri_t(
-    # ZPOTRI - compute the inverse of a np.complex128_t Hermitian positive
-    # definite matrix A using the Cholesky factorization A =
-    # U**T*U or A = L*L**T computed by ZPOTRF
-    char *uplo,          # 'U':  A = U'U and U is stored, 'L': A = LL' and L is stored
-    int *n,              # The order of the matrix A.  n >= 0.
-    np.complex128_t *a,  # Matrix A: nxn
-    int *lda,            # The size of the first dimension of A (in memory)
-    int *info            # 0 if success, otherwise an error code (integer)
-)
-
-ctypedef int zpotrs_t(
-    # ZPOTRS - solve a system of linear equations A*X = B with a
-    # Hermitian positive definite matrix A using the Cholesky fac-
-    # torization A = U**H*U or A = L*L**H computed by ZPOTRF
-    char *uplo,          # 'U':  A = U'U and U is stored, 'L': A = LL' and L is stored
-    int *n,              # The order of the matrix A.  n >= 0.
-    int *nrhs,           # The number of right hand sides
-    np.complex128_t *a,  # Matrix A: nxn
-    int *lda,            # The size of the first dimension of A (in memory)
-    np.complex128_t *b,  # Matrix B: nxnrhs
-    int *ldb,            # The size of the first dimension of B (in memory)
-    int *info            # 0 if success, otherwise an error code (integer)
-)
+cdef:
+    sdot_t *sdot
+    sgemm_t *sgemm
+    sgemv_t *sgemv
+    scopy_t *scopy
+    saxpy_t *saxpy
+    sscal_t *sscal
+    ddot_t *ddot
+    dgemm_t *dgemm
+    dgemv_t *dgemv
+    dcopy_t *dcopy
+    daxpy_t *daxpy
+    dscal_t *dscal
+    cdotu_t *cdot
+    cgemm_t *cgemm
+    cgemv_t *cgemv
+    ccopy_t *ccopy
+    caxpy_t *caxpy
+    cscal_t *cscal
+    zdotu_t *zdot
+    zgemm_t *zgemm
+    zgemv_t *zgemv
+    zcopy_t *zcopy
+    zaxpy_t *zaxpy
+    zscal_t *zscal

@@ -17,9 +17,6 @@ TYPES = {
     "z": ("np.complex128_t", "complex", "np.NPY_COMPLEX128"),
 }
 
-BLAS_FUNCTIONS = ["gemm", "gemv", "copy", "axpy", "scal"]
-LAPACK_FUNCTIONS = ["getrf", "getri", "getrs", "potrf", "potri", "potrs"]
-
 }}
 
 # ## Constants
@@ -67,65 +64,9 @@ cimport cython
 
 np.import_array()
 
-# ## Math Functions
-# Real and complex log and abs functions
-from libc.math cimport log as dlog, abs as dabs
-from numpy cimport npy_cdouble
-
-cdef extern from "numpy/npy_math.h":
-    np.float64_t NPY_PI
-    np.float64_t npy_cabs(np.npy_cdouble z)
-    np.npy_cdouble npy_clog(np.npy_cdouble z)
-
-cdef inline np.float64_t zabs(np.complex128_t z):
-    return npy_cabs((<np.npy_cdouble *> &z)[0])
-
-cdef inline np.complex128_t zlog(np.complex128_t z):
-    cdef np.npy_cdouble x
-    x = npy_clog((<np.npy_cdouble*> &z)[0])
-    return (<np.complex128_t *> &x)[0]
-
-cdef extern from "capsule.h":
-    void *Capsule_AsVoidPtr(object ptr)
-
-# ## BLAS / LAPACK functions
-
-# `blas_lapack.pxd` contains typedef statements for BLAS and LAPACK functions
-from dismalpy.src.blas_lapack cimport *
-
-try:
-    # Scipy >= 0.12.0 exposes Fortran BLAS functions directly
-    from scipy.linalg.blas import cgerc
-except:
-    # Scipy < 0.12.0 exposes Fortran BLAS functions in the `fblas` submodule
-    from scipy.linalg.blas import fblas as blas
-else:
-    from scipy.linalg import blas
-
-try:
-    # Scipy >= 0.12.0 exposes Fortran LAPACK functions directly
-    from scipy.linalg.lapack import cgbsv
-except:
-    # Scipy < 0.12.0 exposes Fortran LAPACK functions in the `flapack` submodule
-    from scipy.linalg.lapack import flapack as lapack
-else:
-    from scipy.linalg import lapack
-
-{{for prefix, types in TYPES.items()}}
-{{for function in BLAS_FUNCTIONS}}
-{{py: name = prefix + function}}
-cdef {{name}}_t *{{name}} = <{{name}}_t*>Capsule_AsVoidPtr(blas.{{name}}._cpointer)
-{{endfor}}
-{{for function in LAPACK_FUNCTIONS}}
-{{py: name = prefix + function}}
-cdef {{name}}_t *{{name}} = <{{name}}_t*>Capsule_AsVoidPtr(lapack.{{name}}._cpointer)
-{{endfor}}
-{{endfor}}
-
-cdef sdot_t *sdot = <sdot_t*>Capsule_AsVoidPtr(blas.sdot._cpointer)
-cdef ddot_t *ddot = <ddot_t*>Capsule_AsVoidPtr(blas.ddot._cpointer)
-cdef cdotu_t *cdot = <cdotu_t*>Capsule_AsVoidPtr(blas.cdotu._cpointer)
-cdef zdotu_t *zdot = <zdotu_t*>Capsule_AsVoidPtr(blas.zdotu._cpointer)
+from dismalpy.src.math cimport *
+cimport dismalpy.src.blas as blas
+cimport dismalpy.src.lapack as lapack
 
 cdef int FORTRAN = 1
 
@@ -423,13 +364,13 @@ cdef int {{prefix}}select_state_cov(int k_states, int k_posdef,
 
         # $\\#_0 = 1.0 * R_t Q_t$  
         # $(m \times r) = (m \times r) (r \times r)$
-        {{prefix}}gemm("N", "N", &k_states, &k_posdef, &k_posdef,
+        blas.{{prefix}}gemm("N", "N", &k_states, &k_posdef, &k_posdef,
               &alpha, selection, &k_states,
                       state_cov, &k_posdef,
               &beta, tmp, &k_states)
         # $Q_t^* = 1.0 * \\#_0 R_t'$  
         # $(m \times m) = (m \times r) (m \times r)'$
-        {{prefix}}gemm("N", "T", &k_states, &k_states, &k_posdef,
+        blas.{{prefix}}gemm("N", "T", &k_states, &k_states, &k_posdef,
               &alpha, tmp, &k_states,
                       selection, &k_states,
               &beta, selected_state_cov, &k_states)
@@ -481,7 +422,7 @@ cdef int {{prefix}}forecast_missing_conventional({{prefix}}KalmanFilter kfilter)
 
     # #### Forecast for time t  
     # `forecast` $= 0 a_t + d_t$
-    {{prefix}}copy(&kfilter.k_endog, kfilter._obs_intercept, &inc, kfilter._forecast, &inc)
+    blas.{{prefix}}copy(&kfilter.k_endog, kfilter._obs_intercept, &inc, kfilter._forecast, &inc)
 
     # #### Forecast error for time t  
     # It is undefined here, since obs is nan
@@ -499,8 +440,8 @@ cdef int {{prefix}}updating_missing_conventional({{prefix}}KalmanFilter kfilter)
 
     # Simply copy over the input arrays ($a_t, P_t$) to the filtered arrays
     # ($a_{t|t}, P_{t|t}$)
-    {{prefix}}copy(&kfilter.k_states, kfilter._input_state, &inc, kfilter._filtered_state, &inc)
-    {{prefix}}copy(&kfilter.k_states2, kfilter._input_state_cov, &inc, kfilter._filtered_state_cov, &inc)
+    blas.{{prefix}}copy(&kfilter.k_states, kfilter._input_state, &inc, kfilter._filtered_state, &inc)
+    blas.{{prefix}}copy(&kfilter.k_states2, kfilter._input_state_cov, &inc, kfilter._filtered_state_cov, &inc)
 
 cdef {{cython_type}} {{prefix}}inverse_missing_conventional({{prefix}}KalmanFilter kfilter, {{cython_type}} determinant)  except *:
     # Since the inverse of the forecast error covariance matrix is not
@@ -534,10 +475,10 @@ cdef int {{prefix}}forecast_conventional({{prefix}}KalmanFilter kfilter):
     # from the previous iteration of the filter (for $t > 0$).
 
     # $\\# = d_t$
-    {{prefix}}copy(&kfilter.k_endog, kfilter._obs_intercept, &inc, kfilter._forecast, &inc)
+    blas.{{prefix}}copy(&kfilter.k_endog, kfilter._obs_intercept, &inc, kfilter._forecast, &inc)
     # `forecast` $= 1.0 * Z_t a_t + 1.0 * \\#$  
     # $(p \times 1) = (p \times m) (m \times 1) + (p \times 1)$
-    {{prefix}}gemv("N", &kfilter.k_endog, &kfilter.k_states,
+    blas.{{prefix}}gemv("N", &kfilter.k_endog, &kfilter.k_states,
           &alpha, kfilter._design, &kfilter.k_endog,
                   kfilter._input_state, &inc,
           &alpha, kfilter._forecast, &inc)
@@ -546,16 +487,16 @@ cdef int {{prefix}}forecast_conventional({{prefix}}KalmanFilter kfilter):
     # `forecast_error` $\equiv v_t = y_t -$ `forecast`
 
     # $\\# = y_t$
-    {{prefix}}copy(&kfilter.k_endog, kfilter._obs, &inc, kfilter._forecast_error, &inc)
+    blas.{{prefix}}copy(&kfilter.k_endog, kfilter._obs, &inc, kfilter._forecast_error, &inc)
     # $v_t = -1.0 * $ `forecast` $ + \\#$
     # $(p \times 1) = (p \times 1) + (p \times 1)$
-    {{prefix}}axpy(&kfilter.k_endog, &gamma, kfilter._forecast, &inc, kfilter._forecast_error, &inc)
+    blas.{{prefix}}axpy(&kfilter.k_endog, &gamma, kfilter._forecast, &inc, kfilter._forecast_error, &inc)
 
     # *Intermediate calculation* (used just below and then once more)  
     # `tmp1` array used here, dimension $(m \times p)$  
     # $\\#_1 = P_t Z_t'$  
     # $(m \times p) = (m \times m) (p \times m)'$
-    {{prefix}}gemm("N", "T", &kfilter.k_states, &kfilter.k_endog, &kfilter.k_states,
+    blas.{{prefix}}gemm("N", "T", &kfilter.k_states, &kfilter.k_endog, &kfilter.k_states,
           &alpha, kfilter._input_state_cov, &kfilter.k_states,
                   kfilter._design, &kfilter.k_endog,
           &beta, kfilter._tmp1, &kfilter.k_states)
@@ -567,9 +508,9 @@ cdef int {{prefix}}forecast_conventional({{prefix}}KalmanFilter kfilter):
     # converged == True
     if not kfilter.converged:
         # $\\# = H_t$
-        {{prefix}}copy(&kfilter.k_endog2, kfilter._obs_cov, &inc, kfilter._forecast_error_cov, &inc)
+        blas.{{prefix}}copy(&kfilter.k_endog2, kfilter._obs_cov, &inc, kfilter._forecast_error_cov, &inc)
         # $F_t = 1.0 * Z_t \\#_1 + 1.0 * \\#$
-        {{prefix}}gemm("N", "N", &kfilter.k_endog, &kfilter.k_endog, &kfilter.k_states,
+        blas.{{prefix}}gemm("N", "N", &kfilter.k_endog, &kfilter.k_endog, &kfilter.k_states,
               &alpha, kfilter._design, &kfilter.k_endog,
                      kfilter._tmp1, &kfilter.k_states,
               &alpha, kfilter._forecast_error_cov, &kfilter.k_endog)
@@ -587,8 +528,8 @@ cdef int {{prefix}}updating_conventional({{prefix}}KalmanFilter kfilter):
     # #### Filtered state for time t
     # $a_{t|t} = a_t + P_t Z_t' F_t^{-1} v_t$  
     # $a_{t|t} = 1.0 * \\#_1 \\#_2 + 1.0 a_t$
-    {{prefix}}copy(&kfilter.k_states, kfilter._input_state, &inc, kfilter._filtered_state, &inc)
-    {{prefix}}gemv("N", &kfilter.k_states, &kfilter.k_endog,
+    blas.{{prefix}}copy(&kfilter.k_states, kfilter._input_state, &inc, kfilter._filtered_state, &inc)
+    blas.{{prefix}}gemv("N", &kfilter.k_states, &kfilter.k_endog,
           &alpha, kfilter._tmp1, &kfilter.k_states,
                   kfilter._tmp2, &inc,
           &alpha, kfilter._filtered_state, &inc)
@@ -600,19 +541,19 @@ cdef int {{prefix}}updating_conventional({{prefix}}KalmanFilter kfilter):
     # *Note*: this and does nothing at all to `filtered_state_cov` if
     # converged == True
     if not kfilter.converged:
-        {{prefix}}copy(&kfilter.k_states2, kfilter._input_state_cov, &inc, kfilter._filtered_state_cov, &inc)
+        blas.{{prefix}}copy(&kfilter.k_states2, kfilter._input_state_cov, &inc, kfilter._filtered_state_cov, &inc)
 
         # `tmp0` array used here, dimension $(m \times m)$  
         # $\\#_0 = 1.0 * \\#_1 \\#_3$  
         # $(m \times m) = (m \times p) (p \times m)$
-        {{prefix}}gemm("N", "N", &kfilter.k_states, &kfilter.k_states, &kfilter.k_endog,
+        blas.{{prefix}}gemm("N", "N", &kfilter.k_states, &kfilter.k_states, &kfilter.k_endog,
               &alpha, kfilter._tmp1, &kfilter.k_states,
                       kfilter._tmp3, &kfilter.k_endog,
               &beta, kfilter._tmp0, &kfilter.k_states)
 
         # $P_{t|t} = - 1.0 * \\# P_t + 1.0 * P_t$  
         # $(m \times m) = (m \times m) (m \times m) + (m \times m)$
-        {{prefix}}gemm("N", "N", &kfilter.k_states, &kfilter.k_states, &kfilter.k_states,
+        blas.{{prefix}}gemm("N", "N", &kfilter.k_states, &kfilter.k_states, &kfilter.k_states,
               &gamma, kfilter._tmp0, &kfilter.k_states,
                       kfilter._input_state_cov, &kfilter.k_states,
               &alpha, kfilter._filtered_state_cov, &kfilter.k_states)
@@ -630,8 +571,8 @@ cdef int {{prefix}}prediction_conventional({{prefix}}KalmanFilter kfilter):
 
     # #### Predicted state for time t+1
     # $a_{t+1} = T_t a_{t|t} + c_t$
-    {{prefix}}copy(&kfilter.k_states, kfilter._state_intercept, &inc, kfilter._predicted_state, &inc)
-    {{prefix}}gemv("N", &kfilter.k_states, &kfilter.k_states,
+    blas.{{prefix}}copy(&kfilter.k_states, kfilter._state_intercept, &inc, kfilter._predicted_state, &inc)
+    blas.{{prefix}}gemv("N", &kfilter.k_states, &kfilter.k_states,
           &alpha, kfilter._transition, &kfilter.k_states,
                   kfilter._filtered_state, &inc,
           &alpha, kfilter._predicted_state, &inc)
@@ -642,19 +583,19 @@ cdef int {{prefix}}prediction_conventional({{prefix}}KalmanFilter kfilter):
     # *Note*: this and does nothing at all to `predicted_state_cov` if
     # converged == True
     if not kfilter.converged:
-        {{prefix}}copy(&kfilter.k_states2, kfilter._selected_state_cov, &inc, kfilter._predicted_state_cov, &inc)
+        blas.{{prefix}}copy(&kfilter.k_states2, kfilter._selected_state_cov, &inc, kfilter._predicted_state_cov, &inc)
         # `tmp0` array used here, dimension $(m \times m)$  
 
         # $\\#_0 = T_t P_{t|t} $
 
         # $(m \times m) = (m \times m) (m \times m)$
-        {{prefix}}gemm("N", "N", &kfilter.k_states, &kfilter.k_states, &kfilter.k_states,
+        blas.{{prefix}}gemm("N", "N", &kfilter.k_states, &kfilter.k_states, &kfilter.k_states,
               &alpha, kfilter._transition, &kfilter.k_states,
                       kfilter._filtered_state_cov, &kfilter.k_states,
               &beta, kfilter._tmp0, &kfilter.k_states)
         # $P_{t+1} = 1.0 \\#_0 T_t' + 1.0 \\#$  
         # $(m \times m) = (m \times m) (m \times m) + (m \times m)$
-        {{prefix}}gemm("N", "T", &kfilter.k_states, &kfilter.k_states, &kfilter.k_states,
+        blas.{{prefix}}gemm("N", "T", &kfilter.k_states, &kfilter.k_states, &kfilter.k_states,
               &alpha, kfilter._tmp0, &kfilter.k_states,
                       kfilter._transition, &kfilter.k_states,
               &alpha, kfilter._predicted_state_cov, &kfilter.k_states)
@@ -673,9 +614,9 @@ cdef {{cython_type}} {{prefix}}loglikelihood_conventional({{prefix}}KalmanFilter
     loglikelihood = -0.5*({{combined_prefix}}log((2*NPY_PI)**kfilter.k_endog * determinant))
 
     {{if combined_prefix == 'd'}}
-    loglikelihood = loglikelihood - 0.5*{{prefix}}dot(&kfilter.k_endog, kfilter._forecast_error, &inc, kfilter._tmp2, &inc)
+    loglikelihood = loglikelihood - 0.5*blas.{{prefix}}dot(&kfilter.k_endog, kfilter._forecast_error, &inc, kfilter._tmp2, &inc)
     {{else}}
-    {{prefix}}gemv("N", &inc, &kfilter.k_endog,
+    blas.{{prefix}}gemv("N", &inc, &kfilter.k_endog,
                    &alpha, kfilter._forecast_error, &inc,
                            kfilter._tmp2, &inc,
                    &beta, kfilter._tmp0, &inc)
@@ -716,8 +657,8 @@ cdef {{cython_type}} {{prefix}}inverse_univariate({{prefix}}KalmanFilter kfilter
                                    ' covariance matrix encountered at'
                                    ' period %d' % kfilter.t)
     kfilter._tmp2[0] = scalar * kfilter._forecast_error[0]
-    {{prefix}}copy(&kfilter.k_endogstates, kfilter._design, &inc, kfilter._tmp3, &inc)
-    {{prefix}}scal(&kfilter.k_endogstates, &scalar, kfilter._tmp3, &inc)
+    blas.{{prefix}}copy(&kfilter.k_endogstates, kfilter._design, &inc, kfilter._tmp3, &inc)
+    blas.{{prefix}}scal(&kfilter.k_endogstates, &scalar, kfilter._tmp3, &inc)
 
     return determinant
 
@@ -739,8 +680,8 @@ cdef {{cython_type}} {{prefix}}factorize_cholesky({{prefix}}KalmanFilter kfilter
         int i
 
     if not kfilter.converged:
-        {{prefix}}copy(&kfilter.k_endog2, kfilter._forecast_error_cov, &inc, kfilter._forecast_error_fac, &inc)
-        {{prefix}}potrf("U", &kfilter.k_endog, kfilter._forecast_error_fac, &kfilter.k_endog, &info)
+        blas.{{prefix}}copy(&kfilter.k_endog2, kfilter._forecast_error_cov, &inc, kfilter._forecast_error_fac, &inc)
+        lapack.{{prefix}}potrf("U", &kfilter.k_endog, kfilter._forecast_error_fac, &kfilter.k_endog, &info)
 
         if info < 0:
             raise np.linalg.LinAlgError('Illegal value in forecast error'
@@ -779,9 +720,9 @@ cdef {{cython_type}} {{prefix}}factorize_lu({{prefix}}KalmanFilter kfilter, {{cy
 
     if not kfilter.converged:
         # Perform LU decomposition into `forecast_error_fac`
-        {{prefix}}copy(&kfilter.k_endog2, kfilter._forecast_error_cov, &inc, kfilter._forecast_error_fac, &inc)
+        blas.{{prefix}}copy(&kfilter.k_endog2, kfilter._forecast_error_cov, &inc, kfilter._forecast_error_fac, &inc)
         
-        {{prefix}}getrf(&kfilter.k_endog, &kfilter.k_endog,
+        lapack.{{prefix}}getrf(&kfilter.k_endog, &kfilter.k_endog,
                         kfilter._forecast_error_fac, &kfilter.k_endog,
                         kfilter._forecast_error_ipiv, &info)
 
@@ -824,7 +765,7 @@ cdef {{cython_type}} {{prefix}}inverse_cholesky({{prefix}}KalmanFilter kfilter, 
         determinant = {{prefix}}factorize_cholesky(kfilter, determinant)
 
         # Continue taking the inverse
-        {{prefix}}potri("U", &kfilter.k_endog, kfilter._forecast_error_fac, &kfilter.k_endog, &info)
+        lapack.{{prefix}}potri("U", &kfilter.k_endog, kfilter._forecast_error_fac, &kfilter.k_endog, &info)
 
         # ?potri only fills in the upper triangle of the symmetric array, and
         # since the ?symm and ?symv routines are not available as of scipy
@@ -839,20 +780,20 @@ cdef {{cython_type}} {{prefix}}inverse_cholesky({{prefix}}KalmanFilter kfilter, 
 
     # `tmp2` array used here, dimension $(p \times 1)$  
     # $\\#_2 = F_t^{-1} v_t$  
-    #{{prefix}}symv("U", &kfilter.k_endog, &alpha, kfilter._forecast_error_fac, &kfilter.k_endog,
+    #blas.{{prefix}}symv("U", &kfilter.k_endog, &alpha, kfilter._forecast_error_fac, &kfilter.k_endog,
     #               kfilter._forecast_error, &inc, &beta, kfilter._tmp2, &inc)
-    {{prefix}}gemv("N", &kfilter.k_endog, &kfilter.k_endog,
+    blas.{{prefix}}gemv("N", &kfilter.k_endog, &kfilter.k_endog,
                    &alpha, kfilter._forecast_error_fac, &kfilter.k_endog,
                            kfilter._forecast_error, &inc,
                    &beta, kfilter._tmp2, &inc)
 
     # `tmp3` array used here, dimension $(p \times m)$  
     # $\\#_3 = F_t^{-1} Z_t$
-    #{{prefix}}symm("L", "U", &kfilter.k_endog, &kfilter.k_states,
+    #blas.{{prefix}}symm("L", "U", &kfilter.k_endog, &kfilter.k_states,
     #               &alpha, kfilter._forecast_error_fac, &kfilter.k_endog,
     #                       kfilter._design, &kfilter.k_endog,
     #               &beta, kfilter._tmp3, &kfilter.k_endog)
-    {{prefix}}gemm("N", "N", &kfilter.k_endog, &kfilter.k_states, &kfilter.k_endog,
+    blas.{{prefix}}gemm("N", "N", &kfilter.k_endog, &kfilter.k_states, &kfilter.k_endog,
                    &alpha, kfilter._forecast_error_fac, &kfilter.k_endog,
                            kfilter._design, &kfilter.k_endog,
                    &beta, kfilter._tmp3, &kfilter.k_endog)
@@ -877,21 +818,21 @@ cdef {{cython_type}} {{prefix}}inverse_lu({{prefix}}KalmanFilter kfilter, {{cyth
         determinant = {{prefix}}factorize_lu(kfilter, determinant)
 
         # Continue taking the inverse
-        {{prefix}}getri(&kfilter.k_endog, kfilter._forecast_error_fac, &kfilter.k_endog,
+        lapack.{{prefix}}getri(&kfilter.k_endog, kfilter._forecast_error_fac, &kfilter.k_endog,
                kfilter._forecast_error_ipiv, kfilter._forecast_error_work, &kfilter.ldwork, &info)
 
     # Get `tmp2` and `tmp3` via matrix multiplications
 
     # `tmp2` array used here, dimension $(p \times 1)$  
     # $\\#_2 = F_t^{-1} v_t$  
-    {{prefix}}gemv("N", &kfilter.k_endog, &kfilter.k_endog,
+    blas.{{prefix}}gemv("N", &kfilter.k_endog, &kfilter.k_endog,
                    &alpha, kfilter._forecast_error_fac, &kfilter.k_endog,
                            kfilter._forecast_error, &inc,
                    &beta, kfilter._tmp2, &inc)
 
     # `tmp3` array used here, dimension $(p \times m)$  
     # $\\#_3 = F_t^{-1} Z_t$
-    {{prefix}}gemm("N", "N", &kfilter.k_endog, &kfilter.k_states, &kfilter.k_endog,
+    blas.{{prefix}}gemm("N", "N", &kfilter.k_endog, &kfilter.k_states, &kfilter.k_endog,
                    &alpha, kfilter._forecast_error_fac, &kfilter.k_endog,
                            kfilter._design, &kfilter.k_endog,
                    &beta, kfilter._tmp3, &kfilter.k_endog)
@@ -916,13 +857,13 @@ cdef {{cython_type}} {{prefix}}solve_cholesky({{prefix}}KalmanFilter kfilter, {{
     # Solve the linear systems  
     # `tmp2` array used here, dimension $(p \times 1)$  
     # $F_t \\#_2 = v_t$  
-    {{prefix}}copy(&kfilter.k_endog, kfilter._forecast_error, &inc, kfilter._tmp2, &inc)
-    {{prefix}}potrs("U", &kfilter.k_endog, &inc, kfilter._forecast_error_fac, &kfilter.k_endog, kfilter._tmp2, &kfilter.k_endog, &info)
+    blas.{{prefix}}copy(&kfilter.k_endog, kfilter._forecast_error, &inc, kfilter._tmp2, &inc)
+    lapack.{{prefix}}potrs("U", &kfilter.k_endog, &inc, kfilter._forecast_error_fac, &kfilter.k_endog, kfilter._tmp2, &kfilter.k_endog, &info)
 
     # `tmp3` array used here, dimension $(p \times m)$  
     # $F_t \\#_3 = Z_t$
-    {{prefix}}copy(&kfilter.k_endogstates, kfilter._design, &inc, kfilter._tmp3, &inc)
-    {{prefix}}potrs("U", &kfilter.k_endog, &kfilter.k_states, kfilter._forecast_error_fac, &kfilter.k_endog, kfilter._tmp3, &kfilter.k_endog, &info)
+    blas.{{prefix}}copy(&kfilter.k_endogstates, kfilter._design, &inc, kfilter._tmp3, &inc)
+    lapack.{{prefix}}potrs("U", &kfilter.k_endog, &kfilter.k_states, kfilter._forecast_error_fac, &kfilter.k_endog, kfilter._tmp3, &kfilter.k_endog, &info)
 
     return determinant
 
@@ -946,14 +887,14 @@ cdef {{cython_type}} {{prefix}}solve_lu({{prefix}}KalmanFilter kfilter, {{cython
     # Solve the linear systems  
     # `tmp2` array used here, dimension $(p \times 1)$  
     # $F_t \\#_2 = v_t$  
-    {{prefix}}copy(&kfilter.k_endog, kfilter._forecast_error, &inc, kfilter._tmp2, &inc)
-    {{prefix}}getrs("N", &kfilter.k_endog, &inc, kfilter._forecast_error_fac, &kfilter.k_endog,
+    blas.{{prefix}}copy(&kfilter.k_endog, kfilter._forecast_error, &inc, kfilter._tmp2, &inc)
+    lapack.{{prefix}}getrs("N", &kfilter.k_endog, &inc, kfilter._forecast_error_fac, &kfilter.k_endog,
                     kfilter._forecast_error_ipiv, kfilter._tmp2, &kfilter.k_endog, &info)
 
     # `tmp3` array used here, dimension $(p \times m)$  
     # $F_t \\#_3 = Z_t$
-    {{prefix}}copy(&kfilter.k_endogstates, kfilter._design, &inc, kfilter._tmp3, &inc)
-    {{prefix}}getrs("N", &kfilter.k_endog, &kfilter.k_states, kfilter._forecast_error_fac, &kfilter.k_endog,
+    blas.{{prefix}}copy(&kfilter.k_endogstates, kfilter._design, &inc, kfilter._tmp3, &inc)
+    lapack.{{prefix}}getrs("N", &kfilter.k_endog, &kfilter.k_states, kfilter._forecast_error_fac, &kfilter.k_endog,
                     kfilter._forecast_error_ipiv, kfilter._tmp3, &kfilter.k_endog, &info)
 
     return determinant
@@ -1469,8 +1410,8 @@ cdef class {{prefix}}KalmanFilter(object):
         if t == 0:
             # `predicted_state[:,0]` $= a_1 =$ `initial_state`  
             # `predicted_state_cov[:,:,0]` $= P_1 =$ `initial_state_cov`  
-            {{prefix}}copy(&self.k_states, self._initial_state, &inc, self._input_state, &inc)
-            {{prefix}}copy(&self.k_states2, self._initial_state_cov, &inc, self._input_state_cov, &inc)
+            blas.{{prefix}}copy(&self.k_states, self._initial_state, &inc, self._input_state, &inc)
+            blas.{{prefix}}copy(&self.k_states2, self._initial_state_cov, &inc, self._input_state_cov, &inc)
 
         # Initialize object-level pointers to output arrays
         self._forecast = &self.forecast[0, forecast_t]
@@ -1611,7 +1552,7 @@ cdef class {{prefix}}KalmanFilter(object):
 
                 # i is rows
                 # k is rows
-                {{prefix}}copy(&self.model.k_states,
+                blas.{{prefix}}copy(&self.model.k_states,
                       &self.model.design[i, 0, design_t], &self.model.k_endog,
                       &self.selected_design[k], &self.k_endog)
 
@@ -1636,11 +1577,11 @@ cdef class {{prefix}}KalmanFilter(object):
 
         if self.converged:
             # $F_t$
-            {{prefix}}copy(&self.k_endog2, self._converged_forecast_error_cov, &inc, self._forecast_error_cov, &inc)
+            blas.{{prefix}}copy(&self.k_endog2, self._converged_forecast_error_cov, &inc, self._forecast_error_cov, &inc)
             # $P_{t|t}$
-            {{prefix}}copy(&self.k_states2, self._converged_filtered_state_cov, &inc, self._filtered_state_cov, &inc)
+            blas.{{prefix}}copy(&self.k_states2, self._converged_filtered_state_cov, &inc, self._filtered_state_cov, &inc)
             # $P_t$
-            {{prefix}}copy(&self.k_states2, self._converged_predicted_state_cov, &inc, self._predicted_state_cov, &inc)
+            blas.{{prefix}}copy(&self.k_states2, self._converged_predicted_state_cov, &inc, self._predicted_state_cov, &inc)
             # $|F_t|$
             self.determinant = self.converged_determinant
 
@@ -1690,16 +1631,16 @@ cdef class {{prefix}}KalmanFilter(object):
             # 
             # `tmp0` array used here, dimension $(m \times m)$  
             # `tmp1` array used here, dimension $(1 \times 1)$  
-            {{prefix}}copy(&self.k_states2, self._input_state_cov, &inc, self._tmp0, &inc)
-            {{prefix}}axpy(&self.k_states2, &gamma, self._predicted_state_cov, &inc, self._tmp0, &inc)
+            blas.{{prefix}}copy(&self.k_states2, self._input_state_cov, &inc, self._tmp0, &inc)
+            blas.{{prefix}}axpy(&self.k_states2, &gamma, self._predicted_state_cov, &inc, self._tmp0, &inc)
 
             {{if combined_prefix == 'd'}}
-            if {{prefix}}dot(&self.k_states2, self._tmp0, &inc, self._tmp0, &inc) < self.tolerance:
+            if blas.{{prefix}}dot(&self.k_states2, self._tmp0, &inc, self._tmp0, &inc) < self.tolerance:
                 self.converged = 1
                 self.period_converged = self.t
 
             {{else}}
-            {{prefix}}gemv("N", &inc, &self.k_states2, &alpha, self._tmp0, &inc, self._tmp0, &inc, &beta, self._tmp1, &inc)
+            blas.{{prefix}}gemv("N", &inc, &self.k_states2, &alpha, self._tmp0, &inc, self._tmp0, &inc, &beta, self._tmp1, &inc)
             if {{combined_prefix}}abs(self._tmp1[0]) < self.tolerance:
                 self.converged = 1
                 self.period_converged = self.t
@@ -1709,11 +1650,11 @@ cdef class {{prefix}}KalmanFilter(object):
             # converged storage
             if self.converged == 1:
                 # $F_t$
-                {{prefix}}copy(&self.k_endog2, &self.forecast_error_cov[0, 0, forecast_t], &inc, self._converged_forecast_error_cov, &inc)
+                blas.{{prefix}}copy(&self.k_endog2, &self.forecast_error_cov[0, 0, forecast_t], &inc, self._converged_forecast_error_cov, &inc)
                 # $P_{t|t}$
-                {{prefix}}copy(&self.k_states2, &self.filtered_state_cov[0, 0, filtered_t], &inc, self._converged_filtered_state_cov, &inc)
+                blas.{{prefix}}copy(&self.k_states2, &self.filtered_state_cov[0, 0, filtered_t], &inc, self._converged_filtered_state_cov, &inc)
                 # $P_t$
-                {{prefix}}copy(&self.k_states2, &self.predicted_state_cov[0, 0, predicted_t], &inc, self._converged_predicted_state_cov, &inc)
+                blas.{{prefix}}copy(&self.k_states2, &self.predicted_state_cov[0, 0, predicted_t], &inc, self._converged_predicted_state_cov, &inc)
                 # $|F_t|$
                 self.converged_determinant = self.determinant
         elif self.period_converged > 0:
@@ -1727,22 +1668,22 @@ cdef class {{prefix}}KalmanFilter(object):
 
         # Forecast: 1 -> 0
         if self.conserve_memory & MEMORY_NO_FORECAST > 0:
-            {{prefix}}copy(&self.k_endog, &self.forecast[0, 1], &inc, &self.forecast[0, 0], &inc)
-            {{prefix}}copy(&self.k_endog, &self.forecast_error[0, 1], &inc, &self.forecast_error[0, 0], &inc)
-            {{prefix}}copy(&self.k_endog2, &self.forecast_error_cov[0, 0, 1], &inc, &self.forecast_error_cov[0, 0, 0], &inc)
+            blas.{{prefix}}copy(&self.k_endog, &self.forecast[0, 1], &inc, &self.forecast[0, 0], &inc)
+            blas.{{prefix}}copy(&self.k_endog, &self.forecast_error[0, 1], &inc, &self.forecast_error[0, 0], &inc)
+            blas.{{prefix}}copy(&self.k_endog2, &self.forecast_error_cov[0, 0, 1], &inc, &self.forecast_error_cov[0, 0, 0], &inc)
 
         # Filtered: 1 -> 0
         if self.conserve_memory & MEMORY_NO_FILTERED > 0:
-            {{prefix}}copy(&self.k_states, &self.filtered_state[0, 1], &inc, &self.filtered_state[0, 0], &inc)
-            {{prefix}}copy(&self.k_states2, &self.filtered_state_cov[0, 0, 1], &inc, &self.filtered_state_cov[0, 0, 0], &inc)
+            blas.{{prefix}}copy(&self.k_states, &self.filtered_state[0, 1], &inc, &self.filtered_state[0, 0], &inc)
+            blas.{{prefix}}copy(&self.k_states2, &self.filtered_state_cov[0, 0, 1], &inc, &self.filtered_state_cov[0, 0, 0], &inc)
 
         # Predicted: 1 -> 0
         if self.conserve_memory & MEMORY_NO_PREDICTED > 0:
-            {{prefix}}copy(&self.k_states, &self.predicted_state[0, 1], &inc, &self.predicted_state[0, 0], &inc)
-            {{prefix}}copy(&self.k_states2, &self.predicted_state_cov[0, 0, 1], &inc, &self.predicted_state_cov[0, 0, 0], &inc)
+            blas.{{prefix}}copy(&self.k_states, &self.predicted_state[0, 1], &inc, &self.predicted_state[0, 0], &inc)
+            blas.{{prefix}}copy(&self.k_states2, &self.predicted_state_cov[0, 0, 1], &inc, &self.predicted_state_cov[0, 0, 0], &inc)
 
             # Predicted: 2 -> 1
-            {{prefix}}copy(&self.k_states, &self.predicted_state[0, 2], &inc, &self.predicted_state[0, 1], &inc)
-            {{prefix}}copy(&self.k_states2, &self.predicted_state_cov[0, 0, 2], &inc, &self.predicted_state_cov[0, 0, 1], &inc)
+            blas.{{prefix}}copy(&self.k_states, &self.predicted_state[0, 2], &inc, &self.predicted_state[0, 1], &inc)
+            blas.{{prefix}}copy(&self.k_states2, &self.predicted_state_cov[0, 0, 2], &inc, &self.predicted_state_cov[0, 0, 1], &inc)
 
 {{endfor}}
