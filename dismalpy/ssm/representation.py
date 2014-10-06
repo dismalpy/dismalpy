@@ -966,6 +966,10 @@ class FilterResults(object):
         self.forecasts_error_cov = np.array(kalman_filter.forecast_error_cov, copy=True)
         self.loglikelihood = np.array(kalman_filter.loglikelihood, copy=True)
 
+        # Setup caches for uninitialized objects
+        self._kalman_gain = None
+        self._standardized_forecasts_error = None
+
         # Fill in missing values in the forecast, forecast error, and
         # forecast error covariance matrix (this is required due to how the
         # Kalman filter implements observations that are completely missing)
@@ -992,17 +996,39 @@ class FilterResults(object):
                 ) + self.obs_cov[:, :, obs_cov_t]
 
     @property
-    def standardized_forecast_error(self):
-        standardized_forecast_error = np.zeros(self.forecasts_error.shape,
-                                               dtype=self.dtype)
+    def kalman_gain(self):
+        if self._kalman_gain is None:
+            # k x n
+            self._kalman_gain = np.zeros(
+                (self.k_states, self.k_endog, self.nobs), dtype=self.dtype)
+            for t in range(self.nobs):
+                design_t = 0 if self.design.shape[2] == 1 else t
+                transition_t = 0 if self.transition.shape[2] == 1 else t
+                self._kalman_gain[:, :, t] = np.dot(
+                    np.dot(
+                        self.transition[:, :, transition_t],
+                        self.predicted_state_cov[:, :, t]
+                    ),
+                    np.dot(
+                        np.transpose(self.design[:, :, design_t]),
+                        np.linalg.inv(self.forecasts_error_cov[:, :, t])
+                    )
+                )
+        return self._kalman_gain
 
-        for t in range(self.forecasts_error_cov.shape[2]):
-            upper = np.linalg.cholesky(self.forecasts_error_cov[:, :, t]).T
-            standardized_forecast_error[:, t] = np.dot(
-                upper, self.forecasts_error[:, t]
-            )
+    @property
+    def standardized_forecasts_error(self):
+        if self._standardized_forecasts_error is None:
+            self.standardized_forecasts_error = np.zeros(
+                self.forecasts_error.shape, dtype=self.dtype)
 
-        return standardized_forecast_error
+            for t in range(self.forecasts_error_cov.shape[2]):
+                upper = np.linalg.cholesky(self.forecasts_error_cov[:, :, t]).T
+                self.standardized_forecasts_error[:, t] = np.dot(
+                    upper, self.forecasts_error[:, t]
+                )
+
+        return self.standardized_forecasts_error
 
     def predict(self, start=None, end=None, dynamic=None, full_results=False,
                 *args, **kwargs):
@@ -1052,7 +1078,7 @@ class FilterResults(object):
         if start is None:
             start = 0
         elif start < 0:
-            raise ValueError('Cannot predict values period to the sample.')
+            raise ValueError('Cannot predict values previous to the sample.')
         if end is None:
             end = self.nobs
 
