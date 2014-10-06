@@ -67,6 +67,7 @@ def convert_notebook(notebook, tofile, resources=None):
     exporter = RSTExporter()
     if resources is None:
         resources = {}
+    resources.setdefault('unique_key', os.path.basename(tofile).replace('.', '_'))
     output, resources = exporter.from_notebook_node(notebook,
                                                     resources=resources)
 
