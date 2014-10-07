@@ -1,0 +1,895 @@
+#cython: boundscheck=False
+#cython: wraparound=False
+#cython: cdivision=False
+"""
+Kalman Filter
+
+Author: Chad Fulton  
+License: Simplified-BSD
+"""
+
+{{py:
+
+TYPES = {
+    "s": ("np.float32_t", "np.float32", "np.NPY_FLOAT32"),
+    "d": ("np.float64_t", "float", "np.NPY_FLOAT64"),
+    "c": ("np.complex64_t", "np.complex64", "np.NPY_COMPLEX64"),
+    "z": ("np.complex128_t", "complex", "np.NPY_COMPLEX128"),
+}
+
+}}
+
+# ## Constants
+
+# ### Filters
+# TODO note that only the conventional filter is implemented
+cdef int FILTER_CONVENTIONAL = 0x01     # Durbin and Koopman (2012), Chapter 4
+cdef int FILTER_EXACT_INITIAL = 0x02    # ibid., Chapter 5.6
+cdef int FILTER_AUGMENTED = 0x04        # ibid., Chapter 5.7
+cdef int FILTER_SQUARE_ROOT = 0x08      # ibid., Chapter 6.3
+cdef int FILTER_UNIVARIATE = 0x10       # ibid., Chapter 6.4
+cdef int FILTER_COLLAPSED = 0x20        # ibid., Chapter 6.5
+cdef int FILTER_EXTENDED = 0x40         # ibid., Chapter 10.2
+cdef int FILTER_UNSCENTED = 0x80        # ibid., Chapter 10.3
+
+# ### Inversion methods
+# Methods by which the terms using the inverse of the forecast error
+# covariance matrix are solved.
+cdef int INVERT_UNIVARIATE = 0x01
+cdef int SOLVE_LU = 0x02
+cdef int INVERT_LU = 0x04
+cdef int SOLVE_CHOLESKY = 0x08
+cdef int INVERT_CHOLESKY = 0x10
+
+# ### Numerical Stability methods
+# Methods to improve numerical stability
+cdef int STABILITY_FORCE_SYMMETRY = 0x01
+
+# ### Memory conservation options
+cdef int MEMORY_STORE_ALL = 0
+cdef int MEMORY_NO_FORECAST = 0x01
+cdef int MEMORY_NO_PREDICTED = 0x02
+cdef int MEMORY_NO_FILTERED = 0x04
+cdef int MEMORY_NO_LIKELIHOOD = 0x08
+cdef int MEMORY_CONSERVE = (
+    MEMORY_NO_FORECAST | MEMORY_NO_PREDICTED | MEMORY_NO_FILTERED |
+    MEMORY_NO_LIKELIHOOD
+)
+
+# Typical imports
+import numpy as np
+import warnings
+cimport numpy as np
+cimport cython
+
+np.import_array()
+
+from dismalpy.src.math cimport *
+cimport dismalpy.src.blas as blas
+cimport dismalpy.src.lapack as lapack
+cimport dismalpy.ssm._tools as tools
+
+{{for prefix, types in TYPES.items()}}
+from dismalpy.ssm._statespace cimport {{prefix}}Statespace, {{prefix}}select_state_cov
+from dismalpy.ssm._filters._conventional cimport (
+    {{prefix}}forecast_missing_conventional,
+    {{prefix}}updating_missing_conventional,
+    {{prefix}}inverse_missing_conventional,
+    {{prefix}}loglikelihood_missing_conventional,
+    {{prefix}}forecast_conventional,
+    {{prefix}}updating_conventional,
+    {{prefix}}prediction_conventional,
+    {{prefix}}loglikelihood_conventional
+)
+from dismalpy.ssm._filters._inversions cimport (
+    {{prefix}}inverse_univariate,
+    {{prefix}}factorize_cholesky,
+    {{prefix}}factorize_lu,
+    {{prefix}}inverse_cholesky,
+    {{prefix}}inverse_lu,
+    {{prefix}}solve_cholesky,
+    {{prefix}}solve_lu
+)
+{{endfor}}
+
+cdef int FORTRAN = 1
+
+{{for prefix, types in TYPES.items()}}
+{{py:cython_type, dtype, typenum = types}}
+{{py:
+combined_prefix = prefix
+combined_cython_type = cython_type
+if prefix == 'c':
+    combined_prefix = 'z'
+    combined_cython_type = 'np.complex128_t'
+if prefix == 's':
+    combined_prefix = 'd'
+    combined_cython_type = 'np.float64_t'
+}}
+
+# ## Kalman filter
+cdef class {{prefix}}KalmanFilter(object):
+    """
+    {{prefix}}KalmanFilter(model, filter=FILTER_CONVENTIONAL, inversion_method=INVERT_UNIVARIATE | SOLVE_CHOLESKY, stability_method=STABILITY_FORCE_SYMMETRY, tolerance=1e-19)
+
+    A representation of the Kalman filter recursions.
+
+    While the filter is mathematically represented as a recursion, it is here
+    translated into Python as a stateful iterator.
+
+    Because there are actually several types of Kalman filter depending on the
+    state space model of interest, this class only handles the *iteration*
+    aspect of filtering, and delegates the actual operations to four general
+    workhorse routines, which can be implemented separately for each type of
+    Kalman filter.
+
+    In order to maintain a consistent interface, and because these four general
+    routines may be quite different across filter types, their argument is only
+    the stateful ?KalmanFilter object. Furthermore, in order to allow the
+    different types of filter to substitute alternate matrices, this class
+    defines a set of pointers to the various state space arrays and the
+    filtering output arrays.
+
+    For example, handling missing observations requires not only substituting
+    `obs`, `design`, and `obs_cov` matrices, but the new matrices actually have
+    different dimensions than the originals. This can be flexibly accomodated
+    simply by replacing e.g. the `obs` pointer to the substituted `obs` array
+    and replacing `k_endog` for that iteration. Then in the next iteration, when
+    the `obs` vector may be missing different elements (or none at all), it can
+    again be redefined.
+
+    Each iteration of the filter (see `__next__`) proceeds in a number of
+    steps.
+
+    `initialize_object_pointers` initializes pointers to current-iteration
+    objects (i.e. the state space arrays and filter output arrays).  
+
+    `initialize_function_pointers` initializes pointers to the appropriate
+    Kalman filtering routines (i.e. `forecast_conventional` or
+    `forecast_exact_initial`, etc.).  
+
+    `select_arrays` converts the base arrays into "selected" arrays using
+    selection matrices. In particular, it handles the state covariance matrix
+    and redefined matrices based on missing values.  
+
+    `post_convergence` handles copying arrays from time $t-1$ to time $t$ when
+    the Kalman filter has converged and they don't need to be re-calculated.  
+
+    `forecasting` calls the Kalman filter `forcasting_<filter type>` routine
+
+    `inversion` calls the appropriate function to invert the forecast error
+    covariance matrix.  
+
+    `updating` calls the Kalman filter `updating_<filter type>` routine
+
+    `loglikelihood` calls the Kalman filter `loglikelihood_<filter type>` routine
+
+    `prediction` calls the Kalman filter `prediction_<filter type>` routine
+
+    `numerical_stability` performs end-of-iteration tasks to improve the numerical
+    stability of the filter 
+
+    `check_convergence` checks for convergence of the filter to steady-state.
+    """
+
+    # ### Statespace model
+    # cdef readonly {{prefix}}Statespace model
+
+    # ### Filter parameters
+    # Holds the time-iteration state of the filter  
+    # *Note*: must be changed using the `seek` method
+    # cdef readonly int t
+    # Holds the tolerance parameter for convergence
+    # cdef public np.float64_t tolerance
+    # Holds the convergence to steady-state status of the filter
+    # *Note*: is by default reset each time `seek` is called
+    # cdef readonly int converged
+    # cdef readonly int period_converged
+    # Holds whether or not the model is time-invariant
+    # *Note*: is by default reset each time `seek` is called
+    # cdef readonly int time_invariant
+    # The Kalman filter procedure to use  
+    # cdef public int filter_method
+    # The method by which the terms using the inverse of the forecast
+    # error covariance matrix are solved.
+    # cdef public int inversion_method
+    # Methods to improve numerical stability
+    # cdef public int stability_method
+    # Whether or not to conserve memory
+    # If True, only stores filtered states and covariance matrices
+    # cdef readonly int conserve_memory
+    # If conserving loglikelihood, the number of periods to "burn"
+    # before starting to record the loglikelihood
+    # cdef readonly int loglikelihood_burn
+
+    # ### Kalman filter properties
+
+    # `loglikelihood` $\equiv \log p(y_t | Y_{t-1})$
+    # cdef readonly {{cython_type}} [:] loglikelihood
+
+    # `filtered_state` $\equiv a_{t|t} = E(\alpha_t | Y_t)$ is the **filtered estimator** of the state $(m \times T)$  
+    # `predicted_state` $\equiv a_{t+1} = E(\alpha_{t+1} | Y_t)$ is the **one-step ahead predictor** of the state $(m \times T-1)$  
+    # `forecast` $\equiv E(y_t|Y_{t-1})$ is the **forecast** of the next observation $(p \times T)$   
+    # `forecast_error` $\equiv v_t = y_t - E(y_t|Y_{t-1})$ is the **one-step ahead forecast error** of the next observation $(p \times T)$  
+    # 
+    # *Note*: Actual values in `filtered_state` will be from 1 to `nobs`+1. Actual
+    # values in `predicted_state` will be from 0 to `nobs`+1 because the initialization
+    # is copied over to the zeroth entry, and similar for the covariances, below.
+    #
+    # *Old notation: beta_tt, beta_tt1, y_tt1, eta_tt1*
+    # cdef readonly {{cython_type}} [::1,:] filtered_state, predicted_state, forecast, forecast_error
+
+    # `filtered_state_cov` $\equiv P_{t|t} = Var(\alpha_t | Y_t)$ is the **filtered state covariance matrix** $(m \times m \times T)$  
+    # `predicted_state_cov` $\equiv P_{t+1} = Var(\alpha_{t+1} | Y_t)$ is the **predicted state covariance matrix** $(m \times m \times T)$  
+    # `forecast_error_cov` $\equiv F_t = Var(v_t | Y_{t-1})$ is the **forecast error covariance matrix** $(p \times p \times T)$  
+    # 
+    # *Old notation: P_tt, P_tt1, f_tt1*
+    # cdef readonly {{cython_type}} [::1,:,:] filtered_state_cov, predicted_state_cov, forecast_error_cov
+
+    # ### Steady State Values
+    # These matrices are used to hold the converged matrices after the Kalman
+    # filter has reached steady-state
+    # cdef readonly {{cython_type}} [::1,:] converged_forecast_error_cov
+    # cdef readonly {{cython_type}} [::1,:] converged_filtered_state_cov
+    # cdef readonly {{cython_type}} [::1,:] converged_predicted_state_cov
+    # cdef readonly {{cython_type}} converged_determinant
+
+    # ### Temporary arrays
+    # These matrices are used to temporarily hold selected observation vectors,
+    # design matrices, and observation covariance matrices in the case of
+    # missing data.  
+    # cdef readonly {{cython_type}} [:] selected_obs
+    # The following are contiguous memory segments which are then used to
+    # store the data in the above matrices.
+    # cdef readonly {{cython_type}} [:] selected_design
+    # cdef readonly {{cython_type}} [:] selected_obs_cov
+    # `forecast_error_fac` is a forecast error covariance matrix **factorization** $(p \times p)$.
+    # Depending on the method for handling the inverse of the forecast error covariance matrix, it may be:
+    # - a Cholesky factorization if `cholesky_solve` is used
+    # - an inverse calculated via Cholesky factorization if `cholesky_inverse` is used
+    # - an LU factorization if `lu_solve` is used
+    # - an inverse calculated via LU factorization if `lu_inverse` is used
+    # cdef readonly {{cython_type}} [::1,:] forecast_error_fac
+    # `forecast_error_ipiv` holds pivot indices if an LU decomposition is used
+    # cdef readonly int [:] forecast_error_ipiv
+    # `forecast_error_work` is a work array for matrix inversion if an LU
+    # decomposition is used
+    # cdef readonly {{cython_type}} [::1,:] forecast_error_work
+    # These hold the memory allocations of the unnamed temporary arrays
+    # cdef readonly {{cython_type}} [::1,:] tmp0, tmp1, tmp3
+    # cdef readonly {{cython_type}} [:] tmp2
+
+    # Holds the determinant across calculations (this is done because after
+    # convergence, it doesn't need to be re-calculated anymore)
+    # cdef readonly {{cython_type}} determinant
+
+    # ### Pointers to current-iteration arrays
+    # cdef {{cython_type}} * _obs
+    # cdef {{cython_type}} * _design
+    # cdef {{cython_type}} * _obs_intercept
+    # cdef {{cython_type}} * _obs_cov
+    # cdef {{cython_type}} * _transition
+    # cdef {{cython_type}} * _state_intercept
+    # cdef {{cython_type}} * _selection
+    # cdef {{cython_type}} * _state_cov
+    # cdef {{cython_type}} * _selected_state_cov
+    # cdef {{cython_type}} * _initial_state
+    # cdef {{cython_type}} * _initial_state_cov
+
+    # cdef {{cython_type}} * _input_state
+    # cdef {{cython_type}} * _input_state_cov
+
+    # cdef {{cython_type}} * _forecast
+    # cdef {{cython_type}} * _forecast_error
+    # cdef {{cython_type}} * _forecast_error_cov
+    # cdef {{cython_type}} * _filtered_state
+    # cdef {{cython_type}} * _filtered_state_cov
+    # cdef {{cython_type}} * _predicted_state
+    # cdef {{cython_type}} * _predicted_state_cov
+
+    # cdef {{cython_type}} * _converged_forecast_error_cov
+    # cdef {{cython_type}} * _converged_filtered_state_cov
+    # cdef {{cython_type}} * _converged_predicted_state_cov
+
+    # cdef {{cython_type}} * _forecast_error_fac
+    # cdef int * _forecast_error_ipiv
+    # cdef {{cython_type}} * _forecast_error_work
+
+    # cdef {{cython_type}} * _tmp0
+    # cdef {{cython_type}} * _tmp1
+    # cdef {{cython_type}} * _tmp2
+    # cdef {{cython_type}} * _tmp3
+
+    # ### Pointers to current-iteration Kalman filtering functions
+    # cdef int (*forecasting)(
+    #     {{prefix}}KalmanFilter
+    # )
+    # cdef {{cython_type}} (*inversion)(
+    #     {{prefix}}KalmanFilter, {{cython_type}}
+    # ) except *
+    # cdef int (*updating)(
+    #     {{prefix}}KalmanFilter
+    # )
+    # cdef {{cython_type}} (*calculate_loglikelihood)(
+    #     {{prefix}}KalmanFilter, {{cython_type}}
+    # )
+    # cdef int (*prediction)(
+    #     {{prefix}}KalmanFilter
+    # )
+
+    # ### Define some constants
+    # cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_endogstates, ldwork
+    
+    def __init__(self,
+                 {{prefix}}Statespace model,
+                 int filter_method=FILTER_CONVENTIONAL,
+                 int inversion_method=INVERT_UNIVARIATE | SOLVE_CHOLESKY,
+                 int stability_method=STABILITY_FORCE_SYMMETRY,
+                 int conserve_memory=MEMORY_STORE_ALL,
+                 np.float64_t tolerance=1e-19,
+                 int loglikelihood_burn=0):
+        # Local variables
+        cdef:
+            np.npy_intp dim1[1]
+            np.npy_intp dim2[2]
+            np.npy_intp dim3[3]
+        cdef int storage
+
+        # Save the model
+        self.model = model
+
+        # Initialize filter parameters
+        self.tolerance = tolerance
+        if not filter_method == FILTER_CONVENTIONAL:
+            raise NotImplementedError("Only the conventional Kalman filter is currently implemented")
+        self.filter_method = filter_method
+        self.inversion_method = inversion_method
+        self.stability_method = stability_method
+        self.conserve_memory = conserve_memory
+        self.loglikelihood_burn = loglikelihood_burn
+
+        # Initialize the constant values
+        self.time_invariant = self.model.time_invariant
+        self.k_endog = self.model.k_endog
+        self.k_states = self.model.k_states
+        self.k_posdef = self.model.k_posdef
+        self.k_endog2 = self.model.k_endog**2
+        self.k_states2 = self.model.k_states**2
+        self.k_endogstates = self.model.k_endog * self.model.k_states
+        # TODO replace with optimal work array size
+        self.ldwork = self.model.k_endog
+
+        # #### Allocate arrays for calculations
+
+        # Arrays for Kalman filter output
+
+        # Forecast
+        if self.conserve_memory & MEMORY_NO_FORECAST:
+            storage = 2
+        else:
+            storage = self.model.nobs
+        dim2[0] = self.k_endog; dim2[1] = storage;
+        self.forecast = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self.forecast_error = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        dim3[0] = self.k_endog; dim3[1] = self.k_endog; dim3[2] = storage;
+        self.forecast_error_cov = np.PyArray_ZEROS(3, dim3, {{typenum}}, FORTRAN)
+
+        # Filtered
+        if self.conserve_memory & MEMORY_NO_FILTERED > 0:
+            storage = 2
+        else:
+            storage = self.model.nobs
+        dim2[0] = self.k_states; dim2[1] = storage;
+        self.filtered_state = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        dim3[0] = self.k_states; dim3[1] = self.k_states; dim3[2] = storage;
+        self.filtered_state_cov = np.PyArray_ZEROS(3, dim3, {{typenum}}, FORTRAN)
+
+        # Predicted
+        if self.conserve_memory & MEMORY_NO_PREDICTED > 0:
+            storage = 2
+        else:
+            storage = self.model.nobs
+        dim2[0] = self.k_states; dim2[1] = storage+1;
+        self.predicted_state = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        dim3[0] = self.k_states; dim3[1] = self.k_states; dim3[2] = storage+1;
+        self.predicted_state_cov = np.PyArray_ZEROS(3, dim3, {{typenum}}, FORTRAN)
+
+        # Likelihood
+        if self.conserve_memory & MEMORY_NO_LIKELIHOOD > 0:
+            storage = 1
+        else:
+            storage = self.model.nobs
+        dim1[0] = storage
+        self.loglikelihood = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+
+        # Converged matrices
+        dim2[0] = self.k_endog; dim2[1] = self.k_endog;
+        self.converged_forecast_error_cov = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self._converged_forecast_error_cov = &self.converged_forecast_error_cov[0,0]
+        dim2[0] = self.k_states; dim2[1] = self.k_states;
+        self.converged_filtered_state_cov = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self._converged_filtered_state_cov = &self.converged_filtered_state_cov[0,0]
+        dim2[0] = self.k_states; dim2[1] = self.k_states;
+        self.converged_predicted_state_cov = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self._converged_predicted_state_cov = &self.converged_predicted_state_cov[0,0]
+
+        # #### Arrays for temporary calculations
+        # *Note*: in math notation below, a $\\#$ will represent a generic
+        # temporary array, and a $\\#_i$ will represent a named temporary array.
+
+        # Arrays related to matrix factorizations / inverses
+        dim2[0] = self.k_endog; dim2[1] = self.k_endog;
+        self.forecast_error_fac = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self._forecast_error_fac = &self.forecast_error_fac[0,0]
+        dim2[0] = self.ldwork; dim2[1] = self.ldwork;
+        self.forecast_error_work = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self._forecast_error_work = &self.forecast_error_work[0,0]
+        dim1[0] = self.k_endog;
+        self.forecast_error_ipiv = np.PyArray_ZEROS(1, dim1, np.NPY_INT, FORTRAN)
+        self._forecast_error_ipiv = &self.forecast_error_ipiv[0]
+
+        # Holds arrays of dimension $(m \times m)$ and $(m \times r)$
+        dim2[0] = self.k_states; dim2[1] = self.k_states;
+        self.tmp0 = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self._tmp0 = &self.tmp0[0, 0]
+
+        # Holds arrays of dimension $(m \times p)$
+        dim2[0] = self.k_states; dim2[1] = self.k_endog;
+        self.tmp1 = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self._tmp1 = &self.tmp1[0, 0]
+
+        # Holds arrays of dimension $(p \times 1)$
+        dim1[0] = self.k_endog;
+        self.tmp2 = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+        self._tmp2 = &self.tmp2[0]
+
+        # Holds arrays of dimension $(p \times m)$
+        dim2[0] = self.k_endog; dim2[1] = self.k_states;
+        self.tmp3 = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self._tmp3 = &self.tmp3[0, 0]
+
+        # Arrays for missing data
+        dim1[0] = self.k_endog;
+        self.selected_obs = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+        dim1[0] = self.k_endog * self.k_states;
+        self.selected_design = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+        dim1[0] = self.k_endog2;
+        self.selected_obs_cov = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+
+        # Initialize time and convergence status
+        self.t = 0
+        self.converged = 0
+        self.period_converged = 0
+
+    cpdef seek(self, unsigned int t, int reset_convergence = True):
+        """
+        seek(self, t, reset_convergence = True)
+
+        Change the time-state of the filter
+
+        Is usually called to reset the filter to the beginning.
+        """
+        if t >= self.model.nobs:
+            raise IndexError("Observation index out of range")
+        self.t = t
+
+        if reset_convergence:
+            self.converged = 0
+            self.period_converged = 0
+
+    def __iter__(self):
+        return self
+
+    def __call__(self):
+        """
+        Iterate the filter across the entire set of observations.
+        """
+        cdef int i
+
+        self.seek(0, True)
+        for i in range(self.model.nobs):
+            next(self)
+
+    def __next__(self):
+        """
+        Perform an iteration of the Kalman filter
+        """
+
+        # Get time subscript, and stop the iterator if at the end
+        if not self.t < self.model.nobs:
+            raise StopIteration
+
+        # Initialize pointers to current-iteration objects
+        self.initialize_statespace_object_pointers()
+        self.initialize_filter_object_pointers()
+
+        # Initialize pointers to appropriate Kalman filtering functions
+        self.initialize_function_pointers()
+
+        # Convert base arrays into "selected" arrays  
+        # - State covariance matrix? $Q_t \to R_t Q_t R_t`$
+        # - Missing values: $y_t \to W_t y_t$, $Z_t \to W_t Z_t$, $H_t \to W_t H_t$
+        self.select_state_cov()
+        self.select_missing()
+
+        # Post-convergence: copy previous iteration arrays
+        self.post_convergence()
+
+        # Form forecasts
+        self.forecasting(self)
+
+        # Perform `forecast_error_cov` inversion (or decomposition)
+        self.determinant = self.inversion(self, self.determinant)
+
+        # Updating step
+        self.updating(self)
+
+        # Retrieve the loglikelihood
+        if self.conserve_memory & MEMORY_NO_LIKELIHOOD > 0:
+            if self.t == 0:
+                self.loglikelihood[0] = 0
+            if self.t >= self.loglikelihood_burn:
+                self.loglikelihood[0] = self.loglikelihood[0] + self.calculate_loglikelihood(
+                    self, self.determinant
+                )
+        else:
+            self.loglikelihood[self.t] = self.calculate_loglikelihood(
+                self, self.determinant
+            )
+
+        # Prediction step
+        self.prediction(self)
+
+        # Aids to numerical stability
+        self.numerical_stability()
+
+        # Check for convergence
+        self.check_convergence()
+
+        # If conserving memory, migrate storage: t->t-1, t+1->t
+        self.migrate_storage()
+
+        # Advance the time
+        self.t += 1
+
+    cdef void initialize_statespace_object_pointers(self) except *:
+        cdef:
+            int t = self.t
+        # Indices for possibly time-varying arrays
+        cdef:
+            int design_t = 0
+            int obs_intercept_t = 0
+            int obs_cov_t = 0
+            int transition_t = 0
+            int state_intercept_t = 0
+            int selection_t = 0
+            int state_cov_t = 0
+
+        # Get indices for possibly time-varying arrays
+        if not self.model.time_invariant:
+            if self.model.design.shape[2] > 1:             design_t = t
+            if self.model.obs_intercept.shape[1] > 1:      obs_intercept_t = t
+            if self.model.obs_cov.shape[2] > 1:            obs_cov_t = t
+            if self.model.transition.shape[2] > 1:         transition_t = t
+            if self.model.state_intercept.shape[1] > 1:    state_intercept_t = t
+            if self.model.selection.shape[2] > 1:          selection_t = t
+            if self.model.state_cov.shape[2] > 1:          state_cov_t = t
+
+        # Initialize object-level pointers to statespace arrays
+        self._obs = &self.model.obs[0, t]
+        self._design = &self.model.design[0, 0, design_t]
+        self._obs_intercept = &self.model.obs_intercept[0, obs_intercept_t]
+        self._obs_cov = &self.model.obs_cov[0, 0, obs_cov_t]
+        self._transition = &self.model.transition[0, 0, transition_t]
+        self._state_intercept = &self.model.state_intercept[0, state_intercept_t]
+        self._selection = &self.model.selection[0, 0, selection_t]
+        self._state_cov = &self.model.state_cov[0, 0, state_cov_t]
+
+        # Initialize object-level pointers to initialization
+        if not self.model.initialized:
+            raise RuntimeError("Statespace model not initialized.")
+        self._initial_state = &self.model.initial_state[0]
+        self._initial_state_cov = &self.model.initial_state_cov[0,0]
+
+    cdef void initialize_filter_object_pointers(self):
+        cdef:
+            int t = self.t
+            int inc = 1
+        # Indices for arrays that may or may not be stored completely
+        cdef:
+            int forecast_t = t
+            int filtered_t = t
+            int predicted_t = t
+        if self.conserve_memory & MEMORY_NO_FORECAST > 0:
+            forecast_t = 1
+        if self.conserve_memory & MEMORY_NO_FILTERED > 0:
+            filtered_t = 1
+        if self.conserve_memory & MEMORY_NO_PREDICTED > 0:
+            predicted_t = 1
+
+        # Initialize object-level pointers to input arrays
+        self._input_state = &self.predicted_state[0, predicted_t]
+        self._input_state_cov = &self.predicted_state_cov[0, 0, predicted_t]
+
+        # Copy initialization arrays to input arrays if we're starting the
+        # filter
+        if t == 0:
+            # `predicted_state[:,0]` $= a_1 =$ `initial_state`  
+            # `predicted_state_cov[:,:,0]` $= P_1 =$ `initial_state_cov`  
+            blas.{{prefix}}copy(&self.k_states, self._initial_state, &inc, self._input_state, &inc)
+            blas.{{prefix}}copy(&self.k_states2, self._initial_state_cov, &inc, self._input_state_cov, &inc)
+
+        # Initialize object-level pointers to output arrays
+        self._forecast = &self.forecast[0, forecast_t]
+        self._forecast_error = &self.forecast_error[0, forecast_t]
+        self._forecast_error_cov = &self.forecast_error_cov[0, 0, forecast_t]
+
+        self._filtered_state = &self.filtered_state[0, filtered_t]
+        self._filtered_state_cov = &self.filtered_state_cov[0, 0, filtered_t]
+
+        self._predicted_state = &self.predicted_state[0, predicted_t+1]
+        self._predicted_state_cov = &self.predicted_state_cov[0, 0, predicted_t+1]
+
+    cdef void initialize_function_pointers(self) except *:
+        if self.filter_method & FILTER_CONVENTIONAL:
+            self.forecasting = {{prefix}}forecast_conventional
+
+            if self.inversion_method & INVERT_UNIVARIATE and self.k_endog == 1:
+                self.inversion = {{prefix}}inverse_univariate
+            elif self.inversion_method & SOLVE_CHOLESKY:
+                self.inversion = {{prefix}}solve_cholesky
+            elif self.inversion_method & SOLVE_LU:
+                self.inversion = {{prefix}}solve_lu
+            elif self.inversion_method & INVERT_CHOLESKY:
+                self.inversion = {{prefix}}inverse_cholesky
+            elif self.inversion_method & INVERT_LU:
+                self.inversion = {{prefix}}inverse_lu
+            else:
+                raise NotImplementedError("Invalid inversion method")
+
+            self.updating = {{prefix}}updating_conventional
+            self.calculate_loglikelihood = {{prefix}}loglikelihood_conventional
+            self.prediction = {{prefix}}prediction_conventional
+
+        else:
+            raise NotImplementedError("Invalid filtering method")
+
+    cdef void select_state_cov(self):
+        cdef int selected_state_cov_t = 0
+
+        # ### Get selected state covariance matrix
+        if self.t == 0 or self.model.selected_state_cov.shape[2] > 1:
+            selected_state_cov_t = self.t
+            self._selected_state_cov = &self.model.selected_state_cov[0, 0, selected_state_cov_t]
+
+            {{prefix}}select_state_cov(self.k_states, self.k_posdef,
+                                       self._tmp0,
+                                       self._selection,
+                                       self._state_cov,
+                                       self._selected_state_cov)
+        else:
+            self._selected_state_cov = &self.model.selected_state_cov[0, 0, 0]
+
+    cdef void select_missing(self):
+        # ### Perform missing selections
+        # In Durbin and Koopman (2012), these are represented as matrix
+        # multiplications, i.e. $Z_t^* = W_t Z_t$ where $W_t$ is a row
+        # selection matrix (it contains a subset of rows of the identity
+        # matrix).
+        #
+        # It's more efficient, though, to just copy over the data directly,
+        # which is what is done here. Note that the `selected_*` arrays are
+        # defined as single-dimensional, so the assignment indexes below are
+        # set such that the arrays can be interpreted by the BLAS and LAPACK
+        # functions as two-dimensional, column-major arrays.
+        #
+        # In the case that all data is missing (e.g. this is what happens in
+        # forecasting), we actually set don't change the dimension, but we set
+        # the design matrix to the zeros array.
+        if self.model.nmissing[self.t] == self.model.k_endog:
+            self._select_missing_entire_obs()
+        elif self.model.nmissing[self.t] > 0:
+            self._select_missing_partial_obs()
+        else:
+            # Reset dimensions
+            self.k_endog = self.model.k_endog
+            self.k_endog2 = self.k_endog**2
+            self.k_endogstates = self.k_endog * self.k_states
+
+    cdef void _select_missing_entire_obs(self):
+        cdef:
+            int i, j
+        # Mark as not converged so that it does not inappropriately
+        # copy over steady state matrices
+        self.converged = 0
+
+        # Dimensions are the same as usual (have to reset in case previous
+        # obs was partially missing case)
+        self.k_endog = self.model.k_endog
+        self.k_endog2 = self.k_endog**2
+        self.k_endogstates = self.k_endog * self.k_states
+
+        # Design matrix is set to zeros
+        for i in range(self.model.k_states):
+            for j in range(self.model.k_endog):
+                self.selected_design[j + i*self.model.k_endog] = 0.0
+        self._design = &self.selected_design[0]
+
+        # Change the forecasting step to set the forecast at the intercept
+        # $d_t$, so that the forecast error is $v_t = y_t - d_t$.
+        self.forecasting = {{prefix}}forecast_missing_conventional
+
+        # Change the updating step to just copy $a_{t|t} = a_t$ and
+        # $P_{t|t} = P_t$
+        self.updating = {{prefix}}updating_missing_conventional
+
+        # Change the inversion step to inverse to nans.
+        self.inversion = {{prefix}}inverse_missing_conventional
+
+        # Change the loglikelihood calculation to give zero.
+        self.calculate_loglikelihood = {{prefix}}loglikelihood_missing_conventional
+
+        # The prediction step is the same as the conventional Kalman
+        # filter
+
+    cdef void _select_missing_partial_obs(self):
+        cdef:
+            int i, j, k, l
+            int inc = 1
+            int design_t = 0
+            int obs_cov_t = 0
+        # Mark as not converged so that it does not inappropriately
+        # copy over steady state matrices
+        self.converged = 0
+
+        # Set dimensions
+        self.k_endog = self.model.k_endog - self.model.nmissing[self.t]
+        self.k_endog2 = self.k_endog**2
+        self.k_endogstates = self.k_endog * self.k_states
+
+        if self.model.design.shape[2] > 1: design_t = self.t
+        if self.model.obs_cov.shape[2] > 1: obs_cov_t = self.t
+
+        k = 0
+        for i in range(self.model.k_endog):
+            if not self.model.missing[i, self.t]:
+
+                self.selected_obs[k] = self.model.obs[i, self.t]
+
+                # i is rows
+                # k is rows
+                blas.{{prefix}}copy(&self.model.k_states,
+                      &self.model.design[i, 0, design_t], &self.model.k_endog,
+                      &self.selected_design[k], &self.k_endog)
+
+                # i, k is columns
+                # j, l is rows
+                l = 0
+                for j in range(self.model.k_endog):
+                    if not self.model.missing[j, self.t]:
+                        self.selected_obs_cov[l + k*self.k_endog] = self.model.obs_cov[j, i, obs_cov_t]
+                        l += 1
+                k += 1
+        self._obs = &self.selected_obs[0]
+        self._design = &self.selected_design[0]
+        self._obs_cov = &self.selected_obs_cov[0]
+
+    cdef void post_convergence(self):
+        # TODO this should probably be defined separately for each Kalman filter type - e.g. `post_convergence_conventional`, etc.
+
+        # Constants
+        cdef:
+            int inc = 1
+
+        if self.converged:
+            # $F_t$
+            blas.{{prefix}}copy(&self.k_endog2, self._converged_forecast_error_cov, &inc, self._forecast_error_cov, &inc)
+            # $P_{t|t}$
+            blas.{{prefix}}copy(&self.k_states2, self._converged_filtered_state_cov, &inc, self._filtered_state_cov, &inc)
+            # $P_t$
+            blas.{{prefix}}copy(&self.k_states2, self._converged_predicted_state_cov, &inc, self._predicted_state_cov, &inc)
+            # $|F_t|$
+            self.determinant = self.converged_determinant
+
+    cdef void numerical_stability(self):
+        cdef int i, j
+        cdef int predicted_t = self.t
+        cdef {{cython_type}} value
+
+        if self.conserve_memory & MEMORY_NO_PREDICTED:
+            predicted_t = 1
+
+        if self.stability_method & STABILITY_FORCE_SYMMETRY:
+            # Enforce symmetry of predicted covariance matrix  
+            # $P_{t+1} = 0.5 * (P_{t+1} + P_{t+1}')$  
+            # See Grewal (2001), Section 6.3.1.1
+            for i in range(self.k_states):
+                for j in range(i, self.k_states):
+                    value = 0.5 * (
+                        self.predicted_state_cov[i,j,predicted_t+1] +
+                        self.predicted_state_cov[j,i,predicted_t+1]
+                    )
+                    self.predicted_state_cov[i,j,predicted_t+1] = value
+                    self.predicted_state_cov[j,i,predicted_t+1] = value
+
+    cdef void check_convergence(self):
+        # Constants
+        cdef:
+            int inc = 1
+            {{cython_type}} alpha = 1.0
+            {{cython_type}} beta = 0.0
+            {{cython_type}} gamma = -1.0
+        # Indices for arrays that may or may not be stored completely
+        cdef:
+            int forecast_t = self.t
+            int filtered_t = self.t
+            int predicted_t = self.t
+        if self.conserve_memory & MEMORY_NO_FORECAST > 0:
+            forecast_t = 1
+        if self.conserve_memory & MEMORY_NO_FILTERED > 0:
+            filtered_t = 1
+        if self.conserve_memory & MEMORY_NO_PREDICTED > 0:
+            predicted_t = 1
+
+        #  and self.model.nmissing[self.t] == 0
+        if self.time_invariant and not self.converged:
+            # #### Check for steady-state convergence
+            # 
+            # `tmp0` array used here, dimension $(m \times m)$  
+            # `tmp1` array used here, dimension $(1 \times 1)$  
+            blas.{{prefix}}copy(&self.k_states2, self._input_state_cov, &inc, self._tmp0, &inc)
+            blas.{{prefix}}axpy(&self.k_states2, &gamma, self._predicted_state_cov, &inc, self._tmp0, &inc)
+
+            {{if combined_prefix == 'd'}}
+            if blas.{{prefix}}dot(&self.k_states2, self._tmp0, &inc, self._tmp0, &inc) < self.tolerance:
+                self.converged = 1
+                self.period_converged = self.t
+
+            {{else}}
+            blas.{{prefix}}gemv("N", &inc, &self.k_states2, &alpha, self._tmp0, &inc, self._tmp0, &inc, &beta, self._tmp1, &inc)
+            if {{combined_prefix}}abs(self._tmp1[0]) < self.tolerance:
+                self.converged = 1
+                self.period_converged = self.t
+            {{endif}}
+
+            # If we just converged, copy the current iteration matrices to the
+            # converged storage
+            if self.converged == 1:
+                # $F_t$
+                blas.{{prefix}}copy(&self.k_endog2, &self.forecast_error_cov[0, 0, forecast_t], &inc, self._converged_forecast_error_cov, &inc)
+                # $P_{t|t}$
+                blas.{{prefix}}copy(&self.k_states2, &self.filtered_state_cov[0, 0, filtered_t], &inc, self._converged_filtered_state_cov, &inc)
+                # $P_t$
+                blas.{{prefix}}copy(&self.k_states2, &self.predicted_state_cov[0, 0, predicted_t], &inc, self._converged_predicted_state_cov, &inc)
+                # $|F_t|$
+                self.converged_determinant = self.determinant
+        elif self.period_converged > 0:
+            # This is here so that the filter's state is reset to converged = 1
+            # even if it was set to converged = 0 for the current iteration
+            # due to missing values
+            self.converged = 1
+
+    cdef void migrate_storage(self):
+        cdef int inc = 1
+
+        # Forecast: 1 -> 0
+        if self.conserve_memory & MEMORY_NO_FORECAST > 0:
+            blas.{{prefix}}copy(&self.k_endog, &self.forecast[0, 1], &inc, &self.forecast[0, 0], &inc)
+            blas.{{prefix}}copy(&self.k_endog, &self.forecast_error[0, 1], &inc, &self.forecast_error[0, 0], &inc)
+            blas.{{prefix}}copy(&self.k_endog2, &self.forecast_error_cov[0, 0, 1], &inc, &self.forecast_error_cov[0, 0, 0], &inc)
+
+        # Filtered: 1 -> 0
+        if self.conserve_memory & MEMORY_NO_FILTERED > 0:
+            blas.{{prefix}}copy(&self.k_states, &self.filtered_state[0, 1], &inc, &self.filtered_state[0, 0], &inc)
+            blas.{{prefix}}copy(&self.k_states2, &self.filtered_state_cov[0, 0, 1], &inc, &self.filtered_state_cov[0, 0, 0], &inc)
+
+        # Predicted: 1 -> 0
+        if self.conserve_memory & MEMORY_NO_PREDICTED > 0:
+            blas.{{prefix}}copy(&self.k_states, &self.predicted_state[0, 1], &inc, &self.predicted_state[0, 0], &inc)
+            blas.{{prefix}}copy(&self.k_states2, &self.predicted_state_cov[0, 0, 1], &inc, &self.predicted_state_cov[0, 0, 0], &inc)
+
+            # Predicted: 2 -> 1
+            blas.{{prefix}}copy(&self.k_states, &self.predicted_state[0, 2], &inc, &self.predicted_state[0, 1], &inc)
+            blas.{{prefix}}copy(&self.k_states2, &self.predicted_state_cov[0, 0, 2], &inc, &self.predicted_state_cov[0, 0, 1], &inc)
+
+{{endfor}}

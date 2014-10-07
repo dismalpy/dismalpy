@@ -35,18 +35,18 @@ except ImportError:
         return (prefix, dtype, None)
 
 
-from dismalpy.ssm import _statespace as ss
+from dismalpy.ssm import _statespace, _kalman_filter
 import dismalpy.ssm.tests.results_kalman as results_kalman_filter
 from numpy.testing import assert_almost_equal
 from nose.exc import SkipTest
 
 prefix_statespace_map = {
-    's': ss.sStatespace, 'd': ss.dStatespace,
-    'c': ss.cStatespace, 'z': ss.zStatespace
+    's': _statespace.sStatespace, 'd': _statespace.dStatespace,
+    'c': _statespace.cStatespace, 'z': _statespace.zStatespace
 }
 prefix_kalman_filter_map = {
-    's': ss.sKalmanFilter, 'd': ss.dKalmanFilter,
-    'c': ss.cKalmanFilter, 'z': ss.zKalmanFilter
+    's': _kalman_filter.sKalmanFilter, 'd': _kalman_filter.dKalmanFilter,
+    'c': _kalman_filter.cKalmanFilter, 'z': _kalman_filter.zKalmanFilter
 }
 
 current_path = os.path.dirname(os.path.abspath(__file__))

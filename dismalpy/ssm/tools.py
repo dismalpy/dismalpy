@@ -8,7 +8,7 @@ from __future__ import division, absolute_import, print_function
 
 import numpy as np
 from statsmodels.tools.data import _is_using_pandas
-from . import _statespace
+from . import _statespace, _kalman_filter
 
 try:
     from scipy.linalg.blas import find_best_blas_type
@@ -31,8 +31,8 @@ prefix_statespace_map = {
     'c': _statespace.cStatespace, 'z': _statespace.zStatespace
 }
 prefix_kalman_filter_map = {
-    's': _statespace.sKalmanFilter, 'd': _statespace.dKalmanFilter,
-    'c': _statespace.cKalmanFilter, 'z': _statespace.zKalmanFilter
+    's': _kalman_filter.sKalmanFilter, 'd': _kalman_filter.dKalmanFilter,
+    'c': _kalman_filter.cKalmanFilter, 'z': _kalman_filter.zKalmanFilter
 }
 
 
