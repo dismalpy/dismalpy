@@ -51,9 +51,11 @@ cdef int MEMORY_NO_FORECAST = 0x01
 cdef int MEMORY_NO_PREDICTED = 0x02
 cdef int MEMORY_NO_FILTERED = 0x04
 cdef int MEMORY_NO_LIKELIHOOD = 0x08
+cdef int MEMORY_NO_GAIN = 0x10
+cdef int MEMORY_NO_SMOOTHING = 0x20
 cdef int MEMORY_CONSERVE = (
     MEMORY_NO_FORECAST | MEMORY_NO_PREDICTED | MEMORY_NO_FILTERED |
-    MEMORY_NO_LIKELIHOOD
+    MEMORY_NO_LIKELIHOOD | MEMORY_NO_GAIN | MEMORY_NO_SMOOTHING
 )
 
 # Typical imports
@@ -226,12 +228,16 @@ cdef class {{prefix}}KalmanFilter(object):
     # *Old notation: P_tt, P_tt1, f_tt1*
     # cdef readonly {{cython_type}} [::1,:,:] filtered_state_cov, predicted_state_cov, forecast_error_cov
 
+    # `kalman_gain` $\equiv K_{t} = T_t P_t Z_t' F_t^{-1}$ is the **Kalman gain** $(m \times p \times T)$  
+    # cdef readonly {{cython_type}} [::1,:,:] kalman_gain
+
     # ### Steady State Values
     # These matrices are used to hold the converged matrices after the Kalman
     # filter has reached steady-state
     # cdef readonly {{cython_type}} [::1,:] converged_forecast_error_cov
     # cdef readonly {{cython_type}} [::1,:] converged_filtered_state_cov
     # cdef readonly {{cython_type}} [::1,:] converged_predicted_state_cov
+    # cdef readonly {{cython_type}} [::1,:] converged_kalman_gain
     # cdef readonly {{cython_type}} converged_determinant
 
     # ### Temporary arrays
@@ -255,9 +261,12 @@ cdef class {{prefix}}KalmanFilter(object):
     # `forecast_error_work` is a work array for matrix inversion if an LU
     # decomposition is used
     # cdef readonly {{cython_type}} [::1,:] forecast_error_work
-    # These hold the memory allocations of the unnamed temporary arrays
-    # cdef readonly {{cython_type}} [::1,:] tmp0, tmp1, tmp3
-    # cdef readonly {{cython_type}} [:] tmp2
+    # These hold the memory allocations of the anonymous temporary arrays
+    # cdef readonly {{cython_type}} [::1,:] tmp0, tmp00
+    # These hold the memory allocations of the named temporary arrays  
+    # (these are all time-varying in the last dimension)
+    # cdef readonly {{cython_type}} [::1,:] tmp2
+    # cdef readonly {{cython_type}} [::1,:,:] tmp1, tmp3
 
     # Holds the determinant across calculations (this is done because after
     # convergence, it doesn't need to be re-calculated anymore)
@@ -287,14 +296,18 @@ cdef class {{prefix}}KalmanFilter(object):
     # cdef {{cython_type}} * _predicted_state
     # cdef {{cython_type}} * _predicted_state_cov
 
+    # cdef {{cython_type}} * _kalman_gain
+
     # cdef {{cython_type}} * _converged_forecast_error_cov
     # cdef {{cython_type}} * _converged_filtered_state_cov
     # cdef {{cython_type}} * _converged_predicted_state_cov
+    # cdef {{cython_type}} * _converged_kalman_gain
 
     # cdef {{cython_type}} * _forecast_error_fac
     # cdef int * _forecast_error_ipiv
     # cdef {{cython_type}} * _forecast_error_work
 
+    # cdef {{cython_type}} * _tmp0
     # cdef {{cython_type}} * _tmp0
     # cdef {{cython_type}} * _tmp1
     # cdef {{cython_type}} * _tmp2
@@ -394,6 +407,14 @@ cdef class {{prefix}}KalmanFilter(object):
         dim3[0] = self.k_states; dim3[1] = self.k_states; dim3[2] = storage+1;
         self.predicted_state_cov = np.PyArray_ZEROS(3, dim3, {{typenum}}, FORTRAN)
 
+        # Kalman Gain
+        if self.conserve_memory & MEMORY_NO_GAIN > 0:
+            storage = 1
+        else:
+            storage = self.model.nobs
+        dim3[0] = self.k_states; dim3[1] = self.k_endog; dim3[2] = storage;
+        self.kalman_gain = np.PyArray_ZEROS(3, dim3, {{typenum}}, FORTRAN)
+
         # Likelihood
         if self.conserve_memory & MEMORY_NO_LIKELIHOOD > 0:
             storage = 1
@@ -412,6 +433,9 @@ cdef class {{prefix}}KalmanFilter(object):
         dim2[0] = self.k_states; dim2[1] = self.k_states;
         self.converged_predicted_state_cov = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
         self._converged_predicted_state_cov = &self.converged_predicted_state_cov[0,0]
+        dim2[0] = self.k_states; dim2[1] = self.k_endog;
+        self.converged_kalman_gain = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self._converged_kalman_gain = &self.converged_kalman_gain[0,0]
 
         # #### Arrays for temporary calculations
         # *Note*: in math notation below, a $\\#$ will represent a generic
@@ -433,20 +457,31 @@ cdef class {{prefix}}KalmanFilter(object):
         self.tmp0 = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
         self._tmp0 = &self.tmp0[0, 0]
 
-        # Holds arrays of dimension $(m \times p)$
-        dim2[0] = self.k_states; dim2[1] = self.k_endog;
-        self.tmp1 = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
-        self._tmp1 = &self.tmp1[0, 0]
+        dim2[0] = self.k_states; dim2[1] = self.k_states;
+        self.tmp00 = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self._tmp00 = &self.tmp00[0, 0]
 
-        # Holds arrays of dimension $(p \times 1)$
-        dim1[0] = self.k_endog;
-        self.tmp2 = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
-        self._tmp2 = &self.tmp2[0]
+        # Optionally we may not want to store temporary arrays required  
+        # for smoothing
+        if self.conserve_memory & MEMORY_NO_SMOOTHING > 0:
+            storage = 1
+        else:
+            storage = self.model.nobs
 
-        # Holds arrays of dimension $(p \times m)$
-        dim2[0] = self.k_endog; dim2[1] = self.k_states;
-        self.tmp3 = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
-        self._tmp3 = &self.tmp3[0, 0]
+        # Holds arrays of dimension $(m \times p \times T)$  
+        # $\\#_1 = P_t Z_t'$
+        dim3[0] = self.k_states; dim3[1] = self.k_endog; dim3[2] = storage;
+        self.tmp1 = np.PyArray_ZEROS(3, dim3, {{typenum}}, FORTRAN)
+
+        # Holds arrays of dimension $(p \times T)$  
+        # $\\#_2 = F_t^{-1} v_t$
+        dim2[0] = self.k_endog; dim2[1] = storage;
+        self.tmp2 = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+
+        # Holds arrays of dimension $(p \times m \times T)$  
+        # $\\#_3 = F_t^{-1} Z_t$
+        dim3[0] = self.k_endog; dim3[1] = self.k_states; dim3[2] = storage;
+        self.tmp3 = np.PyArray_ZEROS(3, dim3, {{typenum}}, FORTRAN)
 
         # Arrays for missing data
         dim1[0] = self.k_endog;
@@ -600,12 +635,18 @@ cdef class {{prefix}}KalmanFilter(object):
             int forecast_t = t
             int filtered_t = t
             int predicted_t = t
+            int gain_t = t
+            int smoothing_t = t
         if self.conserve_memory & MEMORY_NO_FORECAST > 0:
             forecast_t = 1
         if self.conserve_memory & MEMORY_NO_FILTERED > 0:
             filtered_t = 1
         if self.conserve_memory & MEMORY_NO_PREDICTED > 0:
             predicted_t = 1
+        if self.conserve_memory & MEMORY_NO_GAIN > 0:
+            gain_t = 1
+        if self.conserve_memory & MEMORY_NO_SMOOTHING > 0:
+            smoothing_t = 1
 
         # Initialize object-level pointers to input arrays
         self._input_state = &self.predicted_state[0, predicted_t]
@@ -629,6 +670,13 @@ cdef class {{prefix}}KalmanFilter(object):
 
         self._predicted_state = &self.predicted_state[0, predicted_t+1]
         self._predicted_state_cov = &self.predicted_state_cov[0, 0, predicted_t+1]
+
+        self._kalman_gain = &self.kalman_gain[0, 0, gain_t]
+
+        # Initialize object-level pointers to named temporary arrays
+        self._tmp1 = &self.tmp1[0, 0, smoothing_t]
+        self._tmp2 = &self.tmp2[0, smoothing_t]
+        self._tmp3 = &self.tmp3[0, 0, smoothing_t]
 
     cdef void initialize_function_pointers(self) except *:
         if self.filter_method & FILTER_CONVENTIONAL:
@@ -788,6 +836,8 @@ cdef class {{prefix}}KalmanFilter(object):
             blas.{{prefix}}copy(&self.k_states2, self._converged_filtered_state_cov, &inc, self._filtered_state_cov, &inc)
             # $P_t$
             blas.{{prefix}}copy(&self.k_states2, self._converged_predicted_state_cov, &inc, self._predicted_state_cov, &inc)
+            # $K_t$
+            blas.{{prefix}}copy(&self.k_endogstates, self._converged_kalman_gain, &inc, self._kalman_gain, &inc)
             # $|F_t|$
             self.determinant = self.converged_determinant
 
@@ -836,7 +886,7 @@ cdef class {{prefix}}KalmanFilter(object):
             # #### Check for steady-state convergence
             # 
             # `tmp0` array used here, dimension $(m \times m)$  
-            # `tmp1` array used here, dimension $(1 \times 1)$  
+            # `tmp00` array used here, dimension $(1 \times 1)$  
             blas.{{prefix}}copy(&self.k_states2, self._input_state_cov, &inc, self._tmp0, &inc)
             blas.{{prefix}}axpy(&self.k_states2, &gamma, self._predicted_state_cov, &inc, self._tmp0, &inc)
 
@@ -846,8 +896,8 @@ cdef class {{prefix}}KalmanFilter(object):
                 self.period_converged = self.t
 
             {{else}}
-            blas.{{prefix}}gemv("N", &inc, &self.k_states2, &alpha, self._tmp0, &inc, self._tmp0, &inc, &beta, self._tmp1, &inc)
-            if {{combined_prefix}}abs(self._tmp1[0]) < self.tolerance:
+            blas.{{prefix}}gemv("N", &inc, &self.k_states2, &alpha, self._tmp0, &inc, self._tmp0, &inc, &beta, self._tmp00, &inc)
+            if {{combined_prefix}}abs(self._tmp00[0]) < self.tolerance:
                 self.converged = 1
                 self.period_converged = self.t
             {{endif}}

@@ -959,6 +959,12 @@ class FilterResults(object):
         self.predicted_state_cov = np.array(
             kalman_filter.predicted_state_cov, copy=True
         )
+        self.kalman_gain = np.array(kalman_filter.kalman_gain, copy=True)
+
+        self.tmp1 = np.array(kalman_filter.tmp1, copy=True)
+        self.tmp2 = np.array(kalman_filter.tmp2, copy=True)
+        self.tmp3 = np.array(kalman_filter.tmp3, copy=True)
+
         # Note: use forecasts rather than forecast, so as not to interfer
         # with the `forecast` methods in subclasses
         self.forecasts = np.array(kalman_filter.forecast, copy=True)
@@ -996,7 +1002,7 @@ class FilterResults(object):
                 ) + self.obs_cov[:, :, obs_cov_t]
 
     @property
-    def kalman_gain(self):
+    def __kalman_gain(self):
         if self._kalman_gain is None:
             # k x n
             self._kalman_gain = np.zeros(

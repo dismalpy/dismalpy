@@ -231,6 +231,27 @@ cdef int {{prefix}}prediction_conventional({{prefix}}KalmanFilter kfilter):
                       kfilter._transition, &kfilter.k_states,
               &alpha, kfilter._predicted_state_cov, &kfilter.k_states)
 
+    # #### Kalman gain for time t
+    # $K_t = T_t P_t Z_t' F_t^{-1}$
+    #
+    # *Note*: this and does nothing at all to `kalman_gain` if
+    # converged == True
+    if not kfilter.converged:
+        # `tmp00` array used here, dimension $(m \times m)$  
+        # $\\#_{00} = 1.0 * T_t P_t$  
+        # $(m \times m) = (m \times m) (m \times m)$
+        blas.{{prefix}}gemm("N", "N", &kfilter.k_states, &kfilter.k_states, &kfilter.k_states,
+              &alpha, kfilter._transition, &kfilter.k_states,
+                      kfilter._input_state_cov, &kfilter.k_states,
+              &beta, kfilter._tmp00, &kfilter.k_states)
+
+        # K_t = 1.0 * \\#_{00} \\#_3'
+        # $(m \times p) = (m \times m) (m \times p)$
+        blas.{{prefix}}gemm("N", "T", &kfilter.k_states, &kfilter.k_endog, &kfilter.k_states,
+              &alpha, kfilter._tmp00, &kfilter.k_states,
+                      kfilter._tmp3, &kfilter.k_endog,
+              &beta, kfilter._kalman_gain, &kfilter.k_states)
+
     return 0
 
 
