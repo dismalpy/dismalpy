@@ -8,6 +8,41 @@ Author: Chad Fulton
 License: Simplified-BSD
 """
 
+# ## Constants
+
+# ### Filters
+cdef int FILTER_CONVENTIONAL     # Durbin and Koopman (2012), Chapter 4
+cdef int FILTER_EXACT_INITIAL    # ibid., Chapter 5.6
+cdef int FILTER_AUGMENTED        # ibid., Chapter 5.7
+cdef int FILTER_SQUARE_ROOT      # ibid., Chapter 6.3
+cdef int FILTER_UNIVARIATE       # ibid., Chapter 6.4
+cdef int FILTER_COLLAPSED        # ibid., Chapter 6.5
+cdef int FILTER_EXTENDED         # ibid., Chapter 10.2
+cdef int FILTER_UNSCENTED        # ibid., Chapter 10.3
+
+# ### Inversion methods
+# Methods by which the terms using the inverse of the forecast error
+# covariance matrix are solved.
+cdef int INVERT_UNIVARIATE
+cdef int SOLVE_LU
+cdef int INVERT_LU
+cdef int SOLVE_CHOLESKY
+cdef int INVERT_CHOLESKY
+
+# ### Numerical Stability methods
+# Methods to improve numerical stability
+cdef int STABILITY_FORCE_SYMMETRY
+
+# ### Memory conservation options
+cdef int MEMORY_STORE_ALL
+cdef int MEMORY_NO_FORECAST
+cdef int MEMORY_NO_PREDICTED
+cdef int MEMORY_NO_FILTERED
+cdef int MEMORY_NO_LIKELIHOOD
+cdef int MEMORY_NO_GAIN
+cdef int MEMORY_NO_SMOOTHING
+cdef int MEMORY_CONSERVE
+
 # Typical imports
 cimport numpy as np
 
@@ -54,7 +89,7 @@ cdef class sKalmanFilter(object):
     cdef readonly np.float32_t [::1,:] forecast_error_work
     cdef readonly np.float32_t [::1,:] tmp0, tmp00
     cdef readonly np.float32_t [::1,:] tmp2
-    cdef readonly np.float32_t [::1,:,:] tmp1, tmp3
+    cdef readonly np.float32_t [::1,:,:] tmp1, tmp3, tmp4
 
     cdef readonly np.float32_t determinant
 
@@ -98,6 +133,7 @@ cdef class sKalmanFilter(object):
     cdef np.float32_t * _tmp1
     cdef np.float32_t * _tmp2
     cdef np.float32_t * _tmp3
+    cdef np.float32_t * _tmp4
 
     # ### Pointers to current-iteration Kalman filtering functions
     cdef int (*forecasting)(
@@ -172,7 +208,7 @@ cdef class dKalmanFilter(object):
     cdef readonly np.float64_t [::1,:] forecast_error_work
     cdef readonly np.float64_t [::1,:] tmp0, tmp00
     cdef readonly np.float64_t [::1,:] tmp2
-    cdef readonly np.float64_t [::1,:,:] tmp1, tmp3
+    cdef readonly np.float64_t [::1,:,:] tmp1, tmp3, tmp4
 
     cdef readonly np.float64_t determinant
 
@@ -216,6 +252,7 @@ cdef class dKalmanFilter(object):
     cdef np.float64_t * _tmp1
     cdef np.float64_t * _tmp2
     cdef np.float64_t * _tmp3
+    cdef np.float64_t * _tmp4
 
     # ### Pointers to current-iteration Kalman filtering functions
     cdef int (*forecasting)(
@@ -290,7 +327,7 @@ cdef class cKalmanFilter(object):
     cdef readonly np.complex64_t [::1,:] forecast_error_work
     cdef readonly np.complex64_t [::1,:] tmp0, tmp00
     cdef readonly np.complex64_t [::1,:] tmp2
-    cdef readonly np.complex64_t [::1,:,:] tmp1, tmp3
+    cdef readonly np.complex64_t [::1,:,:] tmp1, tmp3, tmp4
 
     cdef readonly np.complex64_t determinant
 
@@ -334,6 +371,7 @@ cdef class cKalmanFilter(object):
     cdef np.complex64_t * _tmp1
     cdef np.complex64_t * _tmp2
     cdef np.complex64_t * _tmp3
+    cdef np.complex64_t * _tmp4
 
     # ### Pointers to current-iteration Kalman filtering functions
     cdef int (*forecasting)(
@@ -408,7 +446,7 @@ cdef class zKalmanFilter(object):
     cdef readonly np.complex128_t [::1,:] forecast_error_work
     cdef readonly np.complex128_t [::1,:] tmp0, tmp00
     cdef readonly np.complex128_t [::1,:] tmp2
-    cdef readonly np.complex128_t [::1,:,:] tmp1, tmp3
+    cdef readonly np.complex128_t [::1,:,:] tmp1, tmp3, tmp4
 
     cdef readonly np.complex128_t determinant
 
@@ -452,6 +490,7 @@ cdef class zKalmanFilter(object):
     cdef np.complex128_t * _tmp1
     cdef np.complex128_t * _tmp2
     cdef np.complex128_t * _tmp3
+    cdef np.complex128_t * _tmp4
 
     # ### Pointers to current-iteration Kalman filtering functions
     cdef int (*forecasting)(

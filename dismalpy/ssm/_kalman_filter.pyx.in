@@ -112,7 +112,7 @@ if prefix == 's':
 # ## Kalman filter
 cdef class {{prefix}}KalmanFilter(object):
     """
-    {{prefix}}KalmanFilter(model, filter=FILTER_CONVENTIONAL, inversion_method=INVERT_UNIVARIATE | SOLVE_CHOLESKY, stability_method=STABILITY_FORCE_SYMMETRY, tolerance=1e-19)
+    {{prefix}}KalmanFilter(model, filter_method=FILTER_CONVENTIONAL, inversion_method=INVERT_UNIVARIATE | SOLVE_CHOLESKY, stability_method=STABILITY_FORCE_SYMMETRY, tolerance=1e-19)
 
     A representation of the Kalman filter recursions.
 
@@ -483,6 +483,11 @@ cdef class {{prefix}}KalmanFilter(object):
         dim3[0] = self.k_endog; dim3[1] = self.k_states; dim3[2] = storage;
         self.tmp3 = np.PyArray_ZEROS(3, dim3, {{typenum}}, FORTRAN)
 
+        # Holds arrays of dimension $(p \times p \times T)$  
+        # $\\#_3 = F_t^{-1} H_t$
+        dim3[0] = self.k_endog; dim3[1] = self.k_endog; dim3[2] = storage;
+        self.tmp4 = np.PyArray_ZEROS(3, dim3, {{typenum}}, FORTRAN)
+
         # Arrays for missing data
         dim1[0] = self.k_endog;
         self.selected_obs = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
@@ -677,6 +682,7 @@ cdef class {{prefix}}KalmanFilter(object):
         self._tmp1 = &self.tmp1[0, 0, smoothing_t]
         self._tmp2 = &self.tmp2[0, smoothing_t]
         self._tmp3 = &self.tmp3[0, 0, smoothing_t]
+        self._tmp4 = &self.tmp4[0, 0, smoothing_t]
 
     cdef void initialize_function_pointers(self) except *:
         if self.filter_method & FILTER_CONVENTIONAL:

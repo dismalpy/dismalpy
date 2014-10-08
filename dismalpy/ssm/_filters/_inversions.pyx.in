@@ -24,6 +24,8 @@ from dismalpy.src.math cimport *
 cimport dismalpy.src.blas as blas
 cimport dismalpy.src.lapack as lapack
 
+from dismalpy.ssm._kalman_filter cimport MEMORY_NO_SMOOTHING
+
 {{for prefix, types in TYPES.items()}}
 {{py:cython_type, dtype, typenum = types}}
 {{py:
@@ -54,6 +56,8 @@ cdef {{cython_type}} {{prefix}}inverse_univariate({{prefix}}KalmanFilter kfilter
     If the model has converged to a steady-state, this is a NOOP and simply
     returns the determinant that was passed in.
     """
+    # TODO it's not a noop if converged, but the docstring says it is...
+
     # #### Intermediate values
     cdef:
         int inc = 1
@@ -71,6 +75,9 @@ cdef {{cython_type}} {{prefix}}inverse_univariate({{prefix}}KalmanFilter kfilter
     kfilter._tmp2[0] = scalar * kfilter._forecast_error[0]
     blas.{{prefix}}copy(&kfilter.k_endogstates, kfilter._design, &inc, kfilter._tmp3, &inc)
     blas.{{prefix}}scal(&kfilter.k_endogstates, &scalar, kfilter._tmp3, &inc)
+
+    if not (kfilter.conserve_memory & MEMORY_NO_SMOOTHING > 0):
+        kfilter._tmp4[0] = scalar * kfilter._obs_cov[0]
 
     return determinant
 
@@ -210,6 +217,18 @@ cdef {{cython_type}} {{prefix}}inverse_cholesky({{prefix}}KalmanFilter kfilter, 
                            kfilter._design, &kfilter.k_endog,
                    &beta, kfilter._tmp3, &kfilter.k_endog)
 
+    if not (kfilter.conserve_memory & MEMORY_NO_SMOOTHING > 0):
+        # `tmp4` array used here, dimension $(p \times p)$  
+        # $\\#_4 = F_t^{-1} H_t$
+        #blas.{{prefix}}symm("L", "U", &kfilter.k_endog, &kfilter.k_endog,
+        #               &alpha, kfilter._forecast_error_fac, &kfilter.k_endog,
+        #                       kfilter._obs_cov, &kfilter.k_endog,
+        #               &beta, kfilter._tmp4, &kfilter.k_endog)
+        blas.{{prefix}}gemm("N", "N", &kfilter.k_endog, &kfilter.k_endog, &kfilter.k_endog,
+                       &alpha, kfilter._forecast_error_fac, &kfilter.k_endog,
+                               kfilter._obs_cov, &kfilter.k_endog,
+                       &beta, kfilter._tmp4, &kfilter.k_endog)
+
     return determinant
 
 cdef {{cython_type}} {{prefix}}inverse_lu({{prefix}}KalmanFilter kfilter, {{cython_type}} determinant) except *:
@@ -249,6 +268,14 @@ cdef {{cython_type}} {{prefix}}inverse_lu({{prefix}}KalmanFilter kfilter, {{cyth
                            kfilter._design, &kfilter.k_endog,
                    &beta, kfilter._tmp3, &kfilter.k_endog)
 
+    if not (kfilter.conserve_memory & MEMORY_NO_SMOOTHING > 0):
+        # `tmp4` array used here, dimension $(p \times p)$  
+        # $\\#_4 = F_t^{-1} H_t$
+        blas.{{prefix}}gemm("N", "N", &kfilter.k_endog, &kfilter.k_endog, &kfilter.k_endog,
+                       &alpha, kfilter._forecast_error_fac, &kfilter.k_endog,
+                               kfilter._obs_cov, &kfilter.k_endog,
+                       &beta, kfilter._tmp4, &kfilter.k_endog)
+
     return determinant
 
 cdef {{cython_type}} {{prefix}}solve_cholesky({{prefix}}KalmanFilter kfilter, {{cython_type}} determinant) except *:
@@ -276,6 +303,12 @@ cdef {{cython_type}} {{prefix}}solve_cholesky({{prefix}}KalmanFilter kfilter, {{
     # $F_t \\#_3 = Z_t$
     blas.{{prefix}}copy(&kfilter.k_endogstates, kfilter._design, &inc, kfilter._tmp3, &inc)
     lapack.{{prefix}}potrs("U", &kfilter.k_endog, &kfilter.k_states, kfilter._forecast_error_fac, &kfilter.k_endog, kfilter._tmp3, &kfilter.k_endog, &info)
+
+    if not (kfilter.conserve_memory & MEMORY_NO_SMOOTHING > 0):
+        # `tmp4` array used here, dimension $(p \times p)$  
+        # $F_t \\#_4 = H_t$
+        blas.{{prefix}}copy(&kfilter.k_endog2, kfilter._obs_cov, &inc, kfilter._tmp4, &inc)
+        lapack.{{prefix}}potrs("U", &kfilter.k_endog, &kfilter.k_endog, kfilter._forecast_error_fac, &kfilter.k_endog, kfilter._tmp4, &kfilter.k_endog, &info)
 
     return determinant
 
@@ -308,6 +341,13 @@ cdef {{cython_type}} {{prefix}}solve_lu({{prefix}}KalmanFilter kfilter, {{cython
     blas.{{prefix}}copy(&kfilter.k_endogstates, kfilter._design, &inc, kfilter._tmp3, &inc)
     lapack.{{prefix}}getrs("N", &kfilter.k_endog, &kfilter.k_states, kfilter._forecast_error_fac, &kfilter.k_endog,
                     kfilter._forecast_error_ipiv, kfilter._tmp3, &kfilter.k_endog, &info)
+
+    if not (kfilter.conserve_memory & MEMORY_NO_SMOOTHING > 0):
+        # `tmp4` array used here, dimension $(p \times p)$  
+        # $F_t \\#_4 = H_t$
+        blas.{{prefix}}copy(&kfilter.k_endog2, kfilter._obs_cov, &inc, kfilter._tmp4, &inc)
+        lapack.{{prefix}}getrs("N", &kfilter.k_endog, &kfilter.k_endog, kfilter._forecast_error_fac, &kfilter.k_endog,
+                        kfilter._forecast_error_ipiv, kfilter._tmp2, &kfilter.k_endog, &info)
 
     return determinant
 

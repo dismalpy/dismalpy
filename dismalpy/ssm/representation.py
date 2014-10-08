@@ -964,6 +964,7 @@ class FilterResults(object):
         self.tmp1 = np.array(kalman_filter.tmp1, copy=True)
         self.tmp2 = np.array(kalman_filter.tmp2, copy=True)
         self.tmp3 = np.array(kalman_filter.tmp3, copy=True)
+        self.tmp4 = np.array(kalman_filter.tmp4, copy=True)
 
         # Note: use forecasts rather than forecast, so as not to interfer
         # with the `forecast` methods in subclasses
