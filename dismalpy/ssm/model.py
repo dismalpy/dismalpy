@@ -689,8 +689,10 @@ class StatespaceResults(FilterResults, tsbase.TimeSeriesModelResults):
             start = 0
         if self.data.dates is not None:
             dates = self.data.dates
-            sample = [dates[start].strftime('%m-%d-%Y')]
-            sample += ['- ' + dates[-1].strftime('%m-%d-%Y')]
+            d = dates[start]
+            sample = ['%02d-%02d-%02d' % (d.month, d.day, d.year)]
+            d = dates[-1]
+            sample += ['- ' + '%02d-%02d-%02d' % (d.month, d.day, d.year)]                
         else:
             sample = [str(start), ' - ' + str(self.model.nobs)]
 
