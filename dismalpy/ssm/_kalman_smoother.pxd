@@ -8,9 +8,10 @@ Author: Chad Fulton
 License: Simplified-BSD
 """
 
-cdef int SMOOTHER_STATE       # Durbin and Koopman (2012), Chapter 4.4.2
-cdef int SMOOTHER_STATE_COV   # Durbin and Koopman (2012), Chapter 4.4.3
-cdef int SMOOTHER_DISTURBANCE # Durbin and Koopman (2012), Chapter 4.5
+cdef int SMOOTHER_STATE           # Durbin and Koopman (2012), Chapter 4.4.2
+cdef int SMOOTHER_STATE_COV       # Durbin and Koopman (2012), Chapter 4.4.3
+cdef int SMOOTHER_DISTURBANCE     # Durbin and Koopman (2012), Chapter 4.5
+cdef int SMOOTHER_DISTURBANCE_COV # Durbin and Koopman (2012), Chapter 4.5
 cdef int SMOOTHER_ALL
 
 # Typical imports

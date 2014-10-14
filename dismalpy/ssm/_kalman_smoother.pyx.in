@@ -22,11 +22,13 @@ TYPES = {
 # ## Constants
 
 # ### Smoothers
-cdef int SMOOTHER_STATE = 0x01     # Durbin and Koopman (2012), Chapter 4.4.2
-cdef int SMOOTHER_STATE_COV = 0x02     # Durbin and Koopman (2012), Chapter 4.4.3
+cdef int SMOOTHER_STATE = 0x01           # Durbin and Koopman (2012), Chapter 4.4.2
+cdef int SMOOTHER_STATE_COV = 0x02       # Durbin and Koopman (2012), Chapter 4.4.3
 cdef int SMOOTHER_DISTURBANCE = 0x04     # Durbin and Koopman (2012), Chapter 4.5
+cdef int SMOOTHER_DISTURBANCE_COV = 0x08 # Durbin and Koopman (2012), Chapter 4.5
 cdef int SMOOTHER_ALL = (
-    SMOOTHER_STATE | SMOOTHER_STATE_COV | SMOOTHER_DISTURBANCE
+    SMOOTHER_STATE | SMOOTHER_STATE_COV | SMOOTHER_DISTURBANCE |
+    SMOOTHER_DISTURBANCE_COV
 )
 
 from dismalpy.ssm._kalman_filter cimport (
