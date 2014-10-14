@@ -1682,12 +1682,12 @@ class SARIMAXResults(StatespaceResults):
         self.polynomial_ma = self.model.polynomial_ma
         self.polynomial_seasonal_ar = self.model.polynomial_seasonal_ar
         self.polynomial_seasonal_ma = self.model.polynomial_seasonal_ma
-        self.polynomial_reduced_ar = np.r_[1, -np.polymul(
+        self.polynomial_reduced_ar = np.polymul(
             self.polynomial_ar, self.polynomial_seasonal_ar
-        )]
-        self.polynomial_reduced_ma = np.r_[1, np.polymul(
+        )
+        self.polynomial_reduced_ma = np.polymul(
             self.polynomial_ma, self.polynomial_seasonal_ma
-        )]
+        )
 
         # Distinguish parameters
         self.model_orders = self.model.model_orders
