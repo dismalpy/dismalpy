@@ -3,6 +3,45 @@ cimport numpy as np
 cdef extern from "capsule.h":
     void *Capsule_AsVoidPtr(object ptr)
 
+ctypedef int (*_sselect)(np.float32_t, np.float32_t)
+ctypedef int (*_dselect)(np.float64_t, np.float64_t)
+ctypedef int (*_cselect)(np.complex64_t, np.complex64_t)
+ctypedef int (*_zselect)(np.complex128_t, np.complex128_t)
+
+ctypedef int sgees_t(
+    char *jobvs,
+    char *sort,
+    _sselect select,
+    int *n,
+    np.float32_t*a,
+    int *lda,
+    int *sdim,
+    np.float32_t *wr,
+    np.float32_t *wi,
+    np.float32_t *vs,
+    int *ldvs,
+    np.float32_t *work,
+    int *lwork,
+    int *bwork,
+    int *info
+) nogil
+
+ctypedef int strsyl_t(
+    char *transa,
+    char *transb,
+    int *isgn,
+    int *m,
+    int *n,
+    np.float32_t *a,
+    int *lda,
+    np.float32_t *b,
+    int *ldb,
+    np.float32_t *c,
+    int *ldc,
+    np.float32_t *scale,
+    int *info
+) nogil
+
 ctypedef int sgetrf_t(
     # SGETRF - compute an LU factorization of a general M-by-N
     # matrix A using partial pivoting with row interchanges
@@ -74,6 +113,40 @@ ctypedef int spotrs_t(
     np.float32_t *b,  # Matrix B: nxnrhs
     int *ldb,         # The size of the first dimension of B (in memory)
     int *info         # 0 if success, otherwise an error code (integer)
+) nogil
+
+ctypedef int dgees_t(
+    char *jobvs,
+    char *sort,
+    _dselect select,
+    int *n,
+    np.float64_t*a,
+    int *lda,
+    int *sdim,
+    np.float64_t *wr,
+    np.float64_t *wi,
+    np.float64_t *vs,
+    int *ldvs,
+    np.float64_t *work,
+    int *lwork,
+    int *bwork,
+    int *info
+) nogil
+
+ctypedef int dtrsyl_t(
+    char *transa,
+    char *transb,
+    int *isgn,
+    int *m,
+    int *n,
+    np.float64_t *a,
+    int *lda,
+    np.float64_t *b,
+    int *ldb,
+    np.float64_t *c,
+    int *ldc,
+    np.float64_t *scale,
+    int *info
 ) nogil
 
 ctypedef int dgetrf_t(
@@ -149,6 +222,40 @@ ctypedef int dpotrs_t(
     int *info         # 0 if success, otherwise an error code (integer)
 ) nogil
 
+ctypedef int cgees_t(
+    char *jobvs,
+    char *sort,
+    _cselect select,
+    int *n,
+    np.complex64_t *a,
+    int *lda,
+    int *sdim,
+    np.complex64_t *w,
+    np.complex64_t *vs,
+    int *ldvs,
+    np.complex64_t *work,
+    int *lwork,
+    np.float64_t *rwork,
+    int *bwork,
+    int *info
+) nogil
+
+ctypedef int ctrsyl_t(
+    char *transa,
+    char *transb,
+    int *isgn,
+    int *m,
+    int *n,
+    np.complex64_t *a,
+    int *lda,
+    np.complex64_t *b,
+    int *ldb,
+    np.complex64_t *c,
+    int *ldc,
+    np.complex64_t *scale,
+    int *info
+) nogil
+
 ctypedef int cgetrf_t(
     # CGETRF - compute an LU factorization of a general M-by-N
     # matrix A using partial pivoting with row interchanges
@@ -220,6 +327,40 @@ ctypedef int cpotrs_t(
     np.complex64_t *b,  # Matrix B: nxnrhs
     int *ldb,           # The size of the first dimension of B (in memory)
     int *info           # 0 if success, otherwise an error code (integer)
+) nogil
+
+ctypedef int zgees_t(
+    char *jobvs,
+    char *sort,
+    _zselect select,
+    int *n,
+    np.complex128_t *a,
+    int *lda,
+    int *sdim,
+    np.complex128_t *w,
+    np.complex128_t *vs,
+    int *ldvs,
+    np.complex128_t *work,
+    int *lwork,
+    np.float64_t *rwork,
+    int *bwork,
+    int *info
+) nogil
+
+ctypedef int ztrsyl_t(
+    char *transa,
+    char *transb,
+    int *isgn,
+    int *m,
+    int *n,
+    np.complex128_t *a,
+    int *lda,
+    np.complex128_t *b,
+    int *ldb,
+    np.complex128_t *c,
+    int *ldc,
+    np.complex128_t *scale,
+    int *info
 ) nogil
 
 ctypedef int zgetrf_t(
@@ -296,24 +437,32 @@ ctypedef int zpotrs_t(
 ) nogil
 
 cdef:
+    cgees_t  *cgees
+    ctrsyl_t *ctrsyl
     cgetrf_t *cgetrf
     cgetri_t *cgetri
     cgetrs_t *cgetrs
     cpotrf_t *cpotrf
     cpotri_t *cpotri
     cpotrs_t *cpotrs
+    sgees_t  *sgees
+    strsyl_t *strsyl
     sgetrf_t *sgetrf
     sgetri_t *sgetri
     sgetrs_t *sgetrs
     spotrf_t *spotrf
     spotri_t *spotri
     spotrs_t *spotrs
+    zgees_t  *zgees
+    ztrsyl_t *ztrsyl
     zgetrf_t *zgetrf
     zgetri_t *zgetri
     zgetrs_t *zgetrs
     zpotrf_t *zpotrf
     zpotri_t *zpotri
     zpotrs_t *zpotrs
+    dgees_t  *dgees
+    dtrsyl_t *dtrsyl
     dgetrf_t *dgetrf
     dgetri_t *dgetri
     dgetrs_t *dgetrs
