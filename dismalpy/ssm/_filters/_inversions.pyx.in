@@ -20,6 +20,7 @@ TYPES = {
 }}
 
 cimport numpy as np
+import numpy as np
 from dismalpy.src.math cimport *
 cimport dismalpy.src.blas as blas
 cimport dismalpy.src.lapack as lapack
