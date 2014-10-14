@@ -1,0 +1,286 @@
+#cython: boundscheck=False
+#cython: wraparound=False
+#cython: cdivision=False
+"""
+State Space Model - Cython tools
+
+Author: Chad Fulton  
+License: Simplified-BSD
+"""
+
+# Typical imports
+cimport numpy as np
+cimport cython
+import numpy as np
+
+np.import_array()
+
+cimport dismalpy.src.blas as blas
+cimport dismalpy.src.lapack as lapack
+
+cdef FORTRAN = 1
+
+# Array shape validation
+cdef validate_matrix_shape(str name, Py_ssize_t *shape, int nrows, int ncols, nobs=None):
+    if not shape[0] == nrows:
+        raise ValueError('Invalid shape for %s matrix: requires %d rows,'
+                         ' got %d' % (name, nrows, shape[0]))
+    if not shape[1] == ncols:
+        raise ValueError('Invalid shape for %s matrix: requires %d columns,'
+                         'got %d' % (name, shape[1], shape[1]))
+    if nobs is not None and shape[2] not in [1, nobs]:
+        raise ValueError('Invalid time-varying dimension for %s matrix:'
+                         ' requires 1 or %d, got %d' % (name, nobs, shape[2]))
+
+cdef validate_vector_shape(str name, Py_ssize_t *shape, int nrows, nobs = None):
+    if not shape[0] == nrows:
+        raise ValueError('Invalid shape for %s vector: requires %d rows,'
+                         ' got %d' % (name, nrows, shape[0]))
+    if nobs is not None and not shape[1] in [1, nobs]:
+        raise ValueError('Invalid time-varying dimension for %s vector:'
+                         ' requires 1 or %d got %d' % (name, nobs, shape[1]))
+
+{{py:
+
+TYPES = {
+    "s": ("np.float32_t", "np.float32", "np.NPY_FLOAT32"),
+    "d": ("np.float64_t", "float", "np.NPY_FLOAT64"),
+    "c": ("np.complex64_t", "np.complex64", "np.NPY_COMPLEX64"),
+    "z": ("np.complex128_t", "complex", "np.NPY_COMPLEX128"),
+}
+
+}}
+
+{{for prefix, types in TYPES.items()}}
+{{py:cython_type, dtype, typenum = types}}
+{{py:
+combined_prefix = prefix
+combined_cython_type = cython_type
+if prefix == 'c':
+    combined_prefix = 'z'
+    combined_cython_type = 'np.complex128_t'
+if prefix == 's':
+    combined_prefix = 'd'
+    combined_cython_type = 'np.float64_t'
+}}
+
+# cpdef {{prefix}}solve_discrete_lyapunov({{cython_type}} [::1,:] a, {{cython_type}} [::1,:] q, int overwrite=False):
+#     cdef:
+#         int inc = 1
+#         int n = a.shape[0]
+#         int n2 = n**2
+#     cdef {{cython_type}} * _a
+#     cdef {{cython_type}} * _q
+#     cdef np.npy_intp dim[2]
+#     cdef {{cython_type}} [::1,:] a_copy, q_copy
+    
+#     if not overwrite:
+#         dim[0] = n; dim[1] = n;
+#         a_copy = np.PyArray_ZEROS(2, dim, {{typenum}}, FORTRAN)
+#         _a = &a_copy[0,0]
+#         blas.{{prefix}}copy(&n2, &a[0,0], &inc, _a, &inc)
+
+#         q_copy = np.PyArray_ZEROS(2, dim, {{typenum}}, FORTRAN)
+#         _q = &q_copy[0,0]
+#         blas.{{prefix}}copy(&n2, &q[0,0], &inc, _q, &inc)
+#     else:
+#         _a = &a[0,0]
+#         _q = &q[0,0]
+
+#     _{{prefix}}solve_discrete_lyapunov(_a, _q, n)
+
+#     if not overwrite:
+#         return np.array(q_copy)
+#     else:
+#         return np.array(q)
+
+cdef int _{{prefix}}select({{cython_type}} a, {{cython_type}} b):
+    return 0
+
+cdef int _{{prefix}}solve_discrete_lyapunov({{cython_type}} * a, {{cython_type}} * q, int n) except *:
+    # Note: some of this code (esp. the Sylvester solving part) cribbed from
+    # https://raw.githubusercontent.com/scipy/scipy/master/scipy/linalg/_solvers.py
+
+    # Solve an equation of the form $A'XA-X=-Q$
+    # a: input / output
+    # q: input / output
+    cdef:
+        int i, j
+        int info
+        int inc = 1
+        int n2 = n**2
+        {{cython_type}} scale = 0.0
+        {{cython_type}} alpha = 1.0
+        {{cython_type}} beta = 0.0
+        {{cython_type}} delta = -2.0
+    cdef np.npy_intp dim[2]
+    cdef {{cython_type}} [::1,:] apI, capI, u
+    cdef int [::1,:] ipiv
+    # Dummy selection function, won't actually be referenced since we don't
+    # need to order the eigenvalues in the ?gees call.
+    cdef:
+        int sdim
+        int lwork = 3*n
+        int bwork
+    cdef np.npy_intp dim1[1]
+    cdef {{cython_type}} [::1,:] work
+    cdef {{cython_type}} [:] wr
+    {{if prefix == 's'}}
+    cdef {{cython_type}} [:] wi
+    {{else}}
+    cdef np.float64_t [:] wi
+    {{endif}}
+
+    cdef lapack._{{prefix}}select select = &_{{prefix}}select
+
+    # Initialize arrays
+    dim[0] = n; dim[1] = n;
+    apI = np.PyArray_ZEROS(2, dim, {{typenum}}, FORTRAN)
+    capI = np.PyArray_ZEROS(2, dim, {{typenum}}, FORTRAN)
+    u = np.PyArray_ZEROS(2, dim, {{typenum}}, FORTRAN)
+    ipiv = np.PyArray_ZEROS(2, dim, np.NPY_INT32, FORTRAN)
+
+    dim1[0] = n;
+    wr = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+    {{if prefix == 's'}}
+    wi = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+    {{else}}
+    wi = np.PyArray_ZEROS(1, dim1, np.NPY_FLOAT64, FORTRAN)
+    {{endif}}
+    #vs = np.PyArray_ZEROS(2, dim, {{typenum}}, FORTRAN)
+    dim[0] = lwork; dim[1] = lwork;
+    work = np.PyArray_ZEROS(2, dim, {{typenum}}, FORTRAN)
+
+    # Get apI = a + I (stored im apI)
+    blas.{{prefix}}copy(&n2, a, &inc, &apI[0,0], &inc)
+    # (for loop below subtracts the identity)
+    
+    # Replace a with its conjugate (if we have a complex matrix)
+    {{if combined_prefix == 'z'}}
+    for i in range(n2):
+        a[i] = a[i] - a[i].imag * 2.0j
+    {{endif}}
+
+    # Get conj(a) + I (stored in capI)
+    blas.{{prefix}}copy(&n2, a, &inc, &capI[0,0], &inc)
+    # (for loop below adds the identity)
+
+    # Get conj(a) - I (stored in a)
+    # (for loop below subtracts the identity)
+    
+    # Add / subtract identity matrix
+    for i in range(n):
+        capI[i,i] = capI[i,i] + 1
+        a[i + i*n] = a[i + i*n] - 1
+        apI[i,i] = apI[i,i] + 1 # apI -> a + I
+
+    # Solve [conj(a) + I] b' = [conj(a) - I] (result stored in a)
+    lapack.{{prefix}}getrf(&n, &n, &capI[0,0], &n, &ipiv[0,0], &info)
+
+    if not info == 0:
+        raise np.linalg.LinAlgError('LU decomposition error.')
+
+    lapack.{{prefix}}getrs("N", &n, &n, &capI[0,0], &n, &ipiv[0,0],
+                               a, &n, &info)
+
+    if not info == 0:
+        raise np.linalg.LinAlgError('LU solver error.')
+
+    # Take the complex conjugate (if we have a complex matrix)
+    {{if combined_prefix == 'z'}}
+    for i in range(n2):
+        a[i] = a[i] - a[i].imag * 2.0j
+    {{endif}}
+
+    # Solve [conj(a) + I] tmp' = q (result stored in q)
+    lapack.{{prefix}}getrs("N", &n, &n, &capI[0,0], &n, &ipiv[0,0],
+                                        q, &n, &info)
+
+    if not info == 0:
+        raise np.linalg.LinAlgError('LU solver error.')
+
+    # Replace the result (stored in q) with its transpose
+    for j in range(1, n):
+        for i in range(j):
+            scale = q[i + j*n]
+            q[i + j*n] = q[j + i*n]
+            q[j + i*n] = scale
+
+    # Solve [a - I] tmp = q
+    lapack.{{prefix}}getrf(&n, &n, &apI[0,0], &n, &ipiv[0,0], &info)
+
+    if not info == 0:
+        raise np.linalg.LinAlgError('LU decomposition error.')
+
+    lapack.{{prefix}}getrs("N", &n, &n, &apI[0,0], &n, &ipiv[0,0],
+                                        q, &n, &info)
+
+    if not info == 0:
+        raise np.linalg.LinAlgError('LU solver error.')
+
+    blas.{{prefix}}scal(&n2, &delta, q, &inc)
+
+    # Now solve the continuous time Lyapunov equation (AX + XA^H = Q), on the
+    # transformed inputs ...
+
+    # ... which requires solving the continuous time Sylvester equation
+    # (AX + XB = Q) where B = A^H
+
+    # Compute the real Schur decomposition of a (unordered)
+    # TODO compute the optimal lwork rather than always using 3*n
+    {{if combined_prefix == 'd'}}
+    lapack.{{prefix}}gees("V", "N", select, &n,
+                          a, &n,
+                          &sdim,
+                          &wr[0], &wi[0],
+                          &u[0,0], &n,
+                          &work[0,0], &lwork,
+                          &bwork, &info)
+    {{else}}
+    lapack.{{prefix}}gees("V", "N", select, &n,
+                          a, &n,
+                          &sdim,
+                          &wr[0],
+                          &u[0,0], &n,
+                          &work[0,0], &lwork,
+                          &wi[0],
+                          &bwork, &info)
+    {{endif}}
+
+    if not info == 0:
+        raise np.linalg.LinAlgError('Schur decomposition solver error.')
+
+    # Construct f = u'*q*u (result overwrites q)
+    blas.{{prefix}}gemm("N", "N", &n, &n, &n,
+                        &alpha, q, &n,
+                                &u[0,0], &n,
+                        &beta, &capI[0,0], &n)
+    blas.{{prefix}}gemm("C", "N", &n, &n, &n,
+                        &alpha, &u[0,0], &n,
+                                &capI[0,0], &n,
+                        &beta, q, &n)
+
+    # DTRYSL Solve op(A)*X + X*op(B) = scale*C which is here:
+    # r*X + X*r = scale*q
+    # results overwrite q
+    lapack.{{prefix}}trsyl("N", "C", &inc, &n, &n,
+                           a, &n,
+                           a, &n,
+                           q, &n,
+                           &scale, &info)
+
+    # Scale q by scale
+    if not scale == 1.0:
+        blas.{{prefix}}scal(&n2, &scale, q, &inc)
+
+    # Calculate the solution: u * q * u^H (results overwrite q)
+    blas.{{prefix}}gemm("N", "C", &n, &n, &n,
+                        &alpha, q, &n,
+                                &u[0,0], &n,
+                        &beta, &capI[0,0], &n)
+    blas.{{prefix}}gemm("N", "N", &n, &n, &n,
+                        &alpha, &u[0,0], &n,
+                                &capI[0,0], &n,
+                        &beta, q, &n)
+
+{{endfor}}

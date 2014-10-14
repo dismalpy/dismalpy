@@ -256,13 +256,14 @@ cdef class {{prefix}}Statespace(object):
 
     # ## Initialize: stationary process
     # *Note:* see Durbin and Koopman section 5.6.2
-    # 
-    # TODO improve efficiency with direct BLAS / LAPACK calls
     def initialize_stationary(self):
         """
         initialize_stationary()
         """
-        cdef np.npy_intp dim[1]
+        cdef np.npy_intp dim1[1]
+        cdef np.npy_intp dim2[2]
+        cdef int inc = 1
+        cdef int k_states2 = self.k_states**2
 
         # Create selected state covariance matrix
         {{prefix}}select_state_cov(self.k_states, self.k_posdef,
@@ -271,14 +272,24 @@ cdef class {{prefix}}Statespace(object):
                                    &self.state_cov[0,0,0],
                                    &self.selected_state_cov[0,0,0])
 
-        from scipy.linalg import solve_discrete_lyapunov
+        # Initial state means are all zero
+        dim1[0] = self.k_states
+        self.initial_state = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+        dim2[0] = self.k_states; dim2[1] = self.k_states;
+        self.initial_state_cov = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
 
-        dim[0] = self.k_states
-        self.initial_state = np.PyArray_ZEROS(1, dim, {{typenum}}, FORTRAN)
-        self.initial_state_cov = solve_discrete_lyapunov(
-            np.array(self.transition[:,:,0], dtype={{dtype}}),
-            np.array(self.selected_state_cov[:,:,0], dtype={{dtype}}),
-        ).T
+        # Create a copy of the transition matrix (to avoid overwriting it)
+        blas.{{prefix}}copy(&k_states2, &self.transition[0,0,0], &inc,
+                                   &self.tmp[0,0], &inc)
+
+        # Copy the selected state covariance to the initial state covariance
+        # (it will be overwritten with the appropriate matrix)
+        blas.{{prefix}}copy(&k_states2, &self.selected_state_cov[0,0,0], &inc,
+                                   &self.initial_state_cov[0,0], &inc)
+
+        # Solve the discrete Lyapunov equation to the get initial state
+        # covariance matrix
+        tools._{{prefix}}solve_discrete_lyapunov(&self.tmp[0,0], &self.initial_state_cov[0,0], self.k_states)
 
         self.initialized = True
 

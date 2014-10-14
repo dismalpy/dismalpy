@@ -16,6 +16,7 @@ def configuration(parent_package='', top_path=None):
                          include_dirs=['dismalpy/src'],
                          sources=['_kalman_smoother.c'], extra_info=info)
     config.add_extension('_tools',
+                         include_dirs=['dismalpy/src'],
                          sources=['_tools.c'])
     config.add_data_dir('tests')
 
