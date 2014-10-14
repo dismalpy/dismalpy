@@ -632,7 +632,7 @@ class Representation(object):
 
         # Determine which filter to call
         prefix = self.prefix
-        dtype = self.dtype
+        dtype = prefix_dtype_map[prefix]
 
         # If the dtype-specific representation matrices do not exist, create
         # them
@@ -744,7 +744,7 @@ class Representation(object):
     def _initialize_smoother(self, smoother_output, *args, **kwargs):
         # Determine which smoother to call
         prefix = self.prefix
-        dtype = self.dtype
+        dtype = prefix_dtype_map[prefix]
 
         # Create or re-initialize the required filter
         # (note that this will also create or re-initialize the underlying
