@@ -12,11 +12,15 @@ def configuration(parent_package='', top_path=None):
     config.add_extension('_kalman_filter',
                          include_dirs=['dismalpy/src'],
                          sources=['_kalman_filter.c'], extra_info=info)
+    config.add_extension('_kalman_smoother',
+                         include_dirs=['dismalpy/src'],
+                         sources=['_kalman_smoother.c'], extra_info=info)
     config.add_extension('_tools',
                          sources=['_tools.c'])
     config.add_data_dir('tests')
 
     config.add_subpackage('_filters')
+    config.add_subpackage('_smoothers')
     config.make_config_py()
     return config
 

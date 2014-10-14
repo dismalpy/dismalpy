@@ -1,0 +1,505 @@
+#cython: boundscheck=False
+#cython: wraparound=False
+#cython: cdivision=False
+"""
+State Space Models
+
+Author: Chad Fulton  
+License: Simplified-BSD
+"""
+
+{{py:
+
+TYPES = {
+    "s": ("np.float32_t", "np.float32", "np.NPY_FLOAT32"),
+    "d": ("np.float64_t", "float", "np.NPY_FLOAT64"),
+    "c": ("np.complex64_t", "np.complex64", "np.NPY_COMPLEX64"),
+    "z": ("np.complex128_t", "complex", "np.NPY_COMPLEX128"),
+}
+
+}}
+
+# ## Constants
+
+# ### Smoothers
+cdef int SMOOTHER_STATE = 0x01     # Durbin and Koopman (2012), Chapter 4.4.2
+cdef int SMOOTHER_STATE_COV = 0x02     # Durbin and Koopman (2012), Chapter 4.4.3
+cdef int SMOOTHER_DISTURBANCE = 0x04     # Durbin and Koopman (2012), Chapter 4.5
+cdef int SMOOTHER_ALL = (
+    SMOOTHER_STATE | SMOOTHER_STATE_COV | SMOOTHER_DISTURBANCE
+)
+
+from dismalpy.ssm._kalman_filter cimport (
+    FILTER_CONVENTIONAL,
+    MEMORY_NO_PREDICTED, MEMORY_NO_GAIN, MEMORY_NO_SMOOTHING
+)
+
+# Typical imports
+import numpy as np
+import warnings
+cimport numpy as np
+cimport cython
+
+np.import_array()
+
+cimport dismalpy.src.blas as blas
+
+cdef int FORTRAN = 1
+
+{{for prefix, types in TYPES.items()}}
+{{py:cython_type, dtype, typenum = types}}
+{{py:
+combined_prefix = prefix
+combined_cython_type = cython_type
+if prefix == 'c':
+    combined_prefix = 'z'
+    combined_cython_type = 'np.complex128_t'
+if prefix == 's':
+    combined_prefix = 'd'
+    combined_cython_type = 'np.float64_t'
+}}
+
+from dismalpy.ssm._smoothers._conventional cimport (
+    {{prefix}}smoothed_estimators_missing_conventional,
+    {{prefix}}smoothed_disturbances_missing_conventional,
+    {{prefix}}smoothed_estimators_conventional,
+    {{prefix}}smoothed_state_conventional,
+    {{prefix}}smoothed_disturbances_conventional
+)
+
+# ## Kalman filter
+cdef class {{prefix}}KalmanSmoother(object):
+    """
+    {{prefix}}KalmanSmoother(model, kfilter, smoother_output=SMOOTHING_ALL)
+
+    A representation of the Kalman smoother recursions; it performs a single
+    backwards pass through the data (after the forwards pass via the Kalman
+    filter has already been completed). In all cases, it calculates:
+
+    - `scaled_smoothed_estimator`
+    - `smoothing_error`
+
+    it can optionally peform three types of smoothing:
+
+    - State smoothing provides `smoothed_state` and `smoothed_state_cov`
+    - Disturbance smoothing provides `smoothed_measurement_disturbance` and
+      `smoothed_state_disturbance`
+    - Simulation smoothing provides `sampled_measurement_disturbance` and
+      `sampled_state_disturbance` (note that this requires Disturbance
+      smoothing as well).
+    """
+
+    # ### Statespace model
+    # cdef readonly {{prefix}}Statespace model
+    # ### Kalman filter
+    # cdef readonly {{prefix}}KalmanFilter kfilter
+
+    # ### Smoother parameters
+    # Holds the time-iteration state of the filter  
+    # *Note*: must be changed using the `seek` method
+    # cdef readonly int t
+    # cdef public int smoother_output
+
+    # ### Kalman smoother properties
+
+    # `scaled_smoothed_estimator` $\equiv r_t$ is the **scaled smoothed estimator** of $\eta_t$ $(m \times T)$  
+    # cdef readonly {{cython_type}} [::1,:] scaled_smoothed_estimator
+
+    # `scaled_smoothed_estimator_cov` $\equiv N_t$ is the **scaled smoothed estimator covariance matrix** $(m \times m \times T)$  
+    # cdef readonly {{cython_type}} [::1,:,:] scaled_smoothed_estimator_cov
+
+    # `smoothing_error` $\equiv u_t = F_{t}^{-1} v_t - K_t' r_t$ is the **smoothing error** $(p \times T)$
+    # cdef readonly {{cython_type}} [::1,:] smoothing_error
+
+    # `smoothed_state` $\equiv \hat \alpha_t = E(\alpha_t | Y_n)$ is the **smoothed estimator** of the state $(m \times T)$
+    # cdef readonly {{cython_type}} [::1,:] smoothed_state
+
+    # `smoothed_state_cov` $\equiv V_t = Var(\alpha_t | Y_n)$ is the **smoothed state covariance matrix** $(m \times m \times T)$
+    # cdef readonly {{cython_type}} [::1,:,:] smoothed_state_cov
+
+    # `smoothed_measurement_disturbance` $\equiv \hat \varepsilon_t = E(\varepsilon_t | Y_n)$ is the **smoothed measurement disturbance** $(p \times T)$
+    # cdef readonly {{cython_type}} [::1,:] smoothed_measurement_disturbance
+
+    # `smoothed_state_disturbance` $\equiv \hat \eta_t = E(\eta_t | Y_n)$ is the **smoothed state disturbance** $(r \times T)$
+    # cdef readonly {{cython_type}} [::1,:] smoothed_state_disturbance
+
+    # `smoothed_measurement_disturbance_cov` $\equiv Var (\varepsilon_t | Y_n)$ is the **smoothed measurement disturbance covariance matrix** $(p \times p \times T)$
+    # cdef readonly {{cython_type}} [::1,:,:] smoothed_measurement_disturbance_cov
+
+    # `smoothed_state_disturbance` $\equiv Var (\eta_t | Y_n)$ is the **smoothed state disturbance covariance matrix** $(r \times r \times T)$
+    # cdef readonly {{cython_type}} [::1,:,:] smoothed_state_disturbance_cov
+
+    # ### Temporary arrays
+    # These matrices are used to temporarily hold selected observation vectors,
+    # design matrices, and observation covariance matrices in the case of
+    # missing data.  
+    # The following are contiguous memory segments which are then used to
+    # store the data in the above matrices.
+    # cdef readonly {{cython_type}} [:] selected_design
+    # cdef readonly {{cython_type}} [:] selected_obs_cov
+    # These hold the memory allocations of the unnamed temporary arrays
+    # cdef readonly {{cython_type}} [::1,:] tmpL, tmp0, tmp00, tmp000
+
+    # ### Pointers to current-iteration arrays
+
+    # Statespace
+    # cdef {{cython_type}} * _design
+    # cdef {{cython_type}} * _obs_cov
+    # cdef {{cython_type}} * _transition
+    # cdef {{cython_type}} * _selection
+    # cdef {{cython_type}} * _state_cov
+
+    # Kalman filter
+    # cdef {{cython_type}} * _predicted_state
+    # cdef {{cython_type}} * _predicted_state_cov
+    # cdef {{cython_type}} * _kalman_gain
+
+    # cdef {{cython_type}} * _tmp1
+    # cdef {{cython_type}} * _tmp2
+    # cdef {{cython_type}} * _tmp3
+    # cdef {{cython_type}} * _tmp4
+
+    # Kalman smoother
+    # cdef {{cython_type}} * _input_scaled_smoothed_estimator
+    # cdef {{cython_type}} * _input_scaled_smoothed_estimator_cov
+
+    # cdef {{cython_type}} * _scaled_smoothed_estimator
+    # cdef {{cython_type}} * _scaled_smoothed_estimator_cov
+    # cdef {{cython_type}} * _smoothing_error
+    # cdef {{cython_type}} * _smoothed_state
+    # cdef {{cython_type}} * _smoothed_state_cov
+    # cdef {{cython_type}} * _smoothed_measurement_disturbance
+    # cdef {{cython_type}} * _smoothed_state_disturbance
+    # cdef {{cython_type}} * _smoothed_measurement_disturbance_cov
+    # cdef {{cython_type}} * _smoothed_state_disturbance_cov
+
+    # cdef {{cython_type}} * _tmpL
+    # cdef {{cython_type}} * _tmp0
+    # cdef {{cython_type}} * _tmp00
+    # cdef {{cython_type}} * _tmp000
+
+    # ### Pointers to current-iteration Kalman smoothing functions
+    # cdef int (*smooth_estimators)(
+    #     {{prefix}}KalmanSmoother
+    # )
+    # cdef int (*smooth_state)(
+    #     {{prefix}}KalmanSmoother
+    # )
+    # cdef int (*smooth_disturbances)(
+    #     {{prefix}}KalmanSmoother
+    # )
+
+    # ### Define some constants
+    # cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_posdef2, k_endogstates, k_statesposdef
+    
+    def __init__(self,
+                 {{prefix}}Statespace model,
+                 {{prefix}}KalmanFilter kfilter,
+                 int smoother_output=SMOOTHER_ALL):
+        # Local variables
+        cdef:
+            np.npy_intp dim1[1]
+            np.npy_intp dim2[2]
+            np.npy_intp dim3[3]
+        cdef int storage
+
+        # Save the model
+        self.model = model
+        self.kfilter = kfilter
+
+        # Make sure the appropriate output has been stored in the filter
+        if self.kfilter.conserve_memory & MEMORY_NO_PREDICTED:
+            raise ValueError('Cannot perform smoothing without all prediced states')
+        if self.kfilter.conserve_memory & MEMORY_NO_GAIN:
+            raise ValueError('Cannot perform smoothing without all Kalman gains')
+        if self.kfilter.conserve_memory & MEMORY_NO_SMOOTHING:
+            raise ValueError('Cannot perform smoothing without all smoothing variables')
+
+        # Initialize smoothing parameters
+        self.smoother_output = smoother_output
+
+        # Initialize the constant values
+        self.k_endog = self.model.k_endog
+        self.k_states = self.model.k_states
+        self.k_posdef = self.model.k_posdef
+        self.k_endog2 = self.model.k_endog**2
+        self.k_states2 = self.model.k_states**2
+        self.k_posdef2 = self.model.k_posdef**2
+        self.k_endogstates = self.model.k_endog * self.model.k_states
+        self.k_statesposdef = self.model.k_states * self.model.k_posdef
+
+        # #### Allocate arrays for calculations
+
+        # Arrays for Kalman smoother output
+        dim2[0] = self.k_states; dim2[1] = self.model.nobs+1;
+        self.scaled_smoothed_estimator = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        dim3[0] = self.k_states; dim3[1] = self.k_states; dim3[2] = self.model.nobs+1;
+        self.scaled_smoothed_estimator_cov = np.PyArray_ZEROS(3, dim3, {{typenum}}, FORTRAN)
+        dim2[0] = self.k_endog; dim2[1] = self.model.nobs;
+        self.smoothing_error = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        dim2[0] = self.k_states; dim2[1] = self.model.nobs;
+        self.smoothed_state = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        dim3[0] = self.k_states; dim3[1] = self.k_states; dim3[2] = self.model.nobs;
+        self.smoothed_state_cov = np.PyArray_ZEROS(3, dim3, {{typenum}}, FORTRAN)
+        dim2[0] = self.k_endog; dim2[1] = self.model.nobs;
+        self.smoothed_measurement_disturbance = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        dim2[0] = self.k_posdef; dim2[1] = self.model.nobs;
+        self.smoothed_state_disturbance = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        dim3[0] = self.k_endog; dim3[1] = self.k_endog; dim3[2] = self.model.nobs;
+        self.smoothed_measurement_disturbance_cov = np.PyArray_ZEROS(3, dim3, {{typenum}}, FORTRAN)
+        dim3[0] = self.k_posdef; dim3[1] = self.k_posdef; dim3[2] = self.model.nobs;
+        self.smoothed_state_disturbance_cov = np.PyArray_ZEROS(3, dim3, {{typenum}}, FORTRAN)
+
+        # #### Arrays for temporary calculations
+        # *Note*: in math notation below, a $\\#$ will represent a generic
+        # temporary array, and a $\\#_i$ will represent a named temporary array.
+
+        # # $L_t$ $(m \times m)$
+        dim2[0] = self.k_states; dim2[1] = self.k_states;
+        self.tmpL = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self._tmpL = &self.tmpL[0, 0]
+
+        # # Holds arrays of dimension $(m \times m)$ and $(m \times r)$
+        dim2[0] = self.k_states; dim2[1] = self.k_states;
+        self.tmp0 = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self._tmp0 = &self.tmp0[0, 0]
+
+        # # Holds arrays of dimension $(m \times p)$
+        dim2[0] = self.k_states; dim2[1] = self.k_endog;
+        self.tmp00 = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self._tmp00 = &self.tmp00[0, 0]
+
+        # # Holds arrays of dimension $(m \times p)$
+        dim2[0] = self.k_states; dim2[1] = self.k_endog;
+        self.tmp000 = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self._tmp000 = &self.tmp000[0, 0]
+
+        # Arrays for missing data
+        dim1[0] = self.k_endog * self.k_states;
+        self.selected_design = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+        dim1[0] = self.k_endog2;
+        self.selected_obs_cov = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+
+        # Initialize time
+        self.t = 0
+
+    cpdef seek(self, unsigned int t):
+        """
+        seek(self, t)
+
+        Change the time-state of the smoother
+
+        Is usually called to reset the smoother to the end of the dataset
+        (which is the beginning of the smoother's iterations).
+        """
+        if t >= self.model.nobs:
+            raise IndexError("Observation index out of range")
+        self.t = t
+
+    def __iter__(self):
+        return self
+
+    def __call__(self):
+        """
+        Iterate the smoother across the entire set of observations.
+        """
+        cdef int i
+
+        self.seek(self.model.nobs-1)
+        for i in range(self.model.nobs-1,-1,-1):
+            next(self)
+
+    def __next__(self):
+        """
+        Perform an iteration of the Kalman smoother
+        """
+
+        # Get time subscript, and stop the iterator if at the end
+        if not self.t >= 0:
+            raise StopIteration
+
+        # Initialize pointers to current-iteration objects
+        self.initialize_statespace_object_pointers()
+        self.initialize_filter_object_pointers()
+        self.initialize_smoother_object_pointers()
+
+        # Initialize pointers to appropriate Kalman smoothing functions
+        self.initialize_function_pointers()
+
+        # Convert base arrays into "selected" arrays  
+        # - State covariance matrix? $Q_t \to R_t Q_t R_t`$
+        # - Missing values: $y_t \to W_t y_t$, $Z_t \to W_t Z_t$, $H_t \to W_t H_t$
+        self.select_missing()
+
+        # Scaled smoothed estimator and covariance matrix, smoothing error  
+        # $L_t, r_{t-1}, N_{t-1}, u_t$
+        self.smooth_estimators(self)
+
+        # Smoothed state and covariance matrix  
+        # $\hat \alpha_t, V_t$
+        if self.smoother_output & (SMOOTHER_STATE | SMOOTHER_STATE_COV):
+            self.smooth_state(self)
+
+        # Smoothed disturbances  
+        # $\hat \eta_t, \hat \varepsilon_t, Var(\eta_t | Y_n), Var(\varepsilon_t | Y_n)$
+        if self.smoother_output & SMOOTHER_DISTURBANCE:
+            self.smooth_disturbances(self)
+
+        # Advance the smoother
+        self.t -= 1
+
+    cdef void initialize_statespace_object_pointers(self) except *:
+        cdef:
+            int t = self.t
+        # Indices for possibly time-varying arrays
+        cdef:
+            int design_t = 0
+            int obs_cov_t = 0
+            int transition_t = 0
+            int selection_t = 0
+            int state_cov_t = 0
+
+        # Get indices for possibly time-varying arrays
+        if not self.model.time_invariant:
+            if self.model.design.shape[2] > 1:             design_t = t
+            if self.model.obs_cov.shape[2] > 1:            obs_cov_t = t
+            if self.model.transition.shape[2] > 1:         transition_t = t
+            if self.model.selection.shape[2] > 1:          selection_t = t
+            if self.model.state_cov.shape[2] > 1:          state_cov_t = t
+
+        # Initialize object-level pointers to statespace arrays
+        self._design = &self.model.design[0, 0, design_t]
+        self._obs_cov = &self.model.obs_cov[0, 0, obs_cov_t]
+        self._transition = &self.model.transition[0, 0, transition_t]
+        self._selection = &self.model.selection[0, 0, selection_t]
+        self._state_cov = &self.model.state_cov[0, 0, state_cov_t]
+
+    cdef void initialize_filter_object_pointers(self):
+        cdef:
+            int t = self.t
+            int inc = 1
+
+        # Initialize object-level pointers to output arrays
+        self._predicted_state = &self.kfilter.predicted_state[0, t]
+        self._predicted_state_cov = &self.kfilter.predicted_state_cov[0, 0, t]
+        self._kalman_gain = &self.kfilter.kalman_gain[0, 0, t]
+
+        # Initialize object-level pointers to named temporary arrays
+        self._tmp1 = &self.kfilter.tmp1[0, 0, t]
+        self._tmp2 = &self.kfilter.tmp2[0, t]
+        self._tmp3 = &self.kfilter.tmp3[0, 0, t]
+        self._tmp4 = &self.kfilter.tmp4[0, 0, t]
+
+    cdef void initialize_smoother_object_pointers(self) except *:
+        cdef:
+            int t = self.t
+            int inc = 1
+
+        # Initialize object-level pointers to output arrays
+        self._input_scaled_smoothed_estimator = &self.scaled_smoothed_estimator[0, t+1]
+        self._input_scaled_smoothed_estimator_cov = &self.scaled_smoothed_estimator_cov[0, 0, t+1]
+
+        self._scaled_smoothed_estimator = &self.scaled_smoothed_estimator[0, t]
+        self._scaled_smoothed_estimator_cov = &self.scaled_smoothed_estimator_cov[0, 0, t]
+        self._smoothing_error = &self.smoothing_error[0, t]
+        self._smoothed_state = &self.smoothed_state[0, t]
+        self._smoothed_state_cov = &self.smoothed_state_cov[0, 0, t]
+        self._smoothed_measurement_disturbance = &self.smoothed_measurement_disturbance[0, t]
+        self._smoothed_state_disturbance = &self.smoothed_state_disturbance[0, t]
+        self._smoothed_measurement_disturbance_cov = &self.smoothed_measurement_disturbance_cov[0, 0, t]
+        self._smoothed_state_disturbance_cov = &self.smoothed_state_disturbance_cov[0, 0, t]
+
+    cdef void initialize_function_pointers(self) except *:
+        if self.kfilter.filter_method & FILTER_CONVENTIONAL:
+
+            self.smooth_estimators = {{prefix}}smoothed_estimators_conventional
+            self.smooth_state = {{prefix}}smoothed_state_conventional
+            self.smooth_disturbances = {{prefix}}smoothed_disturbances_conventional
+
+        else:
+            raise NotImplementedError("Smoother not implemented for provided Kalman filter method")
+
+    cdef void select_missing(self):
+        # ### Perform missing selections
+        # In Durbin and Koopman (2012), these are represented as matrix
+        # multiplications, i.e. $Z_t^* = W_t Z_t$ where $W_t$ is a row
+        # selection matrix (it contains a subset of rows of the identity
+        # matrix).
+        #
+        # It's more efficient, though, to just copy over the data directly,
+        # which is what is done here. Note that the `selected_*` arrays are
+        # defined as single-dimensional, so the assignment indexes below are
+        # set such that the arrays can be interpreted by the BLAS and LAPACK
+        # functions as two-dimensional, column-major arrays.
+        #
+        # In the case that all data is missing (e.g. this is what happens in
+        # forecasting), we actually set don't change the dimension, but we set
+        # the design matrix to the zeros array.
+        if self.model.nmissing[self.t] == self.model.k_endog:
+            self._select_missing_entire_obs()
+        elif self.model.nmissing[self.t] > 0:
+            self._select_missing_partial_obs()
+        else:
+            # Reset dimensions
+            self.k_endog = self.model.k_endog
+            self.k_endog2 = self.k_endog**2
+            self.k_endogstates = self.k_endog * self.k_states
+
+    cdef void _select_missing_entire_obs(self):
+        cdef:
+            int i, j
+        # Dimensions are the same as usual (have to reset in case previous
+        # obs was partially missing case)
+        # TODO I think I can remove this (and in filter too)
+        self.k_endog = self.model.k_endog
+        self.k_endog2 = self.k_endog**2
+        self.k_endogstates = self.k_endog * self.k_states
+
+        # Design matrix is set to zeros
+        for i in range(self.model.k_states):
+            for j in range(self.model.k_endog):
+                self.selected_design[j + i*self.model.k_endog] = 0.0
+        self._design = &self.selected_design[0]
+
+        # Change the smoothing functions to take into account a missing observation
+        self.smooth_estimators = {{prefix}}smoothed_estimators_missing_conventional
+        # (no need to change the state smoothing recursion)
+        # self.smooth_state = {{prefix}}smoothed_state_missing_conventional
+        self.smooth_disturbances = {{prefix}}smoothed_disturbances_missing_conventional
+
+    cdef void _select_missing_partial_obs(self):
+        cdef:
+            int i, j, k, l
+            int inc = 1
+            int design_t = 0
+            int obs_cov_t = 0
+
+        # Set dimensions
+        self.k_endog = self.model.k_endog - self.model.nmissing[self.t]
+        self.k_endog2 = self.k_endog**2
+        self.k_endogstates = self.k_endog * self.k_states
+
+        if self.model.design.shape[2] > 1: design_t = self.t
+        if self.model.obs_cov.shape[2] > 1: obs_cov_t = self.t
+
+        k = 0
+        for i in range(self.model.k_endog):
+            if not self.model.missing[i, self.t]:
+                # i is rows
+                # k is rows
+                blas.{{prefix}}copy(&self.model.k_states,
+                      &self.model.design[i, 0, design_t], &self.model.k_endog,
+                      &self.selected_design[k], &self.k_endog)
+
+                # i, k is columns
+                # j, l is rows
+                l = 0
+                for j in range(self.model.k_endog):
+                    if not self.model.missing[j, self.t]:
+                        self.selected_obs_cov[l + k*self.k_endog] = self.model.obs_cov[j, i, obs_cov_t]
+                        l += 1
+                k += 1
+        self._design = &self.selected_design[0]
+        self._obs_cov = &self.selected_obs_cov[0]
+
+{{endfor}}

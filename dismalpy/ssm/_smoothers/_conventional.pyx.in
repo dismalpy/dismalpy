@@ -1,0 +1,279 @@
+#cython: boundscheck=False
+#cython: wraparound=False
+#cython: cdivision=False
+"""
+State Space Models
+
+Author: Chad Fulton  
+License: Simplified-BSD
+"""
+
+{{py:
+
+TYPES = {
+    "s": ("np.float32_t", "np.float32", "np.NPY_FLOAT32"),
+    "d": ("np.float64_t", "float", "np.NPY_FLOAT64"),
+    "c": ("np.complex64_t", "np.complex64", "np.NPY_COMPLEX64"),
+    "z": ("np.complex128_t", "complex", "np.NPY_COMPLEX128"),
+}
+
+}}
+
+# Typical imports
+cimport numpy as np
+from dismalpy.src.math cimport *
+cimport dismalpy.src.blas as blas
+
+from dismalpy.ssm._kalman_smoother cimport SMOOTHER_STATE, SMOOTHER_STATE_COV
+
+{{for prefix, types in TYPES.items()}}
+{{py:cython_type, dtype, typenum = types}}
+{{py:
+combined_prefix = prefix
+combined_cython_type = cython_type
+if prefix == 'c':
+    combined_prefix = 'z'
+    combined_cython_type = 'np.complex128_t'
+if prefix == 's':
+    combined_prefix = 'd'
+    combined_cython_type = 'np.float64_t'
+}}
+
+# ### Missing Observation Conventional Kalman smoother
+#
+# See Durbin and Koopman (2012) Chapter 4.10
+#
+# Here k_endog is the same as usual, but the design matrix and observation
+# covariance matrix are enforced to be zero matrices.
+
+cdef int {{prefix}}smoothed_estimators_missing_conventional({{prefix}}KalmanSmoother smoother):
+    cdef:
+        int inc = 1
+        {{cython_type}} alpha = 1.0
+        {{cython_type}} beta = 0.0
+        {{cython_type}} gamma = -1.0
+
+    # Scaled smoothed estimator  
+    # $r_{t-1} = T_t' r_t$  
+    # $(m \times 1) = (m \times m) (m \times 1)$
+    # Note: save $r_{t-1}$ as scaled_smoothed_estimator[t] rather than
+    # as scaled_smoothed_estimator[t-1] because we actually need to store
+    # T+1 of them (r_{T-1} to r_{-1} -> r_T to r_0)
+    blas.{{prefix}}gemv("T", &smoother.k_states, &smoother.k_states,
+              &alpha, smoother._transition, &smoother.k_states,
+                      smoother._input_scaled_smoothed_estimator, &inc,
+              &alpha, smoother._scaled_smoothed_estimator, &inc)
+
+    # Scaled smoothed estimator covariance matrix  
+    # $N_{t-1} = T_t' N_t T_t$  
+    # $(m \times m) = (m \times m) (m \times m) (m \times m)$  
+    # Note: save $N_{t-1}$ as scaled_smoothed_estimator_cov[t] rather
+    # than as scaled_smoothed_estimator_cov[t-1] because we actually
+    # need to store T+1 of them (N_{T-1} to N_{-1} -> N_T to N_0)
+    blas.{{prefix}}gemm("N", "N", &smoother.k_states, &smoother.k_states, &smoother.k_states,
+              &alpha, smoother._input_scaled_smoothed_estimator_cov, &smoother.k_states,
+                      smoother._transition, &smoother.k_states,
+              &beta, smoother._tmp0, &smoother.k_states)
+    blas.{{prefix}}gemm("T", "N", &smoother.k_states, &smoother.k_states, &smoother.k_states,
+              &alpha, smoother._transition, &smoother.k_states,
+                      smoother._tmp0, &smoother.k_states,
+              &beta, smoother._scaled_smoothed_estimator_cov, &smoother.k_states)
+
+    # Smoothing error  
+    # It is undefined here, since F_t^{-1} is nan
+    for i in range(smoother.k_endog):
+        smoother._smoothing_error[i] = 0
+
+cdef int {{prefix}}smoothed_disturbances_missing_conventional({{prefix}}KalmanSmoother smoother):
+    cdef:
+        int inc = 1
+    # Just return the unconditional distribution for the disturbances
+    # corresponding to a missing observation
+
+    # TODO this is not explicitly addressed in Durbin and Koopman Chapter 4
+    # or in Koopman (1993) - need to find a source for if this is correct
+    
+    # Smoothed measurement and state disturbances have unconditional expected
+    # value of 0, so no need to do anything
+
+    # Smoothed measurement and state disturbances have unconditional covariance
+    # matrix of $H_t, Q_t$, respectively
+    blas.{{prefix}}copy(&smoother.k_endog2, smoother._obs_cov, &inc, smoother._smoothed_state_disturbance_cov, &inc)
+    blas.{{prefix}}copy(&smoother.k_posdef2, smoother._state_cov, &inc, smoother._smoothed_state_disturbance_cov, &inc)
+
+
+# ### Conventional Kalman smoother
+#
+# The following are the above routines as defined in the conventional Kalman
+# smoother.
+#
+# See Durbin and Koopman (2012) Chapter 4
+
+cdef int {{prefix}}smoothed_estimators_conventional({{prefix}}KalmanSmoother smoother):
+    cdef:
+        int inc = 1
+        {{cython_type}} alpha = 1.0
+        {{cython_type}} beta = 0.0
+        {{cython_type}} gamma = -1.0
+
+    # Smoothing error  
+    # $u_t = \\#_2 - K_t' r_t$  
+    # $(p \times 1) = (p \times 1) - (p \times m) (m \times 1)$  
+    blas.{{prefix}}copy(&smoother.k_endog, smoother._tmp2, &inc, smoother._smoothing_error, &inc)
+    blas.{{prefix}}gemv("T", &smoother.k_states, &smoother.k_endog,
+              &gamma, smoother._kalman_gain, &smoother.k_states,
+                      smoother._input_scaled_smoothed_estimator, &inc,
+              &alpha, smoother._smoothing_error, &inc)
+
+    # $L_t = (T_t - K_t Z_t)$  
+    # $(m \times m) = (m \times m) + (m \times p) (p \times m)$
+    blas.{{prefix}}copy(&smoother.k_states2, smoother._transition, &inc, smoother._tmpL, &inc)
+    blas.{{prefix}}gemm("N", "N", &smoother.k_states, &smoother.k_states, &smoother.k_endog,
+              &gamma, smoother._kalman_gain, &smoother.k_states,
+                      smoother._design, &smoother.k_endog,
+              &alpha, smoother._tmpL, &smoother.k_states)
+
+    # Scaled smoothed estimator  
+    # $r_{t-1} = Z_t' \\#_2 + L_t' r_t$  
+    # $(m \times 1) = (m \times p) (p \times 1) + (m \times m) (m \times 1)$
+    # Note: save $r_{t-1}$ as scaled_smoothed_estimator[t] rather than
+    # as scaled_smoothed_estimator[t-1] because we actually need to store
+    # T+1 of them (r_{T-1} to r_{-1} -> r_T to r_0)
+    blas.{{prefix}}gemv("T", &smoother.k_states, &smoother.k_states,
+              &alpha, smoother._tmpL, &smoother.k_states,
+                      smoother._input_scaled_smoothed_estimator, &inc,
+              &beta, smoother._scaled_smoothed_estimator, &inc)
+
+    blas.{{prefix}}gemv("T", &smoother.k_endog, &smoother.k_states,
+              &alpha, smoother._design, &smoother.k_endog,
+                      smoother._tmp2, &inc,
+              &alpha, smoother._scaled_smoothed_estimator, &inc)
+
+    # Scaled smoothed estimator covariance matrix  
+    # $N_{t-1} = Z_t' \\#_3 + L_t' N_t L_t$  
+    # $(m \times m) = (m \times p) (p \times m) + (m \times m) (m \times m) (m \times m)$  
+    # Note: save $N_{t-1}$ as scaled_smoothed_estimator_cov[t] rather
+    # than as scaled_smoothed_estimator_cov[t-1] because we actually
+    # need to store T+1 of them (N_{T-1} to N_{-1} -> N_T to N_0)
+    blas.{{prefix}}gemm("N", "N", &smoother.k_states, &smoother.k_states, &smoother.k_states,
+              &alpha, smoother._input_scaled_smoothed_estimator_cov, &smoother.k_states,
+                      smoother._tmpL, &smoother.k_states,
+              &beta, smoother._tmp0, &smoother.k_states)
+    blas.{{prefix}}gemm("T", "N", &smoother.k_states, &smoother.k_states, &smoother.k_states,
+              &alpha, smoother._tmpL, &smoother.k_states,
+                      smoother._tmp0, &smoother.k_states,
+              &beta, smoother._scaled_smoothed_estimator_cov, &smoother.k_states)
+    blas.{{prefix}}gemm("T", "N", &smoother.k_states, &smoother.k_states, &smoother.k_endog,
+              &alpha, smoother._design, &smoother.k_endog,
+                      smoother._tmp3, &smoother.k_endog,
+              &alpha, smoother._scaled_smoothed_estimator_cov, &smoother.k_states)
+
+cdef int {{prefix}}smoothed_state_conventional({{prefix}}KalmanSmoother smoother):
+    cdef int i, j
+    cdef:
+        int inc = 1
+        {{cython_type}} alpha = 1.0
+        {{cython_type}} beta = 0.0
+        {{cython_type}} gamma = -1.0
+
+    # Smoothed state
+    if smoother.smoother_output & SMOOTHER_STATE:
+        # $\hat \alpha_t = a_t + P_t r_{t-1}$  
+        # $(m \times 1) = (m \times 1) + (m \times m) (m \times 1)$  
+        blas.{{prefix}}copy(&smoother.k_states, smoother._predicted_state, &inc, smoother._smoothed_state, &inc)
+        blas.{{prefix}}gemv("N", &smoother.k_states, &smoother.k_states,
+                  &alpha, smoother._predicted_state_cov, &smoother.k_states,
+                          smoother._scaled_smoothed_estimator, &inc,
+                  &alpha, smoother._smoothed_state, &inc)
+
+    # Smoothed state covariance
+    if smoother.smoother_output & SMOOTHER_STATE_COV:
+        # $V_t = P_t [I - N_{t-1} P_t]$  
+        # $(m \times m) = (m \times m) [(m \times m) - (m \times m) (m \times m)]$  
+        blas.{{prefix}}gemm("N", "N", &smoother.k_states, &smoother.k_states, &smoother.k_states,
+              &gamma, smoother._scaled_smoothed_estimator_cov, &smoother.k_states,
+                      smoother._predicted_state_cov, &smoother.k_states,
+              &beta, smoother._tmp0, &smoother.k_states)
+        for i in range(smoother.k_states):
+            smoother.tmp0[i,i] = 1 + smoother.tmp0[i,i]
+        blas.{{prefix}}gemm("N", "N", &smoother.k_states, &smoother.k_states, &smoother.k_states,
+              &alpha, smoother._predicted_state_cov, &smoother.k_states,
+                      smoother._tmp0, &smoother.k_states,
+              &beta, smoother._smoothed_state_cov, &smoother.k_states)
+
+cdef int {{prefix}}smoothed_disturbances_conventional({{prefix}}KalmanSmoother smoother):
+    cdef int i, j
+    cdef:
+        int inc = 1
+        {{cython_type}} alpha = 1.0
+        {{cython_type}} beta = 0.0
+        {{cython_type}} gamma = -1.0
+
+    # Temporary arrays
+
+    # $\\#_0 = R_t Q_t$  
+    # $(m \times r) = (m \times r) (r \times r)$
+    blas.{{prefix}}gemm("N", "N", &smoother.k_states, &smoother.k_posdef, &smoother.k_posdef,
+              &alpha, smoother._selection, &smoother.k_states,
+                      smoother._state_cov, &smoother.k_posdef,
+              &beta, smoother._tmp0, &smoother.k_states)
+
+    # $\\#_00 = K_t H_t$  
+    # $(m \times p) = (m \times p) (p \times p)$  
+    blas.{{prefix}}gemm("N", "N", &smoother.k_states, &smoother.k_endog, &smoother.k_endog,
+              &alpha, smoother._kalman_gain, &smoother.k_states,
+                      smoother._obs_cov, &smoother.k_endog,
+              &beta, smoother._tmp00, &smoother.k_states)
+
+    # Smoothed measurement disturbance  
+    # $\hat \varepsilon_t = H_t u_t$  
+    # $(p \times 1) = (p \times p) (p \times 1)$  
+    blas.{{prefix}}gemv("N", &smoother.k_endog, &smoother.k_endog,
+                  &alpha, smoother._obs_cov, &smoother.k_endog,
+                          smoother._smoothing_error, &inc,
+                  &beta, smoother._smoothed_measurement_disturbance, &inc)
+
+    # Smoothed state disturbance  
+    # $\hat \eta_t = \\#_0' r_t$  
+    # $(r \times 1) = (r \times m) (m \times 1)$  
+    blas.{{prefix}}gemv("T", &smoother.k_states, &smoother.k_posdef,
+                  &alpha, smoother._tmp0, &smoother.k_states,
+                          smoother._input_scaled_smoothed_estimator, &inc,
+                  &beta, smoother._smoothed_state_disturbance, &inc)
+
+    # Smoothed measurement disturbance covariance matrix  
+    # $Var(\varepsilon_t | Y_n) = H_t - H_t \\#_4 - \\#_00' N_t \\#_00$  
+    # $(p \times p) = (p \times p) - (p \times p) (p \times p) - (p \times m) (m \times m) (m \times p)$  
+    blas.{{prefix}}gemm("N", "N", &smoother.k_endog, &smoother.k_endog, &smoother.k_endog,
+              &gamma, smoother._obs_cov, &smoother.k_endog,
+                      smoother._tmp4, &smoother.k_endog,
+              &beta, smoother._smoothed_measurement_disturbance_cov, &smoother.k_endog)
+
+    blas.{{prefix}}gemm("N", "N", &smoother.k_states, &smoother.k_endog, &smoother.k_states,
+              &alpha, smoother._input_scaled_smoothed_estimator_cov, &smoother.k_states,
+                      smoother._tmp00, &smoother.k_states,
+              &beta, smoother._tmp000, &smoother.k_states)
+
+    blas.{{prefix}}gemm("T", "N", &smoother.k_endog, &smoother.k_endog, &smoother.k_states,
+              &gamma, smoother._tmp00, &smoother.k_states,
+                      smoother._tmp000, &smoother.k_states,
+              &alpha, smoother._smoothed_measurement_disturbance_cov, &smoother.k_endog)
+
+    blas.{{prefix}}axpy(&smoother.k_endog2, &alpha,
+              smoother._obs_cov, &inc,
+              smoother._smoothed_measurement_disturbance_cov, &inc)
+    
+    # Smoothed state disturbance covariance matrix  
+    # $Var(\eta_t | Y_n) = Q_t - \\#_0' N_t \\#_0$  
+    # $(r \times r) = (r \times r) - (r \times m) (m \times m) (m \times r)$  
+    blas.{{prefix}}gemm("N", "N", &smoother.k_states, &smoother.k_posdef, &smoother.k_states,
+              &alpha, smoother._input_scaled_smoothed_estimator_cov, &smoother.k_states,
+                      smoother._tmp0, &smoother.k_states,
+              &beta, smoother._tmpL, &smoother.k_states)
+    blas.{{prefix}}copy(&smoother.k_posdef2, smoother._state_cov, &inc, smoother._smoothed_state_disturbance_cov, &inc)
+    blas.{{prefix}}gemm("T", "N", &smoother.k_posdef, &smoother.k_posdef, &smoother.k_states,
+              &gamma, smoother._tmp0, &smoother.k_states,
+                      smoother._tmpL, &smoother.k_states,
+              &alpha, smoother._smoothed_state_disturbance_cov, &smoother.k_posdef)
+
+{{endfor}}
