@@ -880,12 +880,15 @@ cdef class {{prefix}}KalmanFilter(object):
             int forecast_t = self.t
             int filtered_t = self.t
             int predicted_t = self.t
+            int gain_t = self.t
         if self.conserve_memory & MEMORY_NO_FORECAST > 0:
             forecast_t = 1
         if self.conserve_memory & MEMORY_NO_FILTERED > 0:
             filtered_t = 1
         if self.conserve_memory & MEMORY_NO_PREDICTED > 0:
             predicted_t = 1
+        if self.conserve_memory & MEMORY_NO_GAIN > 0:
+            gain_t = 1
 
         #  and self.model.nmissing[self.t] == 0
         if self.time_invariant and not self.converged:
@@ -919,6 +922,8 @@ cdef class {{prefix}}KalmanFilter(object):
                 blas.{{prefix}}copy(&self.k_states2, &self.predicted_state_cov[0, 0, predicted_t], &inc, self._converged_predicted_state_cov, &inc)
                 # $|F_t|$
                 self.converged_determinant = self.determinant
+                # $K_t$
+                blas.{{prefix}}copy(&self.k_endogstates, &self.kalman_gain[0, 0, gain_t], &inc, self._converged_kalman_gain, &inc)
         elif self.period_converged > 0:
             # This is here so that the filter's state is reset to converged = 1
             # even if it was set to converged = 0 for the current iteration
