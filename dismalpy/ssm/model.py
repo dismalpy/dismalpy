@@ -412,6 +412,8 @@ class Model(Representation, tsbase.TimeSeriesModel):
         Since Model is a base class, this method should be overridden by
         subclasses to perform actual updating steps.
         """
+        params = np.array(params)
+
         if not transformed:
             params = self.transform_params(params)
         if set_params:
