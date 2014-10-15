@@ -633,7 +633,7 @@ class Representation(object):
             tolerance = self.tolerance
 
         # Determine which filter to call
-        prefix = self.prefix
+        prefix = kwargs['prefix'] if 'prefix' in kwargs else self.prefix
         dtype = prefix_dtype_map[prefix]
 
         # If the dtype-specific representation matrices do not exist, create
@@ -745,14 +745,14 @@ class Representation(object):
 
     def _initialize_smoother(self, smoother_output, *args, **kwargs):
         # Determine which smoother to call
-        prefix = self.prefix
+        prefix = kwargs['prefix'] if 'prefix' in kwargs else self.prefix
         dtype = prefix_dtype_map[prefix]
 
         # Create or re-initialize the required filter
         # (note that this will also create or re-initialize the underlying
         # statespace representation matrices and Cython objects)
-        kwargs.setdefault('recreate', True)
-        self._initialize_filter(*args, **kwargs)
+        # kwargs.setdefault('recreate', True)
+        # self._initialize_filter(*args, **kwargs)
 
         # If the dtype-specific _kalman_smoother does not exist, create it
         if prefix not in self._kalman_smoothers:
@@ -842,8 +842,64 @@ class Representation(object):
         kwargs['return_loglike'] = True
         return np.sum(self.filter(*args, **kwargs)[loglikelihood_burn:])
 
-    def smooth(self, smoother_output=SMOOTHER_ALL, return_smoothed=False,
-               *args, **kwargs):
+    def smooth_state(self, refilter=False, *args, **kwargs):
+        """
+        Perform state smoothing.
+
+        Parameters
+        ----------
+        refilter : bool, optional
+            Whether or not to perform filtering prior to smoothing. Default is
+            False, unless filtering objects are not available.
+
+        Returns
+        -------
+        smoothed_state : array
+        smoothed_state_cov : array
+        """
+        prefix = self.prefix
+
+        if refilter or prefix not in self._kalman_filters:
+            kwargs['prefix'] = prefix
+            kwargs['return_loglike'] = True
+            self.filter(*args, **kwargs)
+
+        results = self._smooth(SMOOTHER_STATE | SMOOTHER_STATE_COV,
+                               *args, **kwargs)
+
+        return results[3:5]
+
+    def smooth_disturbance(self, refilter=False, *args, **kwargs):
+        """
+        Perform measurement and state disturbance smoothing.
+
+        Parameters
+        ----------
+        refilter : bool, optional
+            Whether or not to perform filtering prior to smoothing. Default is
+            False, unless filtering objects are not available.
+
+        Returns
+        -------
+        smoothed_measurement_disturbance : array
+        smoothed_state_disturbance : array
+        smoothed_measurement_disturbance_cov : array
+        smoothed_state_disturbance_cov : array
+        """
+        prefix = self.prefix
+
+        if refilter or prefix not in self._kalman_filters:
+            kwargs['prefix'] = prefix
+            kwargs['return_loglike'] = True
+            self.filter(*args, **kwargs)
+
+        results = self._smooth(SMOOTHER_DISTURBANCE | SMOOTHER_DISTURBANCE_COV,
+                               *args, **kwargs)
+
+        return results[5:9]
+
+    def smooth(self, smoother_output=SMOOTHER_ALL, results_class=None,
+               refilter=False, *args, **kwargs):
         """
         Apply the Kalman smoother to the statespace model.
 
@@ -852,50 +908,71 @@ class Representation(object):
         smoother_output : int, optional
             Determines which Kalman smoother output calculate. Default is all
             (including state, disturbances, and all covariances).
-        return_smoothed : bool, optional
-            Whether to only return the smoother output rather than a full
-            `FilterResults` object. Default is False.
-        
-        Notes
-        -----
-        Using this method will always run the filter on the current
-        representation to get a new `FilterResults` object, and then run the
-        smoother based on that filter output. If you already have a
-        `FilterResults` object and so do not need to re-run the filter, use
-        that object's `FilterResults.smooth` method instead.
+        results_class : class
+            The class instantiated and returned as a result of the filtering;
+            smoothing is called on the resultant object. Default is
+            FilterResults.
+        refilter : bool, optional
+            Whether or not to perform filtering prior to smoothing. Default is
+            False, unless filtering objects are not available.
+        Returns
+        -------
+        FilterResults object
         """
-        if not return_smoothed and kwargs.get('return_loglike', False):
-            raise ValueError('Smoothing with full output cannot be called with'
-                             ' `return_loglike=True`')
-        if return_smoothed:
-            # Run the filter (do not return full results object)
-            kwargs['return_loglike'] = True
-            loglike = self.filter(*args, **kwargs)
+        if results_class is None:
+            results_class = self.filter_results_class
 
-            self._smooth(smoother_output)
-        else:
-            results = self.filter(*args, **kwargs)
-            results.smooth(smoother_output)
+        prefix = self.prefix
+
+        if refilter or prefix not in self._kalman_filters:
+            kwargs['prefix'] = prefix
+            kwargs['return_loglike'] = True
+            self.filter(*args, **kwargs)
+
+        results = results_class(self, self._kalman_filter)
+        results.smooth(smoother_output)
 
         return results
 
-    def _smooth(self, smoother_output):
+    def _smooth(self, smoother_output, *args, **kwargs):
         # Initialize the smoother
-        self._initialize_smoother(smoother_output)
+        prefix, dtype = self._initialize_smoother(smoother_output,
+                                                  *args, **kwargs)
+
         # Run the smoother
-        self._kalman_smoother()
-        # Return all the smoothing output (even if it wasn't calculated)
-        return (
-            np.array(self._kalman_smoother.scaled_smoothed_estimator, copy=True),
-            np.array(self._kalman_smoother.scaled_smoothed_estimator_cov, copy=True),
-            np.array(self._kalman_smoother.smoothing_error, copy=True),
-            np.array(self._kalman_smoother.smoothed_state, copy=True),
-            np.array(self._kalman_smoother.smoothed_state_cov, copy=True),
-            np.array(self._kalman_smoother.smoothed_measurement_disturbance, copy=True),
-            np.array(self._kalman_smoother.smoothed_state_disturbance, copy=True),
-            np.array(self._kalman_smoother.smoothed_measurement_disturbance_cov, copy=True),
-            np.array(self._kalman_smoother.smoothed_state_disturbance_cov, copy=True)
+        smoother = self._kalman_smoothers[prefix]
+        smoother()
+
+        # Return smoothing output
+        results = (
+            np.array(smoother.scaled_smoothed_estimator, copy=True),
+            np.array(smoother.scaled_smoothed_estimator_cov, copy=True),
+            np.array(smoother.smoothing_error, copy=True),
         )
+        if smoother_output & SMOOTHER_STATE:
+            results += (np.array(smoother.smoothed_state, copy=True),)
+        else:
+            results += (None,)
+        if smoother_output & SMOOTHER_STATE_COV:
+            results += (np.array(smoother.smoothed_state_cov, copy=True),)
+        else:
+            results += (None,)
+        if smoother_output & SMOOTHER_DISTURBANCE:
+            results += (
+                np.array(smoother.smoothed_measurement_disturbance, copy=True),
+                np.array(smoother.smoothed_state_disturbance, copy=True),
+            )
+        else:
+            results += (None, None)
+        if smoother_output & SMOOTHER_DISTURBANCE_COV:
+            results += (
+                np.array(smoother.smoothed_measurement_disturbance_cov, copy=True),
+                np.array(smoother.smoothed_state_disturbance_cov, copy=True),
+            )
+        else:
+            results += (None, None)
+
+        return results
 
 
 class FilterResults(object):
