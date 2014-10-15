@@ -1883,7 +1883,10 @@ class SARIMAXResults(StatespaceResults):
                 order_ma = self.k_ma
             else:
                 order_ma = tuple(self.polynomial_ma.nonzero()[0][1:])
-            order = '(%s, %d, %s)' % (order_ar, self.k_diff, order_ma)
+            # If there is simple differencing, then that is reflected in the
+            # dependent variable name
+            k_diff = 0 if self.simple_differencing else self.k_diff
+            order = '(%s, %d, %s)' % (order_ar, k_diff, order_ma)
         # See if we have an SARIMA component
         seasonal_order = ''
         if self.k_seasonal_ar + self.k_seasonal_diff + self.k_seasonal_ma > 0:
@@ -1895,8 +1898,11 @@ class SARIMAXResults(StatespaceResults):
                 order_seasonal_ma = int(self.k_seasonal_ma / self.k_seasons)
             else:
                 order_seasonal_ma = tuple(self.polynomial_seasonal_ma.nonzero()[0][1:])
+            # If there is simple differencing, then that is reflected in the
+            # dependent variable name
+            k_seasonal_diff = 0 if self.simple_differencing else self.k_seasonal_diff
             seasonal_order = ('(%s, %d, %s, %d)' %
-                              (str(order_seasonal_ar), self.k_seasonal_diff,
+                              (str(order_seasonal_ar), k_seasonal_diff,
                                str(order_seasonal_ma), self.k_seasons))
             if not order == '':
                 order += 'x'
