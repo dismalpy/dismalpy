@@ -308,7 +308,7 @@ cdef class {{prefix}}KalmanFilter(object):
     # cdef {{cython_type}} * _forecast_error_work
 
     # cdef {{cython_type}} * _tmp0
-    # cdef {{cython_type}} * _tmp0
+    # cdef {{cython_type}} * _tmp00
     # cdef {{cython_type}} * _tmp1
     # cdef {{cython_type}} * _tmp2
     # cdef {{cython_type}} * _tmp3
