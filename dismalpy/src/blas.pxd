@@ -112,6 +112,15 @@ ctypedef int sscal_t(
     int *incx             # Increment between elements of x.
 ) nogil
 
+ctypedef int sswap_t(
+    # Compute y <-> x
+    int *n,               # Number of vector elements to be swapped.
+    np.float32_t *x,      # Vector x
+    int *incx,            # The increment between elements of x (usually 1)
+    np.float32_t *y,      # Vector y
+    int *incy             # The increment between elements of y (usually 1)
+) nogil
+
 ctypedef int saxpy_t(
     # Compute y := alpha*x + y
     int *n,               # Columns of o(A) / min(len(x))
@@ -238,6 +247,15 @@ ctypedef int dscal_t(
     np.float64_t *alpha,  # scalar alpha
     np.float64_t *x,      # Array of dimension (n-1) * |incx| + 1. Vector to be scaled.
     int *incx             # Increment between elements of x.
+) nogil
+
+ctypedef int dswap_t(
+    # Compute y <-> x
+    int *n,               # Number of vector elements to be swapped.
+    np.float64_t *x,      # Vector x
+    int *incx,            # The increment between elements of x (usually 1)
+    np.float64_t *y,      # Vector y
+    int *incy             # The increment between elements of y (usually 1)
 ) nogil
 
 ctypedef int daxpy_t(
@@ -368,6 +386,15 @@ ctypedef int cscal_t(
     int *incx               # Increment between elements of x.
 ) nogil
 
+ctypedef int cswap_t(
+    # Compute y <-> x
+    int *n,                 # Number of vector elements to be swapped.
+    np.complex64_t *x,      # Vector x
+    int *incx,              # The increment between elements of x (usually 1)
+    np.complex64_t *y,      # Vector y
+    int *incy               # The increment between elements of y (usually 1)
+) nogil
+
 ctypedef int caxpy_t(
     # Compute y := alpha*x + y
     int *n,                 # Columns of o(A) / min(len(x))
@@ -496,6 +523,15 @@ ctypedef int zscal_t(
     int *incx        # Increment between elements of x.
 ) nogil
 
+ctypedef int zswap_t(
+    # Compute y <-> x
+    int *n,                  # Number of vector elements to be swapped.
+    np.complex128_t *x,      # Vector x
+    int *incx,               # The increment between elements of x (usually 1)
+    np.complex128_t *y,      # Vector y
+    int *incy                # The increment between elements of y (usually 1)
+) nogil
+
 ctypedef int zaxpy_t(
     # Compute y := alpha*x + y
     int *n,         # Columns of o(A) / min(len(x))
@@ -519,24 +555,32 @@ cdef:
     sdot_t *sdot
     sgemm_t *sgemm
     sgemv_t *sgemv
+    strmv_t *strmv
     scopy_t *scopy
+    sswap_t *sswap
     saxpy_t *saxpy
     sscal_t *sscal
     ddot_t *ddot
     dgemm_t *dgemm
     dgemv_t *dgemv
+    dtrmv_t *dtrmv
     dcopy_t *dcopy
+    dswap_t *dswap
     daxpy_t *daxpy
     dscal_t *dscal
     cdotu_t *cdot
     cgemm_t *cgemm
     cgemv_t *cgemv
+    ctrmv_t *ctrmv
     ccopy_t *ccopy
+    cswap_t *cswap
     caxpy_t *caxpy
     cscal_t *cscal
     zdotu_t *zdot
     zgemm_t *zgemm
     zgemv_t *zgemv
+    ztrmv_t *ztrmv
     zcopy_t *zcopy
+    zswap_t *zswap
     zaxpy_t *zaxpy
     zscal_t *zscal
