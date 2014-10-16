@@ -28,16 +28,21 @@ current_path = os.path.dirname(os.path.abspath(__file__))
 
 class TestStatesAR3(sarimax.SARIMAX):
     def __init__(self, *args, **kwargs):
+        # Dataset / Stata comparison
         path = current_path + os.sep + 'results/results_wpi1_ar3_stata.csv'
         self.stata = pd.read_csv(path)
+        self.stata.index = pd.date_range(start='1960-01-01', periods=124,
+                                         freq='QS')
+        # Matlab comparison
         path = current_path + os.sep+'results/results_wpi1_ar3_matlab_ssm.csv'
         matlab_names = [
             'a1','a2','a3','detP','alphahat1','alphahat2','alphahat3',
             'detV','eps','epsvar','eta','etavar'
         ]
         self.matlab_ssm = pd.read_csv(path, header=None, names=matlab_names)
-        self.stata.index = pd.date_range(start='1960-01-01', periods=124,
-                                        freq='QS')
+        # Regression tests data
+        path = current_path + os.sep+'results/results_wpi1_ar3_regression.csv'
+        self.regression = pd.read_csv(path)
 
         super(TestStatesAR3, self).__init__(
             self.stata['wpi'], order=(3, 1, 0), simple_differencing=True,
@@ -57,6 +62,13 @@ class TestStatesAR3(sarimax.SARIMAX):
                 self.results.predicted_state_cov[:,:,i])
             self.results.det_smoothed_state_cov[0,i] = np.linalg.det(
                 self.results.smoothed_state_cov[:,:,i])
+
+        # Perform simulation smoothing
+        n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
+        self.sim = self.simulation_smoother(
+            disturbance_variates=np.zeros(n_disturbance_variates),
+            initial_state_variates=np.zeros(self.k_states)
+        )
 
 
     def test_predict_obs(self):
@@ -131,4 +143,25 @@ class TestStatesAR3(sarimax.SARIMAX):
         assert_almost_equal(
             self.results.smoothed_state_disturbance_cov[0].T,
             self.matlab_ssm[['etavar']], 4
+        )
+
+    def test_simulation_smoothed_state(self):
+        # regression test
+        assert_almost_equal(
+            self.sim.simulated_state.T,
+            self.regression[['state1', 'state2', 'state3']], 4
+        )
+
+    def test_simulation_smoothed_measurement_disturbance(self):
+        # regression test
+        assert_almost_equal(
+            self.sim.simulated_measurement_disturbance.T,
+            self.regression[['measurement_disturbance']][:-1], 4
+        )
+
+    def test_simulation_smoothed_state_disturbance(self):
+        # regression test
+        assert_almost_equal(
+            self.sim.simulated_state_disturbance.T,
+            self.regression[['state_disturbance']], 4
         )

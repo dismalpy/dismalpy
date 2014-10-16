@@ -15,6 +15,9 @@ def configuration(parent_package='', top_path=None):
     config.add_extension('_kalman_smoother',
                          include_dirs=['dismalpy/src'],
                          sources=['_kalman_smoother.c'], extra_info=info)
+    config.add_extension('_simulation_smoother',
+                         include_dirs=['dismalpy/src'],
+                         sources=['_simulation_smoother.c'], extra_info=info)
     config.add_extension('_tools',
                          include_dirs=['dismalpy/src'],
                          sources=['_tools.c'])

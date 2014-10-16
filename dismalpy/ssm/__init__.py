@@ -19,6 +19,10 @@ from .representation import (
     SMOOTHER_DISTURBANCE_COV,
     SMOOTHER_ALL,
 
+    SIMULATION_STATE,
+    SIMULATION_DISTURBANCE,
+    SIMULATION_ALL,
+
     INVERT_UNIVARIATE,
     SOLVE_LU,
     INVERT_LU,
@@ -43,7 +47,7 @@ from .sarimax import SARIMAX
 from .tools import (
     find_best_blas_type, prefix_dtype_map,
     prefix_statespace_map, prefix_kalman_filter_map,
-    prefix_kalman_smoother_map,
+    prefix_kalman_smoother_map, prefix_simulation_smoother_map,
 
     diff, companion_matrix,
 

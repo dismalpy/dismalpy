@@ -110,6 +110,8 @@ dismalpy/ssm/_kalman_filter.c
 dismalpy/ssm/_kalman_filter.pyx
 dismalpy/ssm/_kalman_smoother.c
 dismalpy/ssm/_kalman_smoother.pyx
+dismalpy/ssm/_simulation_smoother.c
+dismalpy/ssm/_simulation_smoother.pyx
 dismalpy/ssm/_tools.c
 dismalpy/ssm/_tools.pyx
 dismalpy/ssm/_filters/_conventional.c
