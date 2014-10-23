@@ -349,6 +349,73 @@ class Representation(object):
         self.conserve_memory = kwargs.get('conserve_memory', 0)
         self.tolerance = kwargs.get('tolerance', 1e-19)
 
+    def __getitem__(self, key):
+        _type = type(key)
+        # If only a string is given then we must be getting an entire matrix
+        if _type is str:
+            if not key in self.shapes:
+                raise IndexError('"%s" is an invalid state space matrix name' % key)
+            return getattr(self, '_' + key)
+        # Otherwise if we have a tuple, we want a slice of a matrix
+        elif _type is tuple:
+            name, slice_ = key[0], key[1:]
+            if not name in self.shapes:
+                raise IndexError('"%s" is an invalid state space matrix name' % name)
+
+            matrix = getattr(self, '_' + name)
+
+            # Since the model can support time-varying arrays, but often we
+            # will instead have time-invariant arrays, we want to allow setting
+            # a matrix slice like mod['transition',0,:] even though technically
+            # it should be mod['transition',0,:,0]. Thus if the array in
+            # question is time-invariant but the last slice was excluded,
+            # add it in as a zero.
+            if matrix.shape[-1] == 1 and len(slice_) == matrix.ndim-1:
+                slice_ = slice_ + (0,)
+
+            return matrix[slice_]
+        # Otherwise, we have only a single slice index, but it is not a string
+        else:
+            raise IndexError('first index must the name of a valid state space matrix')
+
+    def __setitem__(self, key, value):
+        _type = type(key)
+        # If only a string is given then we must be setting an entire matrix
+        if _type is str:
+            if not key in self.shapes:
+                raise IndexError('"%s" is an invalid state space matrix name' % key)
+            setattr(self, key, value)
+        # If it's a tuple (with a string as the first element) then we must be
+        # setting a slice of a matrix
+        elif _type is tuple:
+            name, slice_ = key[0], key[1:]
+            if not name in self.shapes:
+                raise IndexError('"%s" is an invalid state space matrix name' % key[0])
+
+            # Change the dtype of the corresponding matrix
+            dtype = np.array(value).dtype
+            if dtype.char in ['f','d','F','D']:
+                matrix = getattr(self, '_' + name).real.astype(dtype)
+            else:
+                matrix = getattr(self, '_' + name)
+
+            # Since the model can support time-varying arrays, but often we
+            # will instead have time-invariant arrays, we want to allow setting
+            # a matrix slice like mod['transition',0,:] even though technically
+            # it should be mod['transition',0,:,0]. Thus if the array in
+            # question is time-invariant but the last slice was excluded,
+            # add it in as a zero.
+            if matrix.shape[-1] == 1 and len(slice_) == matrix.ndim-1:
+                slice_ = slice_ + (0,)
+
+            # Set the new value
+            matrix[slice_] = value
+            setattr(self, name, matrix)
+        # Otherwise we got a single non-string key, (e.g. mod[:]), which is
+        # invalid
+        else:
+            raise IndexError('first index must the name of a valid state space matrix')
+
     @property
     def prefix(self):
         return find_best_blas_type((
