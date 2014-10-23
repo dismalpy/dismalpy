@@ -22,6 +22,7 @@ cdef class sStatespace(object):
 
     cdef readonly int [::1,:] missing
     cdef readonly int [:] nmissing
+    cdef readonly int has_missing
 
     # Flags
     cdef readonly int time_invariant
@@ -55,6 +56,7 @@ cdef class dStatespace(object):
 
     cdef readonly int [::1,:] missing
     cdef readonly int [:] nmissing
+    cdef readonly int has_missing
 
     # Flags
     cdef readonly int time_invariant
@@ -88,6 +90,7 @@ cdef class cStatespace(object):
 
     cdef readonly int [::1,:] missing
     cdef readonly int [:] nmissing
+    cdef readonly int has_missing
 
     # Flags
     cdef readonly int time_invariant
@@ -121,6 +124,7 @@ cdef class zStatespace(object):
 
     cdef readonly int [::1,:] missing
     cdef readonly int [:] nmissing
+    cdef readonly int has_missing
 
     # Flags
     cdef readonly int time_invariant

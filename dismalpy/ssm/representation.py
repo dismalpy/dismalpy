@@ -1347,8 +1347,13 @@ class FilterResults(object):
 
         # Set the output
         self.smoother_output = smoother_output
-        self.scaled_smoothed_estimator = smoothed[0]
-        self.scaled_smoothed_estimator_cov = smoothed[1]
+        # For r_t (and similarly for N_t), what was calculated was
+        # r_T, ..., r_{-1}, and stored such that
+        # scaled_smoothed_estimator[0] == r_{-1}. We only want r_0, ..., r_T
+        # so exclude the zeroth element so that the time index is consistent
+        # with the other returned output
+        self.scaled_smoothed_estimator = smoothed[0][:,1:]
+        self.scaled_smoothed_estimator_cov = smoothed[1][:,:,1:]
         self.smoothing_error = smoothed[2]
         self.smoothed_state = smoothed[3]
         self.smoothed_state_cov = smoothed[4]

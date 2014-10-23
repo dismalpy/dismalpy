@@ -3,27 +3,6 @@ use http://www.stata-press.com/data/r12/wpi1, clear
 arima wpi, arima(1,1,1)
 arima wpi, arima(1,1,1) diffuse
 
-// Estimate an AR(3) via a state-space model
-// (to test prediction, standardized residuals, predicted states 
-constraint 1 [D.wpi]u1 = 1
-constraint 2 [u2]L.u1 = 1
-constraint 3 [u3]L.u2 = 1
-
-sspace (u1 L.u1 L.u2 L.u3, state noconstant) ///
-       (u2 L.u1, state noconstant noerror) ///
-       (u3 L.u2, state noconstant noerror) ///
-       (D.wpi u1, noconstant noerror), ///
-       constraints(1/3) covstate(diagonal)
-
-predict dep*
-predict sr*, rstandard
-predict sp*, states smethod(onestep) // predicted states
-predict sf*, states smethod(filter)  // filtered states
-predict sm*, states smethod(smooth)  // smoothed states
-
-outsheet using results_wpi1_ar3_stata.csv, comma
-
-
 // Example 2: ARIMA model with additive seasonal effects
 arima D.ln_wpi, ar(1) ma(1 4)
 

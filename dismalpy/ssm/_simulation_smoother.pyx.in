@@ -72,8 +72,17 @@ cdef class {{prefix}}SimulationSmoother(object):
     # ### Simulated Kalman smoother
     # cdef readonly {{prefix}}KalmanSmoother simulated_smoother
 
+    # ### Secondary Simulated Statespace model
+    # Note: currently only used in the case of missing data
+    # cdef readonly {{prefix}}Statespace secondary_simulated_model
+    # ### Simulated Kalman filter
+    # cdef readonly {{prefix}}KalmanFilter secondary_simulated_kfilter
+    # ### Simulated Kalman smoother
+    # cdef readonly {{prefix}}KalmanSmoother secondary_simulated_smoother
+
     # ### Simulation parameters
     # cdef public int simulation_output
+    # cdef readonly int has_missing
 
     # ### Random variates
     # cdef int n_disturbance_variates
@@ -109,6 +118,8 @@ cdef class {{prefix}}SimulationSmoother(object):
             np.npy_intp dim1[1]
             np.npy_intp dim2[2]
         cdef {{cython_type}} [::1,:] obs
+        cdef {{cython_type}} [::1,:] secondary_obs
+        cdef int nobs_endog = model.nobs * model.k_endog
 
         # Model objects
         self.model = model
@@ -132,11 +143,39 @@ cdef class {{prefix}}SimulationSmoother(object):
             self.simulated_model, self.simulated_kfilter, smoother.smoother_output
         )
 
+        # Secondary simulated model objects
+        # Currently only used if there is missing data (since then the
+        # approach in which the Kalman filter only has to be run over the
+        # series y_t^* = y_t - y_t^+ is infeasible), although it could also
+        # allow drawing multiple samples at the same time, see Durbin and
+        # Koopman (2002).
+        self.has_missing = model.has_missing
+        if self.has_missing:
+            dim2[0] = kfilter.k_endog; dim2[1] = model.nobs;
+            secondary_obs = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+            blas.{{prefix}}copy(&nobs_endog, &model.obs[0,0], &inc, &secondary_obs[0,0], &inc)
+            self.secondary_simulated_model = {{prefix}}Statespace(
+                secondary_obs, model.design, model.obs_intercept, model.obs_cov,
+                model.transition, model.state_intercept, model.selection,
+                model.state_cov
+            )
+            self.secondary_simulated_kfilter = {{prefix}}KalmanFilter(
+                self.secondary_simulated_model, kfilter.filter_method, kfilter.inversion_method,
+                kfilter.stability_method, kfilter.conserve_memory,
+                kfilter.tolerance, kfilter.loglikelihood_burn
+            )
+            self.secondary_simulated_smoother = {{prefix}}KalmanSmoother(
+                self.secondary_simulated_model, self.secondary_simulated_kfilter, smoother.smoother_output
+            )
+
+
         # Initialize the simulated model memoryviews
         # Note: the actual initialization is replaced in the simulate()
         # function below, but will complain if the memoryviews haven't been
         # first initialized, which this call does.
         self.simulated_model.initialize_approximate_diffuse()
+        if self.has_missing:
+            self.secondary_simulated_model.initialize_approximate_diffuse()
 
         # Parameters
         self.simulation_output = simulation_output
@@ -225,6 +264,10 @@ cdef class {{prefix}}SimulationSmoother(object):
         blas.{{prefix}}copy(&k_states, &self.model.initial_state[0], &inc, &self.simulated_model.initial_state[0], &inc)
         blas.{{prefix}}copy(&k_posdef2, &self.model.initial_state_cov[0,0], &inc, &self.simulated_model.initial_state_cov[0,0], &inc)
 
+        if self.has_missing:
+            blas.{{prefix}}copy(&k_states, &self.model.initial_state[0], &inc, &self.secondary_simulated_model.initial_state[0], &inc)
+            blas.{{prefix}}copy(&k_posdef2, &self.model.initial_state_cov[0,0], &inc, &self.secondary_simulated_model.initial_state_cov[0,0], &inc)
+
         # 0. Kalman filter initialization: transform the N(0,1) random variate
         # into a N(initial_state, initial_state_cov) random variate:
         # alpha_1^+ = initial_state + variate * chol(initial_state_cov)
@@ -234,9 +277,16 @@ cdef class {{prefix}}SimulationSmoother(object):
         blas.{{prefix}}axpy(&k_states, &alpha, &self.model.initial_state[0], &inc, &self.generated_state[0,0], &inc)
 
         self.simulated_kfilter.seek(0) # reset the filter
+        if self.has_missing:
+            self.secondary_simulated_kfilter.seek(0) # reset the filter
         measurement_idx = 0
         state_idx = nobs_endog
-        blas.{{prefix}}copy(&nobs_endog, &self.model.obs[0,0], &inc, &self.simulated_model.obs[0,0], &inc) # reset the obs data
+        if not self.has_missing:
+            # reset the obs data in the primary simulated model
+            # (but only if there is not missing data - in that case we will
+            # combine the actual data with the generated data in the primary
+            # model, so copy the actual data here and subtract data below)
+            blas.{{prefix}}copy(&nobs_endog, &self.model.obs[0,0], &inc, &self.simulated_model.obs[0,0], &inc)
         for t in range(self.model.nobs):
             # 1. Transform independent draws to w_t^+: eps_t^+ = ind_eps * chol(H_t)
             #                                          eta_t^+ = ind_eta * chol(Q_t)
@@ -262,18 +312,61 @@ cdef class {{prefix}}SimulationSmoother(object):
 
             state_idx += k_posdef
 
-            #    Construct y_t^* = - y_t^+ + y_t
-            blas.{{prefix}}axpy(&k_endog, &gamma, &self.generated_obs[0,t], &inc, &self.simulated_model.obs[0, t], &inc)
+            # Typically, rather than running the Kalman filter separately for
+            # y_t^+ and y_t, we can instead run it over y_t^* = y_t - y_t^+
+            if not self.has_missing:
+                #    Construct y_t^* = - y_t^+ + y_t
+                blas.{{prefix}}axpy(&k_endog, &gamma, &self.generated_obs[0,t], &inc, &self.simulated_model.obs[0, t], &inc)
 
-            # 3. Iterate Kalman filter, based on y_t^*
-            #    (this will give us alpha_t+1^*)
-            next(self.simulated_kfilter)
+                # 3. Iterate Kalman filter, based on y_t^*
+                #    (this will give us alpha_t+1^*)
+                next(self.simulated_kfilter)
+            # In the case of missing data, we have to run them separately
+            else:
+                # 3-1. Iterate the Kalman filter on the y_t^+ data
+                #      to get alpha_t+1^+
+                blas.{{prefix}}copy(&k_endog, &self.generated_obs[0,t], &inc, &self.simulated_model.obs[0, t], &inc)
+                next(self.simulated_kfilter)
+
+                # 3-2. Iterate the Kalman filter on the y_t data
+                #      to get alpha_t+1
+                next(self.secondary_simulated_kfilter)
 
         # Backwards recursion
         # This gives us \hat w_t^*        (simulation_output & SIMULATE_DISTURBANCE)
         #               \hat alpha_t+1^*  (simulation_output & SIMULATE_STATE)
+        # or if there is missing data:
+        # this gives us \hat w_t^+
+        #               \hat alpha_t+1
         self.simulated_smoother.smoother_output = simulation_output
         self.simulated_smoother()
+
+        if self.has_missing:
+            # This gives us \hat w_t
+            #               \hat alpha_t+1
+            self.secondary_simulated_smoother.smoother_output = simulation_output
+            self.secondary_simulated_smoother()
+
+            # Construct \hat w_t^* = \hat w_t - \hat w_t^+
+            #           \hat alpha_t+1^* = \hat alpha_t+1 - \hat alpha_t+1^+
+            # Note: this overwrites the values in self.simulated_smoother,
+            # so that the steps below will be the same regardless of whether or
+            # not there was missing data
+            if self.simulation_output & SIMULATE_DISTURBANCE:
+                blas.{{prefix}}swap(&nobs_endog, &self.simulated_smoother.smoothed_measurement_disturbance[0,0], &inc,
+                                                 &self.secondary_simulated_smoother.smoothed_measurement_disturbance[0,0], &inc)
+                blas.{{prefix}}axpy(&nobs_endog, &gamma, &self.secondary_simulated_smoother.smoothed_measurement_disturbance[0,0], &inc,
+                                                         &self.simulated_smoother.smoothed_measurement_disturbance[0,0], &inc)
+                blas.{{prefix}}swap(&nobs_posdef, &self.simulated_smoother.smoothed_state_disturbance[0,0], &inc,
+                                                  &self.secondary_simulated_smoother.smoothed_state_disturbance[0,0], &inc)
+                blas.{{prefix}}axpy(&nobs_posdef, &gamma, &self.secondary_simulated_smoother.smoothed_state_disturbance[0,0], &inc,
+                                                          &self.simulated_smoother.smoothed_state_disturbance[0,0], &inc)
+
+            if self.simulation_output & SIMULATE_STATE:
+                blas.{{prefix}}swap(&nobs1_kstates, &self.simulated_smoother.smoothed_state[0,0], &inc,
+                                                  &self.secondary_simulated_smoother.smoothed_state[0,0], &inc)
+                blas.{{prefix}}axpy(&nobs1_kstates, &gamma, &self.secondary_simulated_smoother.smoothed_state[0,0], &inc,
+                                                           &self.secondary_simulated_smoother.smoothed_state[0,0], &inc)
 
         # Construct the final simulated variables
         # This gives us \tilde w_t        (simulation_output & SIMULATE_DISTURBANCE)

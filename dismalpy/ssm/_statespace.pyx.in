@@ -213,6 +213,7 @@ cdef class {{prefix}}Statespace(object):
         # Handle missing data
         self.missing = np.array(np.isnan(obs), dtype=np.int32, order="F")
         self.nmissing = np.array(np.sum(self.missing, axis=0), dtype=np.int32)
+        self.has_missing = np.sum(self.nmissing) > 0
 
         # Create the temporary array
         # Holds arrays of dimension $(m \times m)$

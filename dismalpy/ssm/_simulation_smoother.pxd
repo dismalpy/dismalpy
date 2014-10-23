@@ -43,8 +43,16 @@ cdef class sSimulationSmoother(object):
     # ### Simulated Kalman smoother
     cdef readonly sKalmanSmoother simulated_smoother
 
+    # ### Simulated Statespace model
+    cdef readonly sStatespace secondary_simulated_model
+    # ### Simulated Kalman filter
+    cdef readonly sKalmanFilter secondary_simulated_kfilter
+    # ### Simulated Kalman smoother
+    cdef readonly sKalmanSmoother secondary_simulated_smoother
+
     # ### Simulation parameters
     cdef public int simulation_output
+    cdef public int has_missing
 
     # ### Random variates
     cdef int n_disturbance_variates
@@ -96,8 +104,16 @@ cdef class dSimulationSmoother(object):
     # ### Simulated Kalman smoother
     cdef readonly dKalmanSmoother simulated_smoother
 
+    # ### Simulated Statespace model
+    cdef readonly dStatespace secondary_simulated_model
+    # ### Simulated Kalman filter
+    cdef readonly dKalmanFilter secondary_simulated_kfilter
+    # ### Simulated Kalman smoother
+    cdef readonly dKalmanSmoother secondary_simulated_smoother
+
     # ### Simulation parameters
     cdef public int simulation_output
+    cdef public int has_missing
 
     # ### Random variates
     cdef int n_disturbance_variates
@@ -149,8 +165,16 @@ cdef class cSimulationSmoother(object):
     # ### Simulated Kalman smoother
     cdef readonly cKalmanSmoother simulated_smoother
 
+    # ### Simulated Statespace model
+    cdef readonly cStatespace secondary_simulated_model
+    # ### Simulated Kalman filter
+    cdef readonly cKalmanFilter secondary_simulated_kfilter
+    # ### Simulated Kalman smoother
+    cdef readonly cKalmanSmoother secondary_simulated_smoother
+
     # ### Simulation parameters
     cdef public int simulation_output
+    cdef public int has_missing
 
     # ### Random variates
     cdef int n_disturbance_variates
@@ -202,8 +226,16 @@ cdef class zSimulationSmoother(object):
     # ### Simulated Kalman smoother
     cdef readonly zKalmanSmoother simulated_smoother
 
+    # ### Simulated Statespace model
+    cdef readonly zStatespace secondary_simulated_model
+    # ### Simulated Kalman filter
+    cdef readonly zKalmanFilter secondary_simulated_kfilter
+    # ### Simulated Kalman smoother
+    cdef readonly zKalmanSmoother secondary_simulated_smoother
+
     # ### Simulation parameters
     cdef public int simulation_output
+    cdef public int has_missing
 
     # ### Random variates
     cdef int n_disturbance_variates

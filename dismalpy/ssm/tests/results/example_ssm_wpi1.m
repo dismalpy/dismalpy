@@ -30,10 +30,14 @@ initial_state_cov = dlyap(conj(transition), selected_state_cov);
 mod = ssmodel('test', ssmat(obs_cov), ssmat(design), ssmat(transition),ssmat(selection),ssmat(state_cov));
 mod.P1 = initial_state_cov;
 
+% Optionally add missing values
+% obs(10:20) = nan;
+
 % Estimate
 [a, P] = kalman(dwpi1', mod);
 [alphahat, V] = statesmo(dwpi1', mod);
 [eps, eta, epsvar, etavar] = disturbsmo(dwpi1', mod);
+% Note: simsmo seems to always crashes MATLAB
 %[alphatilde, epstilde, etatilde] = simsmo(dwpi1', mod);
 
 % Calculate determinants of variance matrices (so that we can compare

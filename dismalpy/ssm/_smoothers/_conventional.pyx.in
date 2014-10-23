@@ -84,25 +84,70 @@ cdef int {{prefix}}smoothed_estimators_missing_conventional({{prefix}}KalmanSmoo
 
     # Smoothing error  
     # It is undefined here, since F_t^{-1} is nan
-    for i in range(smoother.k_endog):
-        smoother._smoothing_error[i] = 0
+    # for i in range(smoother.k_endog):
+    #     smoother._smoothing_error[i] = 0
+
+    # Smoothing error  
+    # $u_t = - K_t' r_t$  
+    # $(p \times 1) = (p \times 1) - (p \times m) (m \times 1)$  
+    blas.{{prefix}}gemv("T", &smoother.k_states, &smoother.k_endog,
+              &gamma, smoother._kalman_gain, &smoother.k_states,
+                      smoother._input_scaled_smoothed_estimator, &inc,
+              &beta, smoother._smoothing_error, &inc)
 
 cdef int {{prefix}}smoothed_disturbances_missing_conventional({{prefix}}KalmanSmoother smoother):
     cdef:
         int inc = 1
-    # Just return the unconditional distribution for the disturbances
-    # corresponding to a missing observation
+        {{cython_type}} alpha = 1.0
+        {{cython_type}} beta = 0.0
+        {{cython_type}} gamma = -1.0
+
+    # Temporary arrays
+
+    # $\\#_0 = R_t Q_t$  
+    # $(m \times r) = (m \times r) (r \times r)$
+    blas.{{prefix}}gemm("N", "N", &smoother.k_states, &smoother.k_posdef, &smoother.k_posdef,
+              &alpha, smoother._selection, &smoother.k_states,
+                      smoother._state_cov, &smoother.k_posdef,
+              &beta, smoother._tmp0, &smoother.k_states)
+
+    if smoother.smoother_output & SMOOTHER_DISTURBANCE:
+        # Smoothed state disturbance  
+        # $\hat \eta_t = \\#_0' r_t$  
+        # $(r \times 1) = (r \times m) (m \times 1)$  
+        blas.{{prefix}}gemv("T", &smoother.k_states, &smoother.k_posdef,
+                      &alpha, smoother._tmp0, &smoother.k_states,
+                              smoother._input_scaled_smoothed_estimator, &inc,
+                      &beta, smoother._smoothed_state_disturbance, &inc)
+
+    if smoother.smoother_output & SMOOTHER_DISTURBANCE_COV:
+      # Smoothed state disturbance covariance matrix  
+        # $Var(\eta_t | Y_n) = Q_t - \\#_0' N_t \\#_0$  
+        # $(r \times r) = (r \times r) - (r \times m) (m \times m) (m \times r)$  
+        blas.{{prefix}}gemm("N", "N", &smoother.k_states, &smoother.k_posdef, &smoother.k_states,
+                  &alpha, smoother._input_scaled_smoothed_estimator_cov, &smoother.k_states,
+                          smoother._tmp0, &smoother.k_states,
+                  &beta, smoother._tmpL, &smoother.k_states)
+        blas.{{prefix}}copy(&smoother.k_posdef2, smoother._state_cov, &inc, smoother._smoothed_state_disturbance_cov, &inc)
+        blas.{{prefix}}gemm("T", "N", &smoother.k_posdef, &smoother.k_posdef, &smoother.k_states,
+                  &gamma, smoother._tmp0, &smoother.k_states,
+                          smoother._tmpL, &smoother.k_states,
+                  &alpha, smoother._smoothed_state_disturbance_cov, &smoother.k_posdef)
+
+
+    # Just return the unconditional distribution for the measurement
+    # disturbances corresponding to a missing observation
 
     # TODO this is not explicitly addressed in Durbin and Koopman Chapter 4
     # or in Koopman (1993) - need to find a source for if this is correct
+    # Note: this is what the MATLAB ssm toolbox does, also
     
-    # Smoothed measurement and state disturbances have unconditional expected
+    # Smoothed measurement disturbances have unconditional expected
     # value of 0, so no need to do anything
 
     # Smoothed measurement and state disturbances have unconditional covariance
     # matrix of $H_t, Q_t$, respectively
-    blas.{{prefix}}copy(&smoother.k_endog2, smoother._obs_cov, &inc, smoother._smoothed_state_disturbance_cov, &inc)
-    blas.{{prefix}}copy(&smoother.k_posdef2, smoother._state_cov, &inc, smoother._smoothed_state_disturbance_cov, &inc)
+    blas.{{prefix}}copy(&smoother.k_endog2, smoother._obs_cov, &inc, smoother._smoothed_measurement_disturbance_cov, &inc)
 
 
 # ### Conventional Kalman smoother
