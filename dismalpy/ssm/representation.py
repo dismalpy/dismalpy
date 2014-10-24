@@ -63,6 +63,56 @@ MEMORY_CONSERVE = (
 )
 
 
+class MatrixWrapper(object):
+    def __init__(self, name, attribute):
+        self.name = name
+        self.attribute = attribute
+        self._attribute = '_' + attribute
+
+    def __get__(self, obj, objtype):
+        return getattr(obj, self._attribute, None)
+
+    def __set__(self, obj, value):
+        value = np.asarray(value, order="F")
+        shape = obj.shapes[self.attribute]
+
+        if len(shape) == 3:
+            value = self._set_matrix(obj, value, shape)
+        else:
+            value = self._set_vector(obj, value, shape)
+
+        setattr(obj, self._attribute, value)
+
+    def _set_matrix(self, obj, value, shape):
+        # Expand 1-dimensional array if possible
+        if (value.ndim == 1 and shape[0] == 1
+                and value.shape[0] == shape[1]):
+            value = value[None, :]
+
+        # Enforce that the matrix is appropriate size
+        validate_matrix_shape(
+            self.name, value.shape, shape[0], shape[1], obj.nobs
+        )
+
+        # Expand time-invariant matrix
+        if value.ndim == 2:
+            value = np.array(value[:, :, None], order="F")
+
+        return value
+
+    def _set_vector(self, obj, value, shape):
+        # Enforce that the vector has appropriate length
+        validate_vector_shape(
+            self.name, value.shape, shape[0], obj.nobs
+        )
+
+        # Expand the time-invariant vector
+        if value.ndim == 1:
+            value = np.array(value[:, None], order="F")
+
+        return value
+
+
 class Representation(object):
     r"""
     State space representation of a time series process
@@ -208,6 +258,15 @@ class Representation(object):
        Time Series Analysis by State Space Methods: Second Edition.
        Oxford University Press.
     """
+
+    design = MatrixWrapper('design', 'design')
+    obs_intercept = MatrixWrapper('observation intercept', 'obs_intercept')
+    obs_cov = MatrixWrapper('observation covariance matrix', 'obs_cov')
+    transition = MatrixWrapper('transition', 'transition')
+    state_intercept = MatrixWrapper('state intercept', 'state_intercept')
+    selection = MatrixWrapper('selection', 'selection')
+    state_cov = MatrixWrapper('state covariance matrix', 'state_cov')
+
     def __init__(self, endog, k_states, k_posdef=None,
                  design=None, obs_intercept=None, obs_cov=None,
                  transition=None, state_intercept=None, selection=None,
@@ -218,9 +277,9 @@ class Representation(object):
         # _statespace assumes it is k_endog x nobs. Thus we create it in the
         # transposed shape as order "C" and then transpose to get order "F".
         if np.ndim(endog) == 1:
-            self.endog = np.array(endog, ndmin=2, copy=True, order="F")
+            self.endog = np.array(endog, ndmin=2, order="F")
         else:
-            self.endog = np.array(endog, copy=True, order="C").T
+            self.endog = np.array(endog, order="C").T
         dtype = self.endog.dtype
 
         # Dimensions
@@ -273,6 +332,7 @@ class Representation(object):
         # These matrices are only used in the Python object as containers,
         # which will be copied to the appropriate _statespace object if a
         # filter is called.
+        s = self.shapes
         self._design = np.zeros(
             self.shapes['design'], dtype=dtype, order="F"
         )
@@ -348,6 +408,24 @@ class Representation(object):
         )
         self.conserve_memory = kwargs.get('conserve_memory', 0)
         self.tolerance = kwargs.get('tolerance', 1e-19)
+
+    def __len__(self):
+        return self.nobs
+
+    def __contains__(self, key):
+        return key in self.shapes.keys()
+
+    def __repr__(self):
+        pass
+
+    def __str__(self):
+        pass
+
+    def __unicode__(self):
+        pass
+
+    def __hash__(self):
+        pass
 
     def __getitem__(self, key):
         _type = type(key)
@@ -468,180 +546,6 @@ class Representation(object):
     @property
     def obs(self):
         return self.endog
-
-    @property
-    def design(self):
-        return self._design
-
-    @design.setter
-    def design(self, value):
-        design = np.asarray(value, order="F")
-
-        # Expand 1-dimensional array if possible
-        if (design.ndim == 1 and self.k_endog == 1
-                and design.shape[0] == self.k_states):
-            design = design[None, :]
-
-        # Enforce that the design matrix is k_endog by k_states
-        validate_matrix_shape(
-            'design', design.shape, self.k_endog, self.k_states, self.nobs
-        )
-
-        # Expand time-invariant design matrix
-        if design.ndim == 2:
-            design = np.array(design[:, :, None], order="F")
-
-        # Set the array elements
-        self._design = design
-
-    @property
-    def obs_intercept(self):
-        return self._obs_intercept
-
-    @obs_intercept.setter
-    def obs_intercept(self, value):
-        obs_intercept = np.asarray(value, order="F")
-
-        # Enforce that the observation intercept has length k_endog
-        validate_vector_shape(
-            'observation intercept', obs_intercept.shape, self.k_endog,
-            self.nobs
-        )
-
-        # Expand the time-invariant observation intercept vector
-        if obs_intercept.ndim == 1:
-            obs_intercept = np.array(obs_intercept[:, None], order="F")
-
-        # Set the array
-        self._obs_intercept = obs_intercept
-
-    @property
-    def obs_cov(self):
-        return self._obs_cov
-
-    @obs_cov.setter
-    def obs_cov(self, value):
-        obs_cov = np.asarray(value, order="F")
-
-        # Expand 1-dimensional array if possible
-        if (obs_cov.ndim == 1 and self.k_endog == 1
-                and obs_cov.shape[0] == self.k_endog):
-            obs_cov = obs_cov[None, :]
-
-        # Enforce that the observation covariance matrix is k_endog by k_endog
-        validate_matrix_shape(
-            'observation covariance', obs_cov.shape, self.k_endog,
-            self.k_endog, self.nobs
-        )
-
-        # Expand time-invariant obs_cov matrix
-        if obs_cov.ndim == 2:
-            obs_cov = np.array(obs_cov[:, :, None], order="F")
-        # Set the array
-        self._obs_cov = obs_cov
-
-    @property
-    def transition(self):
-        return self._transition
-
-    @transition.setter
-    def transition(self, value):
-        transition = np.asarray(value, order="F")
-
-        # Expand 1-dimensional array if possible
-        if (transition.ndim == 1 and self.k_states == 1
-                and transition.shape[0] == self.k_states):
-            transition = transition[None, :]
-
-        # Enforce that the transition matrix is k_states by k_states
-        validate_matrix_shape(
-            'transition', transition.shape, self.k_states, self.k_states,
-            self.nobs
-        )
-
-        # Expand time-invariant transition matrix
-        if transition.ndim == 2:
-            transition = np.array(transition[:, :, None], order="F")
-
-        # Set the array
-        self._transition = transition
-
-    @property
-    def state_intercept(self):
-        return self._state_intercept
-
-    @state_intercept.setter
-    def state_intercept(self, value):
-        state_intercept = np.asarray(value, order="F")
-
-        # Enforce dimension (1 is later expanded to time-invariant 2-dim)
-        if state_intercept.ndim > 2:
-            raise ValueError('Invalid state intercept vector. Requires a'
-                             ' 1- or 2-dimensional array, got %d dimensions'
-                             % state_intercept.ndim)
-
-        # Enforce that the state intercept has length k_endog
-        validate_vector_shape(
-            'state intercept', state_intercept.shape, self.k_states,
-            self.nobs
-        )
-
-        # Expand the time-invariant state intercept vector
-        if state_intercept.ndim == 1:
-            state_intercept = np.array(state_intercept[:, None], order="F")
-
-        # Set the array
-        self._state_intercept = state_intercept
-
-    @property
-    def selection(self):
-        return self._selection
-
-    @selection.setter
-    def selection(self, value):
-        selection = np.asarray(value, order="F")
-
-        # Expand 1-dimensional array if possible
-        if (selection.ndim == 1 and self.k_states == 1
-                and selection.shape[0] == self.k_states):
-            selection = selection[None, :]
-
-        # Enforce that the selection matrix is k_states by k_posdef
-        validate_matrix_shape(
-            'selection', selection.shape, self.k_states, self.k_posdef,
-            self.nobs
-        )
-
-        # Expand time-invariant selection matrix
-        if selection.ndim == 2:
-            selection = np.array(selection[:, :, None], order="F")
-        # Set the array
-        self._selection = selection
-
-    @property
-    def state_cov(self):
-        return self._state_cov
-
-    @state_cov.setter
-    def state_cov(self, value):
-        state_cov = np.asarray(value, order="F")
-
-        # Expand 1-dimensional array if possible
-        if (state_cov.ndim == 1 and self.k_posdef == 1
-                and state_cov.shape[0] == self.k_posdef):
-            state_cov = state_cov[None, :]
-
-        # Enforce that the state covariance matrix is k_states by k_states
-        validate_matrix_shape(
-            'state covariance', state_cov.shape, self.k_posdef, self.k_posdef,
-            self.nobs
-        )
-
-        # Expand time-invariant state_cov matrix
-        if state_cov.ndim == 2:
-            state_cov = np.array(state_cov[:, :, None], order="F")
-        # Set the array
-        self._state_cov = state_cov
 
     def initialize_known(self, initial_state, initial_state_cov):
         """
