@@ -9,6 +9,7 @@ from __future__ import division, absolute_import, print_function
 from warnings import warn
 
 import numpy as np
+from ..model import Model
 from .tools import (
     find_best_blas_type, prefix_dtype_map, prefix_statespace_map,
     prefix_kalman_filter_map, prefix_kalman_smoother_map,
@@ -70,7 +71,11 @@ class MatrixWrapper(object):
         self._attribute = '_' + attribute
 
     def __get__(self, obj, objtype):
-        return getattr(obj, self._attribute, None)
+        matrix = getattr(obj, self._attribute, None)
+        # # Remove last dimension if the array is not actually time-varying
+        # if matrix is not None and matrix.shape[-1] == 1:
+        #     return np.squeeze(matrix, -1)
+        return matrix
 
     def __set__(self, obj, value):
         value = np.asarray(value, order="F")
@@ -113,7 +118,7 @@ class MatrixWrapper(object):
         return value
 
 
-class Representation(object):
+class Representation(Model):
     r"""
     State space representation of a time series process
 
@@ -267,111 +272,55 @@ class Representation(object):
     selection = MatrixWrapper('selection', 'selection')
     state_cov = MatrixWrapper('state covariance matrix', 'state_cov')
 
-    def __init__(self, endog, k_states, k_posdef=None,
-                 design=None, obs_intercept=None, obs_cov=None,
-                 transition=None, state_intercept=None, selection=None,
-                 state_cov=None, *args, **kwargs):
+    def __init__(self, endog, k_states, k_posdef=None, *args, **kwargs):
+        self.shapes = {}
 
-        # Explicitly copy the endogenous array
-        # Note: we assume that the given endog array is nobs x k_endog, but
-        # _statespace assumes it is k_endog x nobs. Thus we create it in the
-        # transposed shape as order "C" and then transpose to get order "F".
-        if np.ndim(endog) == 1:
-            self.endog = np.array(endog, ndmin=2, order="F")
-        else:
-            self.endog = np.array(endog, order="C").T
-        dtype = self.endog.dtype
+        # Initialize the model
+        # (this sets _endog_names, nobs, and endog; if the argument `endog`
+        # only consists of names, then self.nobs = None and self.endog = None)
+        super(Representation, self).__init__(endog, *args, **kwargs)
 
-        # Dimensions
-        self.k_endog, self.nobs = self.endog.shape
+        # Get the base datatype
+        dtype = self.endog.dtype if self.endog is not None else np.float64
+
+        # Get dimensions from transition equation
         if k_states < 1:
             raise ValueError('Number of states in statespace model must be a'
                              ' positive number.')
         self.k_states = k_states
         self.k_posdef = k_posdef if k_posdef is not None else k_states
 
-        # Parameters
-        self.initialization = None
-
         # Record the shapes of all of our matrices
         # Note: these are time-invariant shapes; in practice the last dimension
         # may also be `self.nobs` for any or all of these.
         self.shapes = {
-            'obs': self.endog.shape,
-            'design': (
-                (self.k_endog, self.k_states, 1)
-                if design is None else design.shape
-            ),
-            'obs_intercept': (
-                (self.k_endog, 1)
-                if obs_intercept is None else obs_intercept.shape
-            ),
-            'obs_cov': (
-                (self.k_endog, self.k_endog, 1)
-                if obs_cov is None else obs_cov.shape
-            ),
-            'transition': (
-                (self.k_states, self.k_states, 1)
-                if transition is None else transition.shape
-            ),
-            'state_intercept': (
-                (self.k_states, 1)
-                if state_intercept is None else state_intercept.shape
-            ),
-            'selection': (
-                (self.k_states, self.k_posdef, 1)
-                if selection is None else selection.shape
-            ),
-            'state_cov': (
-                (self.k_posdef, self.k_posdef, 1)
-                if state_cov is None else state_cov.shape
-            )
+            'obs': (self.k_endog, self.nobs if self.nobs is not None else 0),
+            'design': (self.k_endog, self.k_states, 1),
+            'obs_intercept': (self.k_endog, 1),
+            'obs_cov': (self.k_endog, self.k_endog, 1),
+            'transition': (self.k_states, self.k_states, 1),
+            'state_intercept': (self.k_states, 1),
+            'selection': (self.k_states, self.k_posdef, 1),
+            'state_cov': (self.k_posdef, self.k_posdef, 1),
         }
 
         # Representation matrices
         # These matrices are only used in the Python object as containers,
         # which will be copied to the appropriate _statespace object if a
         # filter is called.
-        s = self.shapes
-        self._design = np.zeros(
-            self.shapes['design'], dtype=dtype, order="F"
-        )
-        self._obs_intercept = np.zeros(
-            self.shapes['obs_intercept'], dtype=dtype, order="F"
-        )
-        self._obs_cov = np.zeros(
-            self.shapes['obs_cov'], dtype=dtype, order="F"
-        )
-        self._transition = np.zeros(
-            self.shapes['transition'], dtype=dtype, order="F"
-        )
-        self._state_intercept = np.zeros(
-            self.shapes['state_intercept'], dtype=dtype, order="F"
-        )
-        self._selection = np.zeros(
-            self.shapes['selection'], dtype=dtype, order="F"
-        )
-        self._state_cov = np.zeros(
-            self.shapes['state_cov'], dtype=dtype, order="F"
-        )
+        for name, shape in self.shapes.iteritems():
+            if name == 'obs':
+                continue
+            # Create the initial storage array for each matrix
+            setattr(self, '_' + name, np.zeros(shape, dtype=dtype, order="F"))
 
-        # Initialize with provided matrices
-        if design is not None:
-            self.design = design
-        if obs_intercept is not None:
-            self.obs_intercept = obs_intercept
-        if obs_cov is not None:
-            self.obs_cov = obs_cov
-        if transition is not None:
-            self.transition = transition
-        if state_intercept is not None:
-            self.state_intercept = state_intercept
-        if selection is not None:
-            self.selection = selection
-        if state_cov is not None:
-            self.state_cov = state_cov
+            # If we were given an initial value for the matrix, set it
+            # (notice it is being set via the descriptor)
+            if name in kwargs:
+                setattr(self, name, kwargs[name])
 
         # State-space initialization data
+        self.initialization = None
         self._initial_state = None
         self._initial_state_cov = None
         self._initial_variance = None
@@ -415,8 +364,8 @@ class Representation(object):
     def __contains__(self, key):
         return key in self.shapes.keys()
 
-    def __repr__(self):
-        pass
+    # def __repr__(self):
+    #     pass
 
     def __str__(self):
         pass
@@ -472,10 +421,10 @@ class Representation(object):
 
             # Change the dtype of the corresponding matrix
             dtype = np.array(value).dtype
-            if dtype.char in ['f','d','F','D']:
+            matrix = getattr(self, '_' + name)
+            if not matrix.dtype == dtype and dtype.char in ['f','d','F','D']:
                 matrix = getattr(self, '_' + name).real.astype(dtype)
-            else:
-                matrix = getattr(self, '_' + name)
+                
 
             # Since the model can support time-varying arrays, but often we
             # will instead have time-invariant arrays, we want to allow setting
@@ -546,6 +495,10 @@ class Representation(object):
     @property
     def obs(self):
         return self.endog
+
+    def bind(self, endog):
+        super(Representation, self).bind(endog)
+        self.shapes['obs'] = self.endog.shape
 
     def initialize_known(self, initial_state, initial_state_cov):
         """
@@ -623,6 +576,11 @@ class Representation(object):
             loglikelihood_burn = self.loglikelihood_burn
         if tolerance is None:
             tolerance = self.tolerance
+
+        # Make sure we have endog
+        if self.endog is None:
+            raise RuntimeError('Must bind a dataset to the model before'
+                               ' filtering or smoothing.')
 
         # Determine which filter to call
         prefix = kwargs['prefix'] if 'prefix' in kwargs else self.prefix

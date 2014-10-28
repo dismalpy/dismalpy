@@ -275,8 +275,15 @@ def validate_matrix_shape(name, shape, nrows, ncols, nobs):
     if not shape[1] == ncols:
         raise ValueError('Invalid dimensions for %s matrix: requires %d'
                          ' columns, got %d' % (name, ncols, shape[1]))
+
+    # If we don't yet know `nobs`, don't allow time-varying arrays
+    if nobs is None and not (ndim == 2 or shape[-1] == 1):
+        raise ValueError('Time-varying state space matrices cannot be given'
+                         ' unless `nobs` is specified (implicitly when a'
+                         ' dataset is bound or else set explicity)')
+
     # Enforce time-varying array size
-    if ndim == 3 and not shape[2] in [1, nobs]:
+    if ndim == 3 and nobs is not None and not shape[-1] in [1, nobs]:
         raise ValueError('Invalid dimensions for time-varying %s'
                          ' matrix. Requires shape (*,*,%d), got %s' %
                          (name, nobs, str(shape)))
@@ -314,6 +321,13 @@ def validate_vector_shape(name, shape, nrows, nobs):
     if not shape[0] == nrows:
         raise ValueError('Invalid dimensions for %s vector: requires %d'
                          ' rows, got %d' % (name, nrows, shape[0]))
+
+    # If we don't yet know `nobs`, don't allow time-varying arrays
+    if nobs is None and not (ndim == 1 or shape[-1] == 1):
+        raise ValueError('Time-varying state space vectors cannot be given'
+                         ' unless `nobs` is specified (implicitly when a'
+                         ' dataset is bound or else set explicity)')
+
     # Enforce time-varying array size
     if ndim == 2 and not shape[1] in [1, nobs]:
         raise ValueError('Invalid dimensions for time-varying %s'

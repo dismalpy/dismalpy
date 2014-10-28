@@ -54,22 +54,40 @@ class Model(Representation, tsbase.TimeSeriesModel):
     """
     def __init__(self, endog, k_states, exog=None, dates=None, freq=None,
                  *args, **kwargs):
-        self.i = 0
-        # Initialize the model base
-        tsbase.TimeSeriesModel.__init__(self, endog=endog, exog=exog,
-                                        dates=dates, freq=freq, missing='none')
+        # Save the object identifier of the given array
+        # Note: this is saved here because TimeSeriesModel can sometimes
+        # change the what is reported by self.endog (e.g. in the case of a
+        # Pandas Series)
+        kwargs.setdefault('endog_id', id(endog))
 
         # Set the default results class to be StatespaceResults
         kwargs.setdefault('filter_results_class', StatespaceResults)
 
+        # Save the TimeSeriesModel attributes for use when the data is bound
+        # and the tsbase.TimeSeriesModel is instantiated
+        self._exog = exog
+        self._dates = dates
+        self._freq = freq
+
         # Initialize the statespace representation
-        super(Model, self).__init__(self.endog, k_states, *args, **kwargs)
+        super(Model, self).__init__(endog, k_states, *args, **kwargs)
 
         # Initialize the parameters
         self.params = None
 
-        # Set additional parameters
-        self.nobs = self.endog.shape[1]
+
+    def bind(self, endog):
+        # Bind the data to the model
+        super(Model, self).bind(endog)
+
+        # Initialize the model base
+        tsbase.TimeSeriesModel.__init__(self, endog=self.endog.T,
+                                        exog=self._exog, dates=self._dates,
+                                        freq=self._freq, missing='none')
+        if self.endog.ndim == 1:
+            self.endog = np.asfortranarray(self.endog[None,:])
+        else:
+            self.endog = self.endog.T
 
     def fit(self, start_params=None, transformed=True,
             method='lbfgs', maxiter=50, full_output=1,
@@ -294,6 +312,10 @@ class Model(Representation, tsbase.TimeSeriesModel):
     @property
     def start_params(self):
         raise NotImplementedError
+
+    @property
+    def endog_names(self):
+        return self._endog_names
 
     @property
     def params_names(self):
