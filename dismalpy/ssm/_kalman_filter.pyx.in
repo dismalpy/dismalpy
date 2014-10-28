@@ -490,7 +490,7 @@ cdef class {{prefix}}KalmanFilter(object):
         self.tmp3 = np.PyArray_ZEROS(3, dim3, {{typenum}}, FORTRAN)
 
         # Holds arrays of dimension $(p \times p \times T)$  
-        # $\\#_3 = F_t^{-1} H_t$
+        # $\\#_4 = F_t^{-1} H_t$
         dim3[0] = self.k_endog; dim3[1] = self.k_endog; dim3[2] = storage;
         self.tmp4 = np.PyArray_ZEROS(3, dim3, {{typenum}}, FORTRAN)
 

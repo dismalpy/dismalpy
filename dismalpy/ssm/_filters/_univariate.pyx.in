@@ -119,11 +119,6 @@ cdef int {{prefix}}forecast_univariate({{prefix}}KalmanFilter kfilter):
                        &beta, kfilter._tmp0, &inc)
         forecast_error_cov = kfilter._obs_cov[i + i*kfilter.k_endog] + kfilter._tmp0[0]
         {{endif}}
-        # print kfilter._filtered_state_cov[0]
-        # print kfilter._tmp1[0]
-        # print kfilter._obs_cov[i + i*kfilter.k_endog]
-        # print kfilter._design[i]
-        # print forecast_error_cov
         kfilter._forecast_error_cov[i + i*kfilter.k_endog] = forecast_error_cov
 
         # If we have a non-zero variance
@@ -131,24 +126,34 @@ cdef int {{prefix}}forecast_univariate({{prefix}}KalmanFilter kfilter):
         if not forecast_error_cov == 0:
             forecast_error_cov_inv = 1.0 / forecast_error_cov
 
+            # Save temporary array data
+            # $\\#_1 = P_{t,i} Z_{t,i}'$ - set above
+            # $\\#_2 = v_{t,i} / F_{t,i}$
+            kfilter._tmp2[i] = kfilter._forecast_error[i] * forecast_error_cov_inv
+            # $\\#_3 = Z_{t,i} / F_{t,i}$
+            blas.{{prefix}}copy(&kfilter.k_states, &kfilter._design[i], &kfilter.k_endog,
+                                                   &kfilter._tmp3[i], &kfilter.k_endog)
+            blas.{{prefix}}scal(&kfilter.k_states, &forecast_error_cov_inv, &kfilter._tmp3[i], &kfilter.k_endog)
+            # $\\#_4 = H_{t,i} / F_{t,i}$
+            kfilter._tmp4[i*kfilter.k_endog + i] = kfilter._obs_cov[i*kfilter.k_endog + i] * forecast_error_cov_inv
 
             # #### Filtered state for time t
             # $a_{t,i+1} = a_{t,i} + P_{t,i} Z_{t,i}' F_{t,i}^{-1} v_{t,i}$  
             # Make a new temporary array  
-            # tmp2 = P_{t,i} Z_{t,i}' F_{t,i}^{-1}
+            # K_{t,i} = P_{t,i} Z_{t,i}' F_{t,i}^{-1}
             for j in range(kfilter.k_states):
-                kfilter._tmp2[j] = kfilter._tmp1[j] * forecast_error_cov_inv
-                kfilter._filtered_state[j] = kfilter._filtered_state[j] + kfilter._forecast_error[i] * kfilter._tmp2[j]
+                kfilter._kalman_gain[i*kfilter.k_endog + j] = kfilter._tmp1[j] * forecast_error_cov_inv
+                kfilter._filtered_state[j] = kfilter._filtered_state[j] + kfilter._forecast_error[i] * kfilter._kalman_gain[i*kfilter.k_endog + j]
             # blas.{{prefix}}axpy(&kfilter.k_states, &forecast_error_cov_inv, kfilter._tmp1, &inc,
-            #                                                                 kfilter._tmp2, &inc)
-            # blas.{{prefix}}axpy(&kfilter.k_states, &kfilter._forecast_error[i], kfilter._tmp2, &inc,
+            #                                                                 kfilter._kalman_gain[i*kfilter.k_endog], &inc)
+            # blas.{{prefix}}axpy(&kfilter.k_states, &kfilter._forecast_error[i], kfilter._kalman_gain[i*kfilter.k_endog], &inc,
             #                                                                    kfilter._filtered_state, &inc)
 
             # #### Filtered state covariance for time t
             # $P_{t,i+1} = P_{t,i} Z_{t,i}' F_{t,i}^{-1} Z_{t,i} P_{t,i}'$
             blas.{{prefix}}gemm("N", "T", &kfilter.k_states, &kfilter.k_states, &inc,
                                           &gamma, kfilter._tmp1, &kfilter.k_states,
-                                                  kfilter._tmp2, &kfilter.k_states,
+                                                  &kfilter._kalman_gain[i*kfilter.k_endog], &kfilter.k_states,
                                           &alpha, kfilter._filtered_state_cov, &kfilter.k_states)
 
             # #### Loglikelihood
