@@ -118,6 +118,7 @@ cdef class sKalmanFilter(object):
     cdef np.float32_t * _predicted_state_cov
 
     cdef np.float32_t * _kalman_gain
+    cdef np.float32_t * _loglikelihood
 
     cdef np.float32_t * _converged_forecast_error_cov
     cdef np.float32_t * _converged_filtered_state_cov
@@ -237,6 +238,7 @@ cdef class dKalmanFilter(object):
     cdef np.float64_t * _predicted_state_cov
 
     cdef np.float64_t * _kalman_gain
+    cdef np.float64_t * _loglikelihood
 
     cdef np.float64_t * _converged_forecast_error_cov
     cdef np.float64_t * _converged_filtered_state_cov
@@ -356,6 +358,7 @@ cdef class cKalmanFilter(object):
     cdef np.complex64_t * _predicted_state_cov
 
     cdef np.complex64_t * _kalman_gain
+    cdef np.complex64_t * _loglikelihood
 
     cdef np.complex64_t * _converged_forecast_error_cov
     cdef np.complex64_t * _converged_filtered_state_cov
@@ -475,6 +478,7 @@ cdef class zKalmanFilter(object):
     cdef np.complex128_t * _predicted_state_cov
 
     cdef np.complex128_t * _kalman_gain
+    cdef np.complex128_t * _loglikelihood
 
     cdef np.complex128_t * _converged_forecast_error_cov
     cdef np.complex128_t * _converged_filtered_state_cov

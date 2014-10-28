@@ -9,6 +9,9 @@ def configuration(parent_package='', top_path=None):
     config.add_extension('_conventional',
                          include_dirs=['dismalpy/src'],
                          sources=['_conventional.c'], extra_info=info)
+    config.add_extension('_univariate',
+                         include_dirs=['dismalpy/src'],
+                         sources=['_univariate.c'], extra_info=info)
     config.add_extension('_inversions',
                          include_dirs=['dismalpy/src'],
                          sources=['_inversions.c'], extra_info=info)

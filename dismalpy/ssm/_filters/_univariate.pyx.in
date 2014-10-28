@@ -1,0 +1,218 @@
+#cython: boundscheck=False
+#cython: wraparound=False
+#cython: cdivision=False
+"""
+State Space Models
+
+Author: Chad Fulton  
+License: Simplified-BSD
+"""
+
+{{py:
+
+TYPES = {
+    "s": ("np.float32_t", "np.float32", "np.NPY_FLOAT32"),
+    "d": ("np.float64_t", "float", "np.NPY_FLOAT64"),
+    "c": ("np.complex64_t", "np.complex64", "np.NPY_COMPLEX64"),
+    "z": ("np.complex128_t", "complex", "np.NPY_COMPLEX128"),
+}
+
+}}
+
+# Typical imports
+cimport numpy as np
+import numpy as np
+from dismalpy.src.math cimport *
+cimport dismalpy.src.blas as blas
+cimport dismalpy.src.lapack as lapack
+
+from dismalpy.ssm._kalman_filter cimport MEMORY_NO_LIKELIHOOD
+
+{{for prefix, types in TYPES.items()}}
+{{py:cython_type, dtype, typenum = types}}
+{{py:
+combined_prefix = prefix
+combined_cython_type = cython_type
+if prefix == 'c':
+    combined_prefix = 'z'
+    combined_cython_type = 'np.complex128_t'
+if prefix == 's':
+    combined_prefix = 'd'
+    combined_cython_type = 'np.float64_t'
+}}
+
+# ### Univariate Kalman filter
+#
+# The following are the routines as defined in the univariate Kalman filter.
+#
+# See Durbin and Koopman (2012) Chapter 6.4
+
+cdef int {{prefix}}forecast_univariate({{prefix}}KalmanFilter kfilter):
+
+    # Constants
+    cdef:
+        int i, j, inc = 1, ld
+        {{cython_type}} alpha = 1.0
+        {{cython_type}} beta = 0.0
+        {{cython_type}} gamma = -1.0
+        {{cython_type}} forecast_error_cov
+        {{cython_type}} forecast_error_cov_inv
+
+    # Initialize the filtered states
+    blas.{{prefix}}copy(&kfilter.k_states, kfilter._input_state, &inc,
+                                           kfilter._filtered_state, &inc)
+    blas.{{prefix}}copy(&kfilter.k_states2, kfilter._input_state_cov, &inc,
+                                            kfilter._filtered_state_cov, &inc)
+
+    # Make sure the loglikelihood is set to zero if necessary
+    if not (kfilter.conserve_memory & MEMORY_NO_LIKELIHOOD):
+        kfilter._loglikelihood[0] = 0
+
+    # Iterate over the observations at time t
+    for i in range(kfilter.k_endog):
+        # #### Forecast for time t
+        # `forecast` $= Z_{t,i} a_{t,i} + d_{t,i}$
+        # Note: $Z_{t,i}$ is a row vector starting at [i,0,t] and ending at
+        # [i,k_states,t]
+        # Note: zdot and cdot are broken, so have to use gemv for those
+        {{if combined_prefix == 'd'}}
+        kfilter._forecast[i] = (
+            kfilter._obs_intercept[i] +
+            blas.{{prefix}}dot(&kfilter.k_states, &kfilter._design[i], &kfilter.k_endog,
+                                                  kfilter._filtered_state, &inc)
+        )
+        {{else}}
+        blas.{{prefix}}gemv("N", &inc, &kfilter.k_states,
+                       &alpha, kfilter._filtered_state, &inc,
+                               &kfilter._design[i], &kfilter.k_endog,
+                       &beta, kfilter._tmp0, &inc)
+        kfilter._forecast[i] = kfilter._obs_intercept[i] + kfilter._tmp0[0]
+        {{endif}}
+
+        # #### Forecast error for time t
+        # `forecast_error` $\equiv v_t = y_t -$ `forecast`
+        kfilter._forecast_error[i] = kfilter._obs[i] - kfilter._forecast[i]
+
+        # *Intermediate calculation* (used just below and then once more)  
+        # `tmp1` array used here, dimension $(m \times 1)$  
+        # $\\#_1 = P_{t,i} Z_{t,i}'$  
+        # $(m \times 1) = (m \times m) (1 \times m)'$
+        blas.{{prefix}}gemv("N", &kfilter.k_states, &kfilter.k_states,
+              &alpha, kfilter._filtered_state_cov, &kfilter.k_states,
+                      &kfilter._design[i], &kfilter.k_endog,
+              &beta, kfilter._tmp1, &inc)
+
+        # #### Forecast error covariance matrix for time t
+        # $F_{t,i} \equiv Z_{t,i} P_{t,i} Z_{t,i}' + H_{t,i}$
+        # TODO what about Kalman convergence?
+        # Note: zdot and cdot are broken, so have to use gemv for those
+        {{if combined_prefix == 'd'}}
+        forecast_error_cov = (
+            kfilter._obs_cov[i + i*kfilter.k_endog] +
+            blas.{{prefix}}dot(&kfilter.k_states, &kfilter._design[i], &kfilter.k_endog,
+                                                  kfilter._tmp1, &inc)
+        )
+        {{else}}
+        blas.{{prefix}}gemv("N", &inc, &kfilter.k_states,
+                       &alpha, kfilter._tmp1, &inc,
+                               &kfilter._design[i], &kfilter.k_endog,
+                       &beta, kfilter._tmp0, &inc)
+        forecast_error_cov = kfilter._obs_cov[i + i*kfilter.k_endog] + kfilter._tmp0[0]
+        {{endif}}
+        # print kfilter._filtered_state_cov[0]
+        # print kfilter._tmp1[0]
+        # print kfilter._obs_cov[i + i*kfilter.k_endog]
+        # print kfilter._design[i]
+        # print forecast_error_cov
+        kfilter._forecast_error_cov[i + i*kfilter.k_endog] = forecast_error_cov
+
+        # If we have a non-zero variance
+        # (if we have a zero-variance then we are done with this iteration)
+        if not forecast_error_cov == 0:
+            forecast_error_cov_inv = 1.0 / forecast_error_cov
+
+
+            # #### Filtered state for time t
+            # $a_{t,i+1} = a_{t,i} + P_{t,i} Z_{t,i}' F_{t,i}^{-1} v_{t,i}$  
+            # Make a new temporary array  
+            # tmp2 = P_{t,i} Z_{t,i}' F_{t,i}^{-1}
+            for j in range(kfilter.k_states):
+                kfilter._tmp2[j] = kfilter._tmp1[j] * forecast_error_cov_inv
+                kfilter._filtered_state[j] = kfilter._filtered_state[j] + kfilter._forecast_error[i] * kfilter._tmp2[j]
+            # blas.{{prefix}}axpy(&kfilter.k_states, &forecast_error_cov_inv, kfilter._tmp1, &inc,
+            #                                                                 kfilter._tmp2, &inc)
+            # blas.{{prefix}}axpy(&kfilter.k_states, &kfilter._forecast_error[i], kfilter._tmp2, &inc,
+            #                                                                    kfilter._filtered_state, &inc)
+
+            # #### Filtered state covariance for time t
+            # $P_{t,i+1} = P_{t,i} Z_{t,i}' F_{t,i}^{-1} Z_{t,i} P_{t,i}'$
+            blas.{{prefix}}gemm("N", "T", &kfilter.k_states, &kfilter.k_states, &inc,
+                                          &gamma, kfilter._tmp1, &kfilter.k_states,
+                                                  kfilter._tmp2, &kfilter.k_states,
+                                          &alpha, kfilter._filtered_state_cov, &kfilter.k_states)
+
+            # #### Loglikelihood
+            kfilter._loglikelihood[0] = (
+                kfilter._loglikelihood[0] - 0.5*(
+                    {{combined_prefix}}log(2 * NPY_PI * forecast_error_cov) + 
+                    kfilter._forecast_error[i]**2 * forecast_error_cov_inv
+                )
+            )
+
+    return 0
+
+cdef int {{prefix}}updating_univariate({{prefix}}KalmanFilter kfilter):
+    # the updating step was performed in the forecast_univariate step
+    return 0
+
+cdef int {{prefix}}prediction_univariate({{prefix}}KalmanFilter kfilter):
+    # Constants
+    cdef:
+        int inc = 1
+        {{cython_type}} alpha = 1.0
+        {{cython_type}} beta = 0.0
+        {{cython_type}} gamma = -1.0
+
+    # #### Predicted state for time t+1
+    # $a_{t+1} = T_t a_{t,n} + c_t$
+    blas.{{prefix}}copy(&kfilter.k_states, kfilter._state_intercept, &inc, kfilter._predicted_state, &inc)
+    blas.{{prefix}}gemv("N", &kfilter.k_states, &kfilter.k_states,
+          &alpha, kfilter._transition, &kfilter.k_states,
+                  kfilter._filtered_state, &inc,
+          &alpha, kfilter._predicted_state, &inc)
+
+    # #### Predicted state covariance matrix for time t+1
+    # $P_{t+1} = T_t P_{t,n} T_t' + Q_t^*$
+    #
+    # TODO check behavior during convergence
+    blas.{{prefix}}copy(&kfilter.k_states2, kfilter._selected_state_cov, &inc, kfilter._predicted_state_cov, &inc)
+    # `tmp0` array used here, dimension $(m \times m)$  
+
+    # $\\#_0 = T_t P_{t|t} $
+
+    # $(m \times m) = (m \times m) (m \times m)$
+    blas.{{prefix}}gemm("N", "N", &kfilter.k_states, &kfilter.k_states, &kfilter.k_states,
+          &alpha, kfilter._transition, &kfilter.k_states,
+                  kfilter._filtered_state_cov, &kfilter.k_states,
+          &beta, kfilter._tmp0, &kfilter.k_states)
+    # $P_{t+1} = 1.0 \\#_0 T_t' + 1.0 \\#$  
+    # $(m \times m) = (m \times m) (m \times m) + (m \times m)$
+    blas.{{prefix}}gemm("N", "T", &kfilter.k_states, &kfilter.k_states, &kfilter.k_states,
+          &alpha, kfilter._tmp0, &kfilter.k_states,
+                  kfilter._transition, &kfilter.k_states,
+          &alpha, kfilter._predicted_state_cov, &kfilter.k_states)
+
+    # #### Kalman gain for time t
+    # $K_t = T_t P_t Z_t' F_t^{-1}$
+    #
+    # TODO Kalman gain calculation done in forecasting step.
+
+    return 0
+
+cdef {{cython_type}} {{prefix}}inverse_noop_univariate({{prefix}}KalmanFilter kfilter, {{cython_type}} determinant) except *:
+    return 0
+
+cdef {{cython_type}} {{prefix}}loglikelihood_univariate({{prefix}}KalmanFilter kfilter, {{cython_type}} determinant):
+    return kfilter._loglikelihood[0]
+
+{{endfor}}

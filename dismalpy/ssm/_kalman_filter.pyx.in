@@ -83,6 +83,13 @@ from dismalpy.ssm._filters._conventional cimport (
     {{prefix}}prediction_conventional,
     {{prefix}}loglikelihood_conventional
 )
+from dismalpy.ssm._filters._univariate cimport (
+    {{prefix}}forecast_univariate,
+    {{prefix}}updating_univariate,
+    {{prefix}}inverse_noop_univariate,
+    {{prefix}}prediction_univariate,
+    {{prefix}}loglikelihood_univariate
+)
 from dismalpy.ssm._filters._inversions cimport (
     {{prefix}}inverse_univariate,
     {{prefix}}factorize_cholesky,
@@ -297,6 +304,7 @@ cdef class {{prefix}}KalmanFilter(object):
     # cdef {{cython_type}} * _predicted_state_cov
 
     # cdef {{cython_type}} * _kalman_gain
+    # cdef {{cython_type}} * _loglikelihood
 
     # cdef {{cython_type}} * _converged_forecast_error_cov
     # cdef {{cython_type}} * _converged_filtered_state_cov
@@ -353,8 +361,6 @@ cdef class {{prefix}}KalmanFilter(object):
 
         # Initialize filter parameters
         self.tolerance = tolerance
-        if not filter_method == FILTER_CONVENTIONAL:
-            raise NotImplementedError("Only the conventional Kalman filter is currently implemented")
         self.filter_method = filter_method
         self.inversion_method = inversion_method
         self.stability_method = stability_method
@@ -642,6 +648,7 @@ cdef class {{prefix}}KalmanFilter(object):
             int predicted_t = t
             int gain_t = t
             int smoothing_t = t
+            int loglikelihood_t = t
         if self.conserve_memory & MEMORY_NO_FORECAST > 0:
             forecast_t = 1
         if self.conserve_memory & MEMORY_NO_FILTERED > 0:
@@ -652,6 +659,8 @@ cdef class {{prefix}}KalmanFilter(object):
             gain_t = 1
         if self.conserve_memory & MEMORY_NO_SMOOTHING > 0:
             smoothing_t = 1
+        if self.conserve_memory & MEMORY_NO_LIKELIHOOD > 0:
+            loglikelihood_t = 0
 
         # Initialize object-level pointers to input arrays
         self._input_state = &self.predicted_state[0, predicted_t]
@@ -678,6 +687,8 @@ cdef class {{prefix}}KalmanFilter(object):
 
         self._kalman_gain = &self.kalman_gain[0, 0, gain_t]
 
+        self._loglikelihood = &self.loglikelihood[loglikelihood_t]
+
         # Initialize object-level pointers to named temporary arrays
         self._tmp1 = &self.tmp1[0, 0, smoothing_t]
         self._tmp2 = &self.tmp2[0, smoothing_t]
@@ -685,9 +696,20 @@ cdef class {{prefix}}KalmanFilter(object):
         self._tmp4 = &self.tmp4[0, 0, smoothing_t]
 
     cdef void initialize_function_pointers(self) except *:
-        if self.filter_method & FILTER_CONVENTIONAL:
+        # Filtering method
+        if self.filter_method & FILTER_UNIVARIATE:
+            self.forecasting = {{prefix}}forecast_univariate
+            self.updating = {{prefix}}updating_univariate
+            self.inversion = {{prefix}}inverse_noop_univariate
+            self.calculate_loglikelihood = {{prefix}}loglikelihood_univariate
+            self.prediction = {{prefix}}prediction_univariate
+        elif self.filter_method & FILTER_CONVENTIONAL:
             self.forecasting = {{prefix}}forecast_conventional
+            self.updating = {{prefix}}updating_conventional
+            self.calculate_loglikelihood = {{prefix}}loglikelihood_conventional
+            self.prediction = {{prefix}}prediction_conventional
 
+            # Inversion method
             if self.inversion_method & INVERT_UNIVARIATE and self.k_endog == 1:
                 self.inversion = {{prefix}}inverse_univariate
             elif self.inversion_method & SOLVE_CHOLESKY:
@@ -700,11 +722,6 @@ cdef class {{prefix}}KalmanFilter(object):
                 self.inversion = {{prefix}}inverse_lu
             else:
                 raise NotImplementedError("Invalid inversion method")
-
-            self.updating = {{prefix}}updating_conventional
-            self.calculate_loglikelihood = {{prefix}}loglikelihood_conventional
-            self.prediction = {{prefix}}prediction_conventional
-
         else:
             raise NotImplementedError("Invalid filtering method")
 
