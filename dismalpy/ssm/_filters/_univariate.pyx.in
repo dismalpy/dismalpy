@@ -142,18 +142,18 @@ cdef int {{prefix}}forecast_univariate({{prefix}}KalmanFilter kfilter):
             # Make a new temporary array  
             # K_{t,i} = P_{t,i} Z_{t,i}' F_{t,i}^{-1}
             for j in range(kfilter.k_states):
-                kfilter._kalman_gain[i*kfilter.k_endog + j] = kfilter._tmp1[j] * forecast_error_cov_inv
-                kfilter._filtered_state[j] = kfilter._filtered_state[j] + kfilter._forecast_error[i] * kfilter._kalman_gain[i*kfilter.k_endog + j]
+                kfilter._kalman_gain[i*kfilter.k_states + j] = kfilter._tmp1[j] * forecast_error_cov_inv
+                kfilter._filtered_state[j] = kfilter._filtered_state[j] + kfilter._forecast_error[i] * kfilter._kalman_gain[i*kfilter.k_states + j]
             # blas.{{prefix}}axpy(&kfilter.k_states, &forecast_error_cov_inv, kfilter._tmp1, &inc,
-            #                                                                 kfilter._kalman_gain[i*kfilter.k_endog], &inc)
-            # blas.{{prefix}}axpy(&kfilter.k_states, &kfilter._forecast_error[i], kfilter._kalman_gain[i*kfilter.k_endog], &inc,
+            #                                                                 kfilter._kalman_gain[i*kfilter.k_states], &inc)
+            # blas.{{prefix}}axpy(&kfilter.k_states, &kfilter._forecast_error[i], kfilter._kalman_gain[i*kfilter.k_states], &inc,
             #                                                                    kfilter._filtered_state, &inc)
 
             # #### Filtered state covariance for time t
             # $P_{t,i+1} = P_{t,i} Z_{t,i}' F_{t,i}^{-1} Z_{t,i} P_{t,i}'$
             blas.{{prefix}}gemm("N", "T", &kfilter.k_states, &kfilter.k_states, &inc,
                                           &gamma, kfilter._tmp1, &kfilter.k_states,
-                                                  &kfilter._kalman_gain[i*kfilter.k_endog], &kfilter.k_states,
+                                                  &kfilter._kalman_gain[i*kfilter.k_states], &kfilter.k_states,
                                           &alpha, kfilter._filtered_state_cov, &kfilter.k_states)
 
             # #### Loglikelihood

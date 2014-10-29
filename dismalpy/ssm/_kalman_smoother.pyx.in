@@ -32,7 +32,7 @@ cdef int SMOOTHER_ALL = (
 )
 
 from dismalpy.ssm._kalman_filter cimport (
-    FILTER_CONVENTIONAL,
+    FILTER_CONVENTIONAL, FILTER_UNIVARIATE,
     MEMORY_NO_PREDICTED, MEMORY_NO_GAIN, MEMORY_NO_SMOOTHING
 )
 
@@ -67,6 +67,10 @@ from dismalpy.ssm._smoothers._conventional cimport (
     {{prefix}}smoothed_estimators_conventional,
     {{prefix}}smoothed_state_conventional,
     {{prefix}}smoothed_disturbances_conventional
+)
+from dismalpy.ssm._smoothers._univariate cimport (
+    {{prefix}}smoothed_estimators_univariate,
+    {{prefix}}smoothed_disturbances_univariate
 )
 
 # ## Kalman filter
@@ -412,7 +416,13 @@ cdef class {{prefix}}KalmanSmoother(object):
         self._smoothed_state_disturbance_cov = &self.smoothed_state_disturbance_cov[0, 0, t]
 
     cdef void initialize_function_pointers(self) except *:
-        if self.kfilter.filter_method & FILTER_CONVENTIONAL:
+        if self.kfilter.filter_method & FILTER_UNIVARIATE:
+
+            self.smooth_estimators = {{prefix}}smoothed_estimators_univariate
+            self.smooth_state = {{prefix}}smoothed_state_conventional
+            self.smooth_disturbances = {{prefix}}smoothed_disturbances_univariate
+
+        elif self.kfilter.filter_method & FILTER_CONVENTIONAL:
 
             self.smooth_estimators = {{prefix}}smoothed_estimators_conventional
             self.smooth_state = {{prefix}}smoothed_state_conventional
