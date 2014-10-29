@@ -308,7 +308,7 @@ class Representation(Model):
         # These matrices are only used in the Python object as containers,
         # which will be copied to the appropriate _statespace object if a
         # filter is called.
-        for name, shape in self.shapes.iteritems():
+        for name, shape in self.shapes.items():
             if name == 'obs':
                 continue
             # Create the initial storage array for each matrix

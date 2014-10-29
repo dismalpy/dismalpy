@@ -233,7 +233,7 @@ def kalman_filter(model, return_loglike=False):
             return np.array(loglikelihood)
     else:
         kwargs = dict(
-            (k, v) for k, v in locals().iteritems()
+            (k, v) for k, v in locals().items()
             if k in _kalman_filter._fields
         )
         kwargs['model'] = _statespace(
