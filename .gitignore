@@ -118,8 +118,12 @@ dismalpy/ssm/_filters/_conventional.c
 dismalpy/ssm/_filters/_conventional.pyx
 dismalpy/ssm/_filters/_inversions.c
 dismalpy/ssm/_filters/_inversions.pyx
+dismalpy/ssm/_filters/_univariate.c
+dismalpy/ssm/_filters/_univariate.pyx
 dismalpy/ssm/_smoothers/_conventional.c
 dismalpy/ssm/_smoothers/_conventional.pyx
+dismalpy/ssm/_smoothers/_univariate.c
+dismalpy/ssm/_smoothers/_univariate.pyx
 examples
 
 # lbfgs output
