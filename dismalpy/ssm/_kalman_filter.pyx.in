@@ -599,43 +599,20 @@ cdef class {{prefix}}KalmanFilter(object):
         self.t += 1
 
     cdef void initialize_statespace_object_pointers(self) except *:
-        cdef:
-            int t = self.t
-        # Indices for possibly time-varying arrays
-        cdef:
-            int design_t = 0
-            int obs_intercept_t = 0
-            int obs_cov_t = 0
-            int transition_t = 0
-            int state_intercept_t = 0
-            int selection_t = 0
-            int state_cov_t = 0
-
-        # Get indices for possibly time-varying arrays
-        if not self.model.time_invariant:
-            if self.model.design.shape[2] > 1:             design_t = t
-            if self.model.obs_intercept.shape[1] > 1:      obs_intercept_t = t
-            if self.model.obs_cov.shape[2] > 1:            obs_cov_t = t
-            if self.model.transition.shape[2] > 1:         transition_t = t
-            if self.model.state_intercept.shape[1] > 1:    state_intercept_t = t
-            if self.model.selection.shape[2] > 1:          selection_t = t
-            if self.model.state_cov.shape[2] > 1:          state_cov_t = t
-
         # Initialize object-level pointers to statespace arrays
-        self._obs = &self.model.obs[0, t]
-        self._design = &self.model.design[0, 0, design_t]
-        self._obs_intercept = &self.model.obs_intercept[0, obs_intercept_t]
-        self._obs_cov = &self.model.obs_cov[0, 0, obs_cov_t]
-        self._transition = &self.model.transition[0, 0, transition_t]
-        self._state_intercept = &self.model.state_intercept[0, state_intercept_t]
-        self._selection = &self.model.selection[0, 0, selection_t]
-        self._state_cov = &self.model.state_cov[0, 0, state_cov_t]
+        self.model.initialize_object_pointers(self.t)
 
-        # Initialize object-level pointers to initialization
-        if not self.model.initialized:
-            raise RuntimeError("Statespace model not initialized.")
-        self._initial_state = &self.model.initial_state[0]
-        self._initial_state_cov = &self.model.initial_state_cov[0,0]
+        # Get convenience copies of the pointers
+        self._obs = self.model._obs
+        self._design = self.model._design
+        self._obs_intercept = self.model._obs_intercept
+        self._obs_cov = self.model._obs_cov
+        self._transition = self.model._transition
+        self._state_intercept = self.model._state_intercept
+        self._selection = self.model._selection
+        self._state_cov = self.model._state_cov
+        self._initial_state = self.model._initial_state
+        self._initial_state_cov = self.model._initial_state_cov
 
     cdef void initialize_filter_object_pointers(self):
         cdef:

@@ -44,6 +44,9 @@ cdef class sStatespace(object):
     cdef np.float32_t * _initial_state
     cdef np.float32_t * _initial_state_cov
 
+    # Functions
+    cdef void initialize_object_pointers(self, unsigned int t) except *
+
 cdef class dStatespace(object):
     # Statespace dimensions
     cdef readonly int nobs, k_endog, k_states, k_posdef
@@ -77,6 +80,9 @@ cdef class dStatespace(object):
     cdef np.float64_t * _selected_state_cov
     cdef np.float64_t * _initial_state
     cdef np.float64_t * _initial_state_cov
+
+    # Functions
+    cdef void initialize_object_pointers(self, unsigned int t) except *
 
 cdef class cStatespace(object):
     # Statespace dimensions
@@ -112,6 +118,9 @@ cdef class cStatespace(object):
     cdef np.complex64_t * _initial_state
     cdef np.complex64_t * _initial_state_cov
 
+    # Functions
+    cdef void initialize_object_pointers(self, unsigned int t) except *
+
 cdef class zStatespace(object):
     # Statespace dimensions
     cdef readonly int nobs, k_endog, k_states, k_posdef
@@ -145,6 +154,9 @@ cdef class zStatespace(object):
     cdef np.complex128_t * _selected_state_cov
     cdef np.complex128_t * _initial_state
     cdef np.complex128_t * _initial_state_cov
+
+    # Functions
+    cdef void initialize_object_pointers(self, unsigned int t) except *
 
 cdef int sselect_state_cov(int k_states, int k_posdef,
                            np.float32_t * tmp,

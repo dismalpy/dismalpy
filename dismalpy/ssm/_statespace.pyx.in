@@ -294,6 +294,43 @@ cdef class {{prefix}}Statespace(object):
 
         self.initialized = True
 
+    cdef void initialize_object_pointers(self, unsigned int t) except *:
+        # Indices for possibly time-varying arrays
+        cdef:
+            int design_t = 0
+            int obs_intercept_t = 0
+            int obs_cov_t = 0
+            int transition_t = 0
+            int state_intercept_t = 0
+            int selection_t = 0
+            int state_cov_t = 0
+
+        # Get indices for possibly time-varying arrays
+        if not self.time_invariant:
+            if self.design.shape[2] > 1:             design_t = t
+            if self.obs_intercept.shape[1] > 1:      obs_intercept_t = t
+            if self.obs_cov.shape[2] > 1:            obs_cov_t = t
+            if self.transition.shape[2] > 1:         transition_t = t
+            if self.state_intercept.shape[1] > 1:    state_intercept_t = t
+            if self.selection.shape[2] > 1:          selection_t = t
+            if self.state_cov.shape[2] > 1:          state_cov_t = t
+
+        # Initialize object-level pointers to statespace arrays
+        self._obs = &self.obs[0, t]
+        self._design = &self.design[0, 0, design_t]
+        self._obs_intercept = &self.obs_intercept[0, obs_intercept_t]
+        self._obs_cov = &self.obs_cov[0, 0, obs_cov_t]
+        self._transition = &self.transition[0, 0, transition_t]
+        self._state_intercept = &self.state_intercept[0, state_intercept_t]
+        self._selection = &self.selection[0, 0, selection_t]
+        self._state_cov = &self.state_cov[0, 0, state_cov_t]
+
+        # Initialize object-level pointers to initialization
+        if not self.initialized:
+            raise RuntimeError("Statespace model not initialized.")
+        self._initial_state = &self.initial_state[0]
+        self._initial_state_cov = &self.initial_state_cov[0,0]
+
 # ### Selected state covariance matrice
 cdef int {{prefix}}select_state_cov(int k_states, int k_posdef,
                                     {{cython_type}} * tmp,
