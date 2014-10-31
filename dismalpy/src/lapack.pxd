@@ -115,6 +115,23 @@ ctypedef int spotrs_t(
     int *info         # 0 if success, otherwise an error code (integer)
 ) nogil
 
+ctypedef int strtrs_t(
+    # STRTRS solves a triangular system of the form
+    # A * X = B  or  A**T * X = B,
+    # where A is a triangular matrix of order N, and B is an N-by-NRHS
+    # matrix. A check is made to verify that A is nonsingular.
+    char *uplo,       # 'U':  A is upper triangular
+    char *trans,      # 'N', 'T', 'C'
+    char *diag,       # 'N': A is non-unit triangular, 'U': a is unit triangular
+    int *n,           # The order of the matrix A.  n >= 0.
+    int *nrhs,        # The number of right hand sides
+    np.float32_t *a,  # Matrix A: nxn
+    int *lda,         # The size of the first dimension of A (in memory)
+    np.float32_t *b,  # Matrix B: nxnrhs
+    int *ldb,         # The size of the first dimension of B (in memory)
+    int *info         # 0 if success, otherwise an error code (integer)
+) nogil
+
 ctypedef int dgees_t(
     char *jobvs,
     char *sort,
@@ -213,6 +230,23 @@ ctypedef int dpotrs_t(
     # symmetric positive definite matrix A using the Cholesky fac-
     # torization A = U**T*U or A = L*L**T computed by DPOTRF
     char *uplo,       # 'U':  A = U'U and U is stored, 'L': A = LL' and L is stored
+    int *n,           # The order of the matrix A.  n >= 0.
+    int *nrhs,        # The number of right hand sides
+    np.float64_t *a,  # Matrix A: nxn
+    int *lda,         # The size of the first dimension of A (in memory)
+    np.float64_t *b,  # Matrix B: nxnrhs
+    int *ldb,         # The size of the first dimension of B (in memory)
+    int *info         # 0 if success, otherwise an error code (integer)
+) nogil
+
+ctypedef int dtrtrs_t(
+    # DTRTRS solves a triangular system of the form
+    # A * X = B  or  A**T * X = B,
+    # where A is a triangular matrix of order N, and B is an N-by-NRHS
+    # matrix. A check is made to verify that A is nonsingular.
+    char *uplo,       # 'U':  A is upper triangular
+    char *trans,      # 'N', 'T', 'C'
+    char *diag,       # 'N': A is non-unit triangular, 'U': a is unit triangular
     int *n,           # The order of the matrix A.  n >= 0.
     int *nrhs,        # The number of right hand sides
     np.float64_t *a,  # Matrix A: nxn
@@ -329,6 +363,23 @@ ctypedef int cpotrs_t(
     int *info           # 0 if success, otherwise an error code (integer)
 ) nogil
 
+ctypedef int ctrtrs_t(
+    # CTRTRS solves a triangular system of the form
+    # A * X = B  or  A**T * X = B,
+    # where A is a triangular matrix of order N, and B is an N-by-NRHS
+    # matrix. A check is made to verify that A is nonsingular.
+    char *uplo,       # 'U':  A is upper triangular
+    char *trans,      # 'N', 'T', 'C'
+    char *diag,       # 'N': A is non-unit triangular, 'U': a is unit triangular
+    int *n,           # The order of the matrix A.  n >= 0.
+    int *nrhs,        # The number of right hand sides
+    np.complex64_t *a,  # Matrix A: nxn
+    int *lda,         # The size of the first dimension of A (in memory)
+    np.complex64_t *b,  # Matrix B: nxnrhs
+    int *ldb,         # The size of the first dimension of B (in memory)
+    int *info         # 0 if success, otherwise an error code (integer)
+) nogil
+
 ctypedef int zgees_t(
     char *jobvs,
     char *sort,
@@ -436,6 +487,23 @@ ctypedef int zpotrs_t(
     int *info            # 0 if success, otherwise an error code (integer)
 ) nogil
 
+ctypedef int ztrtrs_t(
+    # ZTRTRS solves a triangular system of the form
+    # A * X = B  or  A**T * X = B,
+    # where A is a triangular matrix of order N, and B is an N-by-NRHS
+    # matrix. A check is made to verify that A is nonsingular.
+    char *uplo,       # 'U':  A is upper triangular
+    char *trans,      # 'N', 'T', 'C'
+    char *diag,       # 'N': A is non-unit triangular, 'U': a is unit triangular
+    int *n,           # The order of the matrix A.  n >= 0.
+    int *nrhs,        # The number of right hand sides
+    np.complex128_t *a,  # Matrix A: nxn
+    int *lda,         # The size of the first dimension of A (in memory)
+    np.complex128_t *b,  # Matrix B: nxnrhs
+    int *ldb,         # The size of the first dimension of B (in memory)
+    int *info         # 0 if success, otherwise an error code (integer)
+) nogil
+
 cdef:
     cgees_t  *cgees
     ctrsyl_t *ctrsyl
@@ -445,6 +513,7 @@ cdef:
     cpotrf_t *cpotrf
     cpotri_t *cpotri
     cpotrs_t *cpotrs
+    ctrtrs_t *ctrtrs
     sgees_t  *sgees
     strsyl_t *strsyl
     sgetrf_t *sgetrf
@@ -453,6 +522,7 @@ cdef:
     spotrf_t *spotrf
     spotri_t *spotri
     spotrs_t *spotrs
+    strtrs_t *strtrs
     zgees_t  *zgees
     ztrsyl_t *ztrsyl
     zgetrf_t *zgetrf
@@ -461,6 +531,7 @@ cdef:
     zpotrf_t *zpotrf
     zpotri_t *zpotri
     zpotrs_t *zpotrs
+    ztrtrs_t *ztrtrs
     dgees_t  *dgees
     dtrsyl_t *dtrsyl
     dgetrf_t *dgetrf
@@ -469,3 +540,4 @@ cdef:
     dpotrf_t *dpotrf
     dpotri_t *dpotri
     dpotrs_t *dpotrs
+    dtrtrs_t * dtrtrs
