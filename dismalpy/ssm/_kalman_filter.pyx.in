@@ -668,11 +668,16 @@ cdef class {{prefix}}KalmanFilter(object):
             self.inversion = {{prefix}}inverse_noop_univariate
             self.calculate_loglikelihood = {{prefix}}loglikelihood_univariate
             self.prediction = {{prefix}}prediction_univariate
+
+            # TODO check for (generalized) collapse at least for loglikelihood
+
         elif self.filter_method & FILTER_CONVENTIONAL:
             self.forecasting = {{prefix}}forecast_conventional
             self.updating = {{prefix}}updating_conventional
             self.calculate_loglikelihood = {{prefix}}loglikelihood_conventional
             self.prediction = {{prefix}}prediction_conventional
+
+            # TODO check for collapse at least for loglikelihood
 
             # Inversion method
             if self.inversion_method & INVERT_UNIVARIATE and self.k_endog == 1:
@@ -736,9 +741,34 @@ cdef class {{prefix}}KalmanFilter(object):
             self._obs_cov = self.model._obs_cov
 
     cdef void transform(self):
-        if self.filter_method & FILTER_UNIVARIATE:
+        # Generalized collapse by transformation
+        # (Note: this incorporates the conversion to a diagonal
+        # observation covariance matrix)
+        if self.filter_method & FILTER_COLLAPSED:
+            self.model.transform_generalized_collapse(self.t)
+
+            # Reset pointers
+            self._obs = self.model._obs
+            self._design = self.model._design
+            self._obs_cov = self.model._obs_cov
+
+            # Add the likelihood to the current iteration
+            # Note: this is before it is set by the main prediction error
+            # decomposition of the Kalman filter
+            print(self.model.collapse_loglikelihood)
+            if self.conserve_memory & MEMORY_NO_LIKELIHOOD:
+                if self.t >= self.loglikelihood_burn:
+                    self.loglikelihood[0] = self.loglikelihood[0] + self.model.collapse_loglikelihood
+            else:
+                self.loglikelihood[self.t] = self.model.collapse_loglikelihood
+
+        # If we're not collapsing, we may need to perform a Cholesky
+        # transformation
+        if(self.filter_method & FILTER_UNIVARIATE and
+           not (self.filter_method & FILTER_COLLAPSED) and
+           not self.model.diagonal_obs_cov):
             # Perform cholesky transformation
-            self.model.transform_cholesky(self.t)
+            self.model.transform_diagonalize(self.t)
 
             # Reset pointers
             self._obs = self.model._obs

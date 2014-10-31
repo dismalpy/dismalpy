@@ -41,6 +41,12 @@ cdef class sStatespace(object):
     cdef readonly np.float32_t [::1,:] transform_cholesky
     cdef readonly np.float32_t [::1,:] transform_obs_cov
     cdef readonly np.float32_t [::1,:] transform_design
+    cdef readonly np.float32_t transform_determinant
+
+    cdef readonly np.float32_t [:] collapse_obs
+    cdef readonly np.float32_t [::1,:] collapse_design
+    cdef readonly np.float32_t [::1,:] collapse_obs_cov
+    cdef readonly np.float32_t collapse_loglikelihood
 
     # Pointers
     cdef np.float32_t * _obs
@@ -61,8 +67,7 @@ cdef class sStatespace(object):
     cdef int select_missing(self, unsigned int t)
     cdef void _select_missing_entire_obs(self, unsigned int t)
     cdef void _select_missing_partial_obs(self, unsigned int t)
-    cdef void transform_cholesky(self, unsigned int t) except *
-    cdef void transform_collapse(self, unsigned int t) except *
+    cdef void transform_diagonalize(self, unsigned int t) except *
     cdef void transform_generalized_collapse(self, unsigned int t) except *
 
 cdef class dStatespace(object):
@@ -96,6 +101,12 @@ cdef class dStatespace(object):
     cdef readonly np.float64_t [::1,:] transform_cholesky
     cdef readonly np.float64_t [::1,:] transform_obs_cov
     cdef readonly np.float64_t [::1,:] transform_design
+    cdef readonly np.float64_t transform_determinant
+
+    cdef readonly np.float64_t [:] collapse_obs
+    cdef readonly np.float64_t [::1,:] collapse_design
+    cdef readonly np.float64_t [::1,:] collapse_obs_cov
+    cdef readonly np.float64_t collapse_loglikelihood
 
     # Pointers
     cdef np.float64_t * _obs
@@ -116,8 +127,7 @@ cdef class dStatespace(object):
     cdef int select_missing(self, unsigned int t)
     cdef void _select_missing_entire_obs(self, unsigned int t)
     cdef void _select_missing_partial_obs(self, unsigned int t)
-    cdef void transform_cholesky(self, unsigned int t) except *
-    cdef void transform_collapse(self, unsigned int t) except *
+    cdef void transform_diagonalize(self, unsigned int t) except *
     cdef void transform_generalized_collapse(self, unsigned int t) except *
 
 cdef class cStatespace(object):
@@ -151,6 +161,12 @@ cdef class cStatespace(object):
     cdef readonly np.complex64_t [::1,:] transform_cholesky
     cdef readonly np.complex64_t [::1,:] transform_obs_cov
     cdef readonly np.complex64_t [::1,:] transform_design
+    cdef readonly np.complex64_t transform_determinant
+
+    cdef readonly np.complex64_t [:] collapse_obs
+    cdef readonly np.complex64_t [::1,:] collapse_design
+    cdef readonly np.complex64_t [::1,:] collapse_obs_cov
+    cdef readonly np.complex64_t collapse_loglikelihood
 
     # Pointers
     cdef np.complex64_t * _obs
@@ -171,8 +187,7 @@ cdef class cStatespace(object):
     cdef int select_missing(self, unsigned int t)
     cdef void _select_missing_entire_obs(self, unsigned int t)
     cdef void _select_missing_partial_obs(self, unsigned int t)
-    cdef void transform_cholesky(self, unsigned int t) except *
-    cdef void transform_collapse(self, unsigned int t) except *
+    cdef void transform_diagonalize(self, unsigned int t) except *
     cdef void transform_generalized_collapse(self, unsigned int t) except *
 
 cdef class zStatespace(object):
@@ -206,6 +221,12 @@ cdef class zStatespace(object):
     cdef readonly np.complex128_t [::1,:] transform_cholesky
     cdef readonly np.complex128_t [::1,:] transform_obs_cov
     cdef readonly np.complex128_t [::1,:] transform_design
+    cdef readonly np.complex128_t transform_determinant
+
+    cdef readonly np.complex128_t [:] collapse_obs
+    cdef readonly np.complex128_t [::1,:] collapse_design
+    cdef readonly np.complex128_t [::1,:] collapse_obs_cov
+    cdef readonly np.complex128_t collapse_loglikelihood
 
     # Pointers
     cdef np.complex128_t * _obs
@@ -226,8 +247,7 @@ cdef class zStatespace(object):
     cdef int select_missing(self, unsigned int t)
     cdef void _select_missing_entire_obs(self, unsigned int t)
     cdef void _select_missing_partial_obs(self, unsigned int t)
-    cdef void transform_cholesky(self, unsigned int t) except *
-    cdef void transform_collapse(self, unsigned int t) except *
+    cdef void transform_diagonalize(self, unsigned int t) except *
     cdef void transform_generalized_collapse(self, unsigned int t) except *
 
 cdef int sselect_state_cov(int k_states, int k_posdef,

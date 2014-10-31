@@ -136,6 +136,12 @@ cdef class {{prefix}}Statespace(object):
     # cdef readonly {{cython_type}} [::1,:] transform_cholesky
     # cdef readonly {{cython_type}} [::1,:] transform_obs_cov
     # cdef readonly {{cython_type}} [::1,:] transform_design
+    # cdef readonly {{cython_type}} transform_determinant
+
+    # cdef readonly {{cython_type}} [:] collapse_obs
+    # cdef readonly {{cython_type}} [::1,:] collapse_design
+    # cdef readonly {{cython_type}} [::1,:] collapse_obs_cov
+    # cdef readonly {{cython_type}} collapse_loglikelihood
 
     # Pointers  
     # *Note*: These are not yet implemented to do anything in this base class
@@ -257,6 +263,12 @@ cdef class {{prefix}}Statespace(object):
         self.transform_obs_cov = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
         dim2[0] = self.k_endog; dim2[1] = self.k_states;
         self.transform_design = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+
+        dim1[0] = self.k_states;
+        self.collapse_obs = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+        dim2[0] = self.k_states; dim2[1] = self.k_states;
+        self.collapse_design = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self.collapse_obs_cov = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
 
     # ## Initialize: known values
     #
@@ -453,7 +465,7 @@ cdef class {{prefix}}Statespace(object):
         self._design = &self.selected_design[0]
         self._obs_cov = &self.selected_obs_cov[0]
 
-    cdef void transform_cholesky(self, unsigned int t) except *:
+    cdef void transform_diagonalize(self, unsigned int t) except *:
         # Note: this assumes that initialize_object_pointers has *already* been done
         # Note: this assumes that select_missing has *already* been done
         # TODO need unit tests, especially for the missing case
@@ -540,11 +552,141 @@ cdef class {{prefix}}Statespace(object):
             self._design = &self.transform_design[0,0]
             self._obs_cov = &self.transform_obs_cov[0,0]
 
-    cdef void transform_collapse(self, unsigned int t) except *:
-        pass
-
     cdef void transform_generalized_collapse(self, unsigned int t) except *:
-        pass
+        # Note: this assumes that initialize_object_pointers has *already* been done
+        # Note: this assumes that select_missing has *already* been done
+        # TODO need unit tests, especially for the missing case
+        cdef:
+            int k_endog = self.k_endog
+            int k_endog2 = self.k_endog**2
+            int k_states = self.k_states
+            int k_endogstates = self.k_endog * self.k_states
+            int i, j, inc=1
+            int obs_cov_t, design_t
+            int info
+            int reset_missing
+            {{cython_type}} alpha = 1.0
+            {{cython_type}} beta = 0.0
+            {{cython_type}} gamma = -1.0
+        # $y_t^* = \bar A^* y_t = C_t Z_t' H_t^{-1} y_t$  
+        # $Z_t^* = C_t^{-1}$  
+        # $H_t^* = I_m$  
+
+        # Handle missing data
+        if self.nmissing[t] > 0 and not self.nmissing[t] == self.k_endog:
+            k_endog = self.k_endog - self.nmissing[t]
+            k_endog2 = k_endog**2
+            k_endogstates = k_endog * k_states
+
+        reset_missing = self.nmissing[t]
+        if t > 0:
+            reset_missing = reset_missing + self.nmissing[t-1]            
+
+        # Set H_t^* to identity
+        if t == 0:
+            for i in range(k_states):
+                self.collapse_obs_cov[i,i] = 1
+
+        # Perform the Cholesky decomposition of H_t, if necessary
+        if t == 0 or self.obs_cov.shape[2] > 1 or reset_missing:
+            # Cholesky decomposition: $H = L L'$
+            blas.{{prefix}}copy(&k_endog2, self._obs_cov, &inc, &self.transform_cholesky[0,0], &inc)
+            # Use LDA=self.k_endog so that we can use the memoryview slicing below
+            lapack.{{prefix}}potrf("L", &k_endog, &self.transform_cholesky[0,0], &self.k_endog, &info)
+
+            # Check for errors
+            if info > 0:
+                # Only warn, since it is sometimes possible to carry on anyway (e.g. if it is positive semi-definite)
+                warnings.warn('Non-positive-definite observation covariance matrix encountered at period %d' % t)
+            elif info < 0:
+                raise np.linalg.LinAlgError('Invalid value in observation covariance matrix encountered at period %d' % t)
+
+            # Calculate the determinant (just the squared product of the
+            # diagonals, in the Cholesky decomposition case)
+            self.transform_determinant = 1.0
+            for i in range(k_endog):
+                self.transform_determinant = self.transform_determinant * self.transform_cholesky[i, i]
+            self.transform_determinant = self.transform_determinant**2
+
+        # Get C^{-1}, if necessary
+        if t == 0 or self.obs_cov.shape[2] > 1 or self.design.shape[2] > 1 or reset_missing:
+            # Calculate $H_t^{-1} Z_t \equiv (Z_t' H_t^{-1})'$ via Cholesky solver
+            blas.{{prefix}}copy(&k_endogstates, self._design, &inc, &self.transform_design[0,0], &inc)
+            lapack.{{prefix}}potrs("L", &k_endog, &k_states, &self.transform_cholesky[0,0], &self.k_endog, &self.transform_design[0,0], &k_endog, &info)
+
+            # Check for errors
+            if not info == 0:
+                raise np.linalg.LinAlgError('Invalid value in calculation of H_t^{-1}Z matrix encountered at period %d' % t)
+        
+            # Calculate $(H_t^{-1} Z_t)' Z_t$  
+            # $(m \times m) = (m \times p) (p \times p) (p \times m)$
+            blas.{{prefix}}gemm("T", "N", &k_states, &k_states, &k_endog,
+                   &alpha, self._design, &k_endog,
+                           &self.transform_design[0,0], &k_endog,
+                   &beta, &self.collapse_design[0,0], &k_states)
+
+            # Calculate $C_t^{-1} C_t^{-1}' = Z_t' H_t^{-1} Z_t$ Cholesky decomposition
+            lapack.{{prefix}}potrf("L", &k_states, &self.collapse_design[0,0], &self.k_states, &info)
+
+            # Check for errors
+            if info > 0:
+                # Only warn, since it is sometimes possible to carry on anyway (e.g. if it is positive semi-definite)
+                warnings.warn('Non-positive-definite ZHZ matrix encountered at period %d' % t)
+            elif info < 0:
+                raise np.linalg.LinAlgError('Invalid value in ZHZ matrix encountered at period %d' % t)
+
+        # Solve for $y_t^* = \bar A_t^* y_t = (C_t^{-1})^{-1} Z_t' H_t^{-1} y_t$  
+        # (unless this is a completely missing observation)
+        self.collapse_loglikelihood = 0
+        if not self.nmissing[t] == self.k_endog:
+            # If we have some missing elements, selected_obs is already populated
+            if self.nmissing[t] == 0:
+                blas.{{prefix}}copy(&self.k_endog, &self.obs[0,t], &inc, &self.selected_obs[0], &inc)
+            # $\\# = Z_t' H_t^{-1} y_t$
+            blas.{{prefix}}gemv("T", &k_endog, &k_states,
+                  &alpha, &self.transform_design[0,0], &k_endog,
+                          &self.selected_obs[0], &inc,
+                  &beta, &self.collapse_obs[0], &inc)
+            # Solve $C_t^{-1} y_t^* = \\#$  
+            lapack.{{prefix}}potrs("L", &k_states, &inc, &self.collapse_design[0,0], &self.k_states, &self.collapse_obs[0], &k_endog, &info)
+
+            # Check for errors
+            if not info == 0:
+                raise np.linalg.LinAlgError('Invalid value in calculation of y_t^* matrix encountered at period %d' % t)
+
+            # Get residuals for loglikelihood calculation
+            # $e_t = - Z_t y_t^* + y_t$
+            blas.{{prefix}}gemv("T", &k_endog, &k_states,
+                  &gamma, self._design, &k_endog,
+                          &self.collapse_obs[0], &inc,
+                  &beta, &self.selected_obs[0], &inc)
+
+            print(np.array(self.collapse_obs))
+            print(np.array(self.selected_obs))
+
+            # Calculate H_t^{-1} e_t via Cholesky solver
+            lapack.{{prefix}}potrs("L", &k_endog, &inc, &self.transform_cholesky[0,0], &self.k_endog, &self.selected_obs[0], &k_endog, &info)
+
+            # Calculate loglikelihood contribution of this observation
+
+            # e_t' H_t^{-1} e_t
+            for i in range(k_endog):
+                self.collapse_loglikelihood = self.collapse_loglikelihood + self.selected_obs[i]
+            self.collapse_loglikelihood = self.collapse_loglikelihood**2
+            
+            # log( 2*pi^(p-m) |H_t| )
+            self.collapse_loglikelihood = (
+                self.collapse_loglikelihood +
+                {{combined_prefix}}log((2*NPY_PI)**(k_endog - k_states) * self.transform_determinant)
+            )
+
+            # -0.5 * ...
+            self.collapse_loglikelihood = -0.5 * self.collapse_loglikelihood
+
+        # Set pointers
+        self._obs = &self.collapse_obs[0]
+        self._design = &self.collapse_design[0,0]
+        self._obs = &self.collapse_obs_cov[0,0]
 
 # ### Selected state covariance matrice
 cdef int {{prefix}}select_state_cov(int k_states, int k_posdef,
