@@ -544,6 +544,7 @@ cdef class {{prefix}}KalmanFilter(object):
         # - Missing values: $y_t \to W_t y_t$, $Z_t \to W_t Z_t$, $H_t \to W_t H_t$
         self.select_state_cov()
         self.select_missing()
+        self.transform()
 
         # Post-convergence: copy previous iteration arrays
         self.post_convergence()
@@ -730,6 +731,16 @@ cdef class {{prefix}}KalmanFilter(object):
             self.converged = 0
 
             # Set the pointers for partial missing obs
+            self._obs = self.model._obs
+            self._design = self.model._design
+            self._obs_cov = self.model._obs_cov
+
+    cdef void transform(self):
+        if self.filter_method & FILTER_UNIVARIATE:
+            # Perform cholesky transformation
+            self.model.transform_cholesky(self.t)
+
+            # Reset pointers
             self._obs = self.model._obs
             self._design = self.model._design
             self._obs_cov = self.model._obs_cov

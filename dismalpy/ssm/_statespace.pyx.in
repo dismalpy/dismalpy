@@ -29,6 +29,7 @@ np.import_array()
 
 from dismalpy.src.math cimport *
 cimport dismalpy.src.blas as blas
+cimport dismalpy.src.lapack as lapack
 cimport dismalpy.ssm._tools as tools
 
 cdef int FORTRAN = 1
@@ -117,6 +118,10 @@ cdef class {{prefix}}Statespace(object):
     # Flag for initialization.
     # cdef readonly int initialized
 
+    # Flag for diagonal observation covariance
+    # TODO need to add this to the UI in representation
+    # cdef public int diagonal_obs_cov
+
     # Temporary arrays
     # cdef {{cython_type}} [::1,:] tmp
 
@@ -126,6 +131,11 @@ cdef class {{prefix}}Statespace(object):
     # store the data in the above matrices.
     # cdef readonly {{cython_type}} [:] selected_design
     # cdef readonly {{cython_type}} [:] selected_obs_cov
+
+    # Temporary transformation arrays
+    # cdef readonly {{cython_type}} [::1,:] transform_ldl_l
+    # cdef readonly {{cython_type}} [::1,:] transform_ldl_d
+    # cdef readonly {{cython_type}} [::1,:] transform_design
 
     # Pointers  
     # *Note*: These are not yet implemented to do anything in this base class
@@ -210,6 +220,12 @@ cdef class {{prefix}}Statespace(object):
         # Set the flag for initialization to be false
         self.initialized = False
 
+        # By default, assume a diagonal observation covariance
+        # (since it is most common to have diagonal or zero observation
+        # covariance matrices, we don't want to test for, so require it to be
+        # set manually)
+        self.diagonal_obs_cov = True
+
         # Allocate selected state covariance matrix
         dim3[0] = self.k_states; dim3[1] = self.k_states; dim3[2] = 1;
         # (we only allocate memory for time-varying array if necessary)
@@ -234,6 +250,13 @@ cdef class {{prefix}}Statespace(object):
         self.selected_design = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
         dim1[0] = self.k_endog**2;
         self.selected_obs_cov = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+
+        # Arrays for transformations
+        dim2[0] = self.k_endog; dim2[1] = self.k_endog;
+        self.transform_ldl_l = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self.transform_ldl_d = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        dim2[0] = self.k_endog; dim2[1] = self.k_states;
+        self.transform_design = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
 
     # ## Initialize: known values
     #
@@ -363,6 +386,8 @@ cdef class {{prefix}}Statespace(object):
             self._selected_state_cov = &self.selected_state_cov[0, 0, 0]
 
     cdef int select_missing(self, unsigned int t):
+        # Note: this assumes that initialize_object_pointers has *already* been done
+        # Note: this assumes that transform_... will be done *later*
         cdef int k_endog = self.k_endog
         # ### Perform missing selections
         # In Durbin and Koopman (2012), these are represented as matrix
@@ -406,30 +431,120 @@ cdef class {{prefix}}Statespace(object):
             int obs_cov_t = 0
             int k_endog = self.k_endog - self.nmissing[t]
 
-        if self.design.shape[2] > 1: design_t = t
-        if self.obs_cov.shape[2] > 1: obs_cov_t = t
-
         k = 0
         for i in range(self.k_endog):
             if not self.missing[i, t]:
 
-                self.selected_obs[k] = self.obs[i, t]
+                self.selected_obs[k] = self._obs[i]
 
                 # i is rows, k is rows
                 blas.{{prefix}}copy(&self.k_states,
-                      &self.design[i, 0, design_t], &self.k_endog,
+                      self._design, &self.k_endog,
                       &self.selected_design[k], &k_endog)
 
                 # i, k is columns, j, l is rows
                 l = 0
                 for j in range(self.k_endog):
                     if not self.missing[j, t]:
-                        self.selected_obs_cov[l + k*k_endog] = self.obs_cov[j, i, obs_cov_t]
+                        self.selected_obs_cov[l + k*k_endog] = self._obs_cov[j + i*self.k_endog]
                         l += 1
                 k += 1
         self._obs = &self.selected_obs[0]
         self._design = &self.selected_design[0]
         self._obs_cov = &self.selected_obs_cov[0]
+
+    cdef void transform_cholesky(self, unsigned int t) except *:
+        # Note: this assumes that initialize_object_pointers has *already* been done
+        # Note: this assumes that select_missing has *already* been done
+        # TODO need unit tests, especially for the missing case
+        cdef:
+            int k_endog = self.k_endog
+            int k_endog2 = self.k_endog**2
+            int k_states = self.k_states
+            int k_endogstates = self.k_endog * self.k_states
+            int i, j, inc=1
+            int obs_cov_t, design_t
+            int info
+            int reset_missing
+        # Compute the cholesky decomposition of *self._obs_cov
+        if not self.diagonal_obs_cov:
+
+            # Handle missing data
+            if self.nmissing[t] > 0 and not self.nmissing[t] == self.k_endog:
+                k_endog = self.k_endog - self.nmissing[t]
+                k_endog2 = k_endog**2
+                k_endogstates = k_endog * k_states
+
+            reset_missing = self.nmissing[t]
+            if t > 0:
+                reset_missing = reset_missing + self.nmissing[t-1]
+
+            # Perform the LDL decomposition, if necessary
+            if t == 0 or self.obs_cov.shape[2] > 1 or reset_missing:
+
+                # Cholesky decomposition: $H = L L'$
+                blas.{{prefix}}copy(&k_endog2, self._obs_cov, &inc, &self.transform_ldl_l[0,0], &inc)
+                # Use LDA=self.k_endog so that we can use the memoryview slicing below
+                lapack.{{prefix}}potrf("L", &k_endog, &self.transform_ldl_l[0,0], &self.k_endog, &info)
+
+                # Check for errors
+                if info > 0:
+                    # Only warn, since it is sometimes possible to carry on anyway
+                    # (e.g. if it is positive semi-definite)
+                    warnings.warn('Non-positive-definite observation covariance matrix encountered at period %d' % t)
+                elif info < 0:
+                    raise np.linalg.LinAlgError('Invalid value in observation covariance matrix encountered at period %d' % t)
+
+                # Convert to $H = C D C'$
+                for i in range(k_endog): # i is rows
+                    for j in range(k_endog): # j is columns
+                        # Diagonal elements come from the Cholesky diagonal, squared
+                        if i == j:
+                            self.transform_ldl_d[i,i] = self.transform_ldl_l[i, i]**2
+                        # Other elements are zero
+                        else:
+                            self.transform_ldl_d[i,j] = 0
+
+                    # Convert from L to C simply by setting the diagonal elements to ones
+                    self.transform_ldl_l[i,i] = 1
+            
+            # Solve for y_t^*
+            # (unless this is a completely missing observation)
+            if not self.nmissing[t] == self.k_endog:
+                # If we have some missing elements, selected_obs is already populated
+                if self.nmissing[t] == 0:
+                    blas.{{prefix}}copy(&self.k_endog, &self.obs[0,t], &inc, &self.selected_obs[0], &inc)
+                lapack.{{prefix}}trtrs("L", "N", "U", &k_endog, &inc, &self.transform_ldl_l[0,0], &self.k_endog, &self.selected_obs[0], &k_endog, &info)
+
+                # Check for errors
+                if info > 0:
+                    raise np.linalg.LinAlgError('Singular factorization of observation covariance matrix encountered at period %d' % t)
+                elif info < 0:
+                    raise np.linalg.LinAlgError('Invalid value in factorization of observation covariance matrix encountered at period %d' % t)
+
+                # Setup the pointer
+                self._obs = &self.selected_obs[0]
+
+            # Solve for Z_t^*, if necessary
+            if t == 0 or self.design.shape[2] > 1 or reset_missing:
+                blas.{{prefix}}copy(&k_endogstates, self._design, &inc, &self.transform_design[0,0], &inc)
+                lapack.{{prefix}}trtrs("L", "N", "U", &k_endog, &k_states, &self.transform_ldl_l[0,0], &self.k_endog, &self.transform_design[0,0], &k_endog, &info)
+
+                # Check for errors
+                if info > 0:
+                    raise np.linalg.LinAlgError('Singular factorization of observation covariance matrix encountered at period %d' % t)
+                elif info < 0:
+                    raise np.linalg.LinAlgError('Invalid value in factorization of observation covariance matrix encountered at period %d' % t)
+
+            # Setup final pointers            
+            self._design = &self.transform_design[0,0]
+            self._obs_cov = &self.transform_ldl_d[0,0]
+
+    cdef void transform_collapse(self, unsigned int t) except *:
+        pass
+
+    cdef void transform_generalized_collapse(self, unsigned int t) except *:
+        pass
 
 # ### Selected state covariance matrice
 cdef int {{prefix}}select_state_cov(int k_states, int k_posdef,

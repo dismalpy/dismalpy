@@ -27,6 +27,7 @@ cdef class sStatespace(object):
     # Flags
     cdef readonly int time_invariant
     cdef readonly int initialized
+    cdef public int diagonal_obs_cov
 
     # Temporary arrays
     cdef np.float32_t [::1,:] tmp
@@ -35,6 +36,11 @@ cdef class sStatespace(object):
     cdef readonly np.float32_t [:] selected_obs
     cdef readonly np.float32_t [:] selected_design
     cdef readonly np.float32_t [:] selected_obs_cov
+
+    # Temporary transformation arrays
+    cdef readonly np.float32_t [::1,:] transform_ldl_l
+    cdef readonly np.float32_t [::1,:] transform_ldl_d
+    cdef readonly np.float32_t [::1,:] transform_design
 
     # Pointers
     cdef np.float32_t * _obs
@@ -55,6 +61,9 @@ cdef class sStatespace(object):
     cdef int select_missing(self, unsigned int t)
     cdef void _select_missing_entire_obs(self, unsigned int t)
     cdef void _select_missing_partial_obs(self, unsigned int t)
+    cdef void transform_cholesky(self, unsigned int t) except *
+    cdef void transform_collapse(self, unsigned int t) except *
+    cdef void transform_generalized_collapse(self, unsigned int t) except *
 
 cdef class dStatespace(object):
     # Statespace dimensions
@@ -73,6 +82,7 @@ cdef class dStatespace(object):
     # Flags
     cdef readonly int time_invariant
     cdef readonly int initialized
+    cdef public int diagonal_obs_cov
 
     # Temporary arrays
     cdef np.float64_t [::1,:] tmp
@@ -81,6 +91,11 @@ cdef class dStatespace(object):
     cdef readonly np.float64_t [:] selected_obs
     cdef readonly np.float64_t [:] selected_design
     cdef readonly np.float64_t [:] selected_obs_cov
+
+    # Temporary transformation arrays
+    cdef readonly np.float64_t [::1,:] transform_ldl_l
+    cdef readonly np.float64_t [::1,:] transform_ldl_d
+    cdef readonly np.float64_t [::1,:] transform_design
 
     # Pointers
     cdef np.float64_t * _obs
@@ -101,6 +116,9 @@ cdef class dStatespace(object):
     cdef int select_missing(self, unsigned int t)
     cdef void _select_missing_entire_obs(self, unsigned int t)
     cdef void _select_missing_partial_obs(self, unsigned int t)
+    cdef void transform_cholesky(self, unsigned int t) except *
+    cdef void transform_collapse(self, unsigned int t) except *
+    cdef void transform_generalized_collapse(self, unsigned int t) except *
 
 cdef class cStatespace(object):
     # Statespace dimensions
@@ -119,6 +137,7 @@ cdef class cStatespace(object):
     # Flags
     cdef readonly int time_invariant
     cdef readonly int initialized
+    cdef public int diagonal_obs_cov
 
     # Temporary arrays
     cdef np.complex64_t [::1,:] tmp
@@ -127,6 +146,11 @@ cdef class cStatespace(object):
     cdef readonly np.complex64_t [:] selected_obs
     cdef readonly np.complex64_t [:] selected_design
     cdef readonly np.complex64_t [:] selected_obs_cov
+
+    # Temporary transformation arrays
+    cdef readonly np.complex64_t [::1,:] transform_ldl_l
+    cdef readonly np.complex64_t [::1,:] transform_ldl_d
+    cdef readonly np.complex64_t [::1,:] transform_design
 
     # Pointers
     cdef np.complex64_t * _obs
@@ -147,6 +171,9 @@ cdef class cStatespace(object):
     cdef int select_missing(self, unsigned int t)
     cdef void _select_missing_entire_obs(self, unsigned int t)
     cdef void _select_missing_partial_obs(self, unsigned int t)
+    cdef void transform_cholesky(self, unsigned int t) except *
+    cdef void transform_collapse(self, unsigned int t) except *
+    cdef void transform_generalized_collapse(self, unsigned int t) except *
 
 cdef class zStatespace(object):
     # Statespace dimensions
@@ -165,6 +192,7 @@ cdef class zStatespace(object):
     # Flags
     cdef readonly int time_invariant
     cdef readonly int initialized
+    cdef public int diagonal_obs_cov
 
     # Temporary arrays
     cdef np.complex128_t [::1,:] tmp
@@ -173,6 +201,11 @@ cdef class zStatespace(object):
     cdef readonly np.complex128_t [:] selected_obs
     cdef readonly np.complex128_t [:] selected_design
     cdef readonly np.complex128_t [:] selected_obs_cov
+
+    # Temporary transformation arrays
+    cdef readonly np.complex128_t [::1,:] transform_ldl_l
+    cdef readonly np.complex128_t [::1,:] transform_ldl_d
+    cdef readonly np.complex128_t [::1,:] transform_design
 
     # Pointers
     cdef np.complex128_t * _obs
@@ -193,6 +226,9 @@ cdef class zStatespace(object):
     cdef int select_missing(self, unsigned int t)
     cdef void _select_missing_entire_obs(self, unsigned int t)
     cdef void _select_missing_partial_obs(self, unsigned int t)
+    cdef void transform_cholesky(self, unsigned int t) except *
+    cdef void transform_collapse(self, unsigned int t) except *
+    cdef void transform_generalized_collapse(self, unsigned int t) except *
 
 cdef int sselect_state_cov(int k_states, int k_posdef,
                            np.float32_t * tmp,
