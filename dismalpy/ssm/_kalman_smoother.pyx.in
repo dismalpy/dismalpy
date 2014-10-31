@@ -432,86 +432,25 @@ cdef class {{prefix}}KalmanSmoother(object):
             raise NotImplementedError("Smoother not implemented for provided Kalman filter method")
 
     cdef void select_missing(self):
-        # ### Perform missing selections
-        # In Durbin and Koopman (2012), these are represented as matrix
-        # multiplications, i.e. $Z_t^* = W_t Z_t$ where $W_t$ is a row
-        # selection matrix (it contains a subset of rows of the identity
-        # matrix).
-        #
-        # It's more efficient, though, to just copy over the data directly,
-        # which is what is done here. Note that the `selected_*` arrays are
-        # defined as single-dimensional, so the assignment indexes below are
-        # set such that the arrays can be interpreted by the BLAS and LAPACK
-        # functions as two-dimensional, column-major arrays.
-        #
-        # In the case that all data is missing (e.g. this is what happens in
-        # forecasting), we actually set don't change the dimension, but we set
-        # the design matrix to the zeros array.
+        self.k_endog = self.model.select_missing(self.t)
+        self.k_endog2 = self.k_endog**2
+        self.k_endogstates = self.k_endog * self.model.k_states
+
+        # If we are missing the entire observation
         if self.model.nmissing[self.t] == self.model.k_endog:
-            self._select_missing_entire_obs()
+            # Change the smoothing functions to take into account a missing observation
+            self.smooth_estimators = {{prefix}}smoothed_estimators_missing_conventional
+            # (no need to change the state smoothing recursion)
+            # self.smooth_state = {{prefix}}smoothed_state_missing_conventional
+            self.smooth_disturbances = {{prefix}}smoothed_disturbances_missing_conventional
+
+            # Set the pointers for full missing obs
+            self._design = self.model._design
+
         elif self.model.nmissing[self.t] > 0:
-            self._select_missing_partial_obs()
-        else:
-            # Reset dimensions
-            self.k_endog = self.model.k_endog
-            self.k_endog2 = self.k_endog**2
-            self.k_endogstates = self.k_endog * self.k_states
-
-    cdef void _select_missing_entire_obs(self):
-        cdef:
-            int i, j
-        # Dimensions are the same as usual (have to reset in case previous
-        # obs was partially missing case)
-        # TODO I think I can remove this (and in filter too)
-        self.k_endog = self.model.k_endog
-        self.k_endog2 = self.k_endog**2
-        self.k_endogstates = self.k_endog * self.k_states
-
-        # Design matrix is set to zeros
-        for i in range(self.model.k_states):
-            for j in range(self.model.k_endog):
-                self.selected_design[j + i*self.model.k_endog] = 0.0
-        self._design = &self.selected_design[0]
-
-        # Change the smoothing functions to take into account a missing observation
-        self.smooth_estimators = {{prefix}}smoothed_estimators_missing_conventional
-        # (no need to change the state smoothing recursion)
-        # self.smooth_state = {{prefix}}smoothed_state_missing_conventional
-        self.smooth_disturbances = {{prefix}}smoothed_disturbances_missing_conventional
-
-    cdef void _select_missing_partial_obs(self):
-        cdef:
-            int i, j, k, l
-            int inc = 1
-            int design_t = 0
-            int obs_cov_t = 0
-
-        # Set dimensions
-        self.k_endog = self.model.k_endog - self.model.nmissing[self.t]
-        self.k_endog2 = self.k_endog**2
-        self.k_endogstates = self.k_endog * self.k_states
-
-        if self.model.design.shape[2] > 1: design_t = self.t
-        if self.model.obs_cov.shape[2] > 1: obs_cov_t = self.t
-
-        k = 0
-        for i in range(self.model.k_endog):
-            if not self.model.missing[i, self.t]:
-                # i is rows
-                # k is rows
-                blas.{{prefix}}copy(&self.model.k_states,
-                      &self.model.design[i, 0, design_t], &self.model.k_endog,
-                      &self.selected_design[k], &self.k_endog)
-
-                # i, k is columns
-                # j, l is rows
-                l = 0
-                for j in range(self.model.k_endog):
-                    if not self.model.missing[j, self.t]:
-                        self.selected_obs_cov[l + k*self.k_endog] = self.model.obs_cov[j, i, obs_cov_t]
-                        l += 1
-                k += 1
-        self._design = &self.selected_design[0]
-        self._obs_cov = &self.selected_obs_cov[0]
+            # Set the pointers for partial missing obs
+            # self._obs = self.model._obs
+            self._design = self.model._design
+            self._obs_cov = self.model._obs_cov
 
 {{endfor}}

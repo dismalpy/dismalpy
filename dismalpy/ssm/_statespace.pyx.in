@@ -120,6 +120,13 @@ cdef class {{prefix}}Statespace(object):
     # Temporary arrays
     # cdef {{cython_type}} [::1,:] tmp
 
+    # Temporary selection arrays
+    # cdef readonly {{cython_type}} [:] selected_obs
+    # The following are contiguous memory segments which are then used to
+    # store the data in the above matrices.
+    # cdef readonly {{cython_type}} [:] selected_design
+    # cdef readonly {{cython_type}} [:] selected_obs_cov
+
     # Pointers  
     # *Note*: These are not yet implemented to do anything in this base class
     # but are used in subclasses. Necessary to have them here due to problems
@@ -219,6 +226,14 @@ cdef class {{prefix}}Statespace(object):
         # Holds arrays of dimension $(m \times m)$
         dim2[0] = self.k_states; dim2[1] = self.k_states;
         self.tmp = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+
+        # Arrays for missing data
+        dim1[0] = self.k_endog;
+        self.selected_obs = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+        dim1[0] = self.k_endog * self.k_states;
+        self.selected_design = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
+        dim1[0] = self.k_endog**2;
+        self.selected_obs_cov = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
 
     # ## Initialize: known values
     #
@@ -346,6 +361,75 @@ cdef class {{prefix}}Statespace(object):
                                        self._selected_state_cov)
         else:
             self._selected_state_cov = &self.selected_state_cov[0, 0, 0]
+
+    cdef int select_missing(self, unsigned int t):
+        cdef int k_endog = self.k_endog
+        # ### Perform missing selections
+        # In Durbin and Koopman (2012), these are represented as matrix
+        # multiplications, i.e. $Z_t^* = W_t Z_t$ where $W_t$ is a row
+        # selection matrix (it contains a subset of rows of the identity
+        # matrix).
+        #
+        # It's more efficient, though, to just copy over the data directly,
+        # which is what is done here. Note that the `selected_*` arrays are
+        # defined as single-dimensional, so the assignment indexes below are
+        # set such that the arrays can be interpreted by the BLAS and LAPACK
+        # functions as two-dimensional, column-major arrays.
+        #
+        # In the case that all data is missing (e.g. this is what happens in
+        # forecasting), we actually set don't change the dimension, but we set
+        # the design matrix to the zeros array.
+        if self.nmissing[t] == self.k_endog:
+            self._select_missing_entire_obs(t)
+        elif self.nmissing[t] > 0:
+            self._select_missing_partial_obs(t)
+            k_endog = self.k_endog - self.nmissing[t]
+
+        # Return the number of non-missing endogenous variables
+        return k_endog
+
+    cdef void _select_missing_entire_obs(self, unsigned int t):
+        cdef:
+            int i, j
+
+        # Design matrix is set to zeros
+        for i in range(self.k_states):
+            for j in range(self.k_endog):
+                self.selected_design[j + i*self.k_endog] = 0.0
+        self._design = &self.selected_design[0]
+
+    cdef void _select_missing_partial_obs(self, unsigned int t):
+        cdef:
+            int i, j, k, l
+            int inc = 1
+            int design_t = 0
+            int obs_cov_t = 0
+            int k_endog = self.k_endog - self.nmissing[t]
+
+        if self.design.shape[2] > 1: design_t = t
+        if self.obs_cov.shape[2] > 1: obs_cov_t = t
+
+        k = 0
+        for i in range(self.k_endog):
+            if not self.missing[i, t]:
+
+                self.selected_obs[k] = self.obs[i, t]
+
+                # i is rows, k is rows
+                blas.{{prefix}}copy(&self.k_states,
+                      &self.design[i, 0, design_t], &self.k_endog,
+                      &self.selected_design[k], &k_endog)
+
+                # i, k is columns, j, l is rows
+                l = 0
+                for j in range(self.k_endog):
+                    if not self.missing[j, t]:
+                        self.selected_obs_cov[l + k*k_endog] = self.obs_cov[j, i, obs_cov_t]
+                        l += 1
+                k += 1
+        self._obs = &self.selected_obs[0]
+        self._design = &self.selected_design[0]
+        self._obs_cov = &self.selected_obs_cov[0]
 
 # ### Selected state covariance matrice
 cdef int {{prefix}}select_state_cov(int k_states, int k_posdef,

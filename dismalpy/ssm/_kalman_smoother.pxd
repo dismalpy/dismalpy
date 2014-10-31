@@ -105,8 +105,6 @@ cdef class sKalmanSmoother(object):
     cdef void initialize_smoother_object_pointers(self)
     cdef void initialize_function_pointers(self) except *
     cdef void select_missing(self)
-    cdef void _select_missing_entire_obs(self)
-    cdef void _select_missing_partial_obs(self)
 
 # Double precision
 cdef class dKalmanSmoother(object):
@@ -189,8 +187,6 @@ cdef class dKalmanSmoother(object):
     cdef void initialize_smoother_object_pointers(self)
     cdef void initialize_function_pointers(self) except *
     cdef void select_missing(self)
-    cdef void _select_missing_entire_obs(self)
-    cdef void _select_missing_partial_obs(self)
 
 # Single precision complex
 cdef class cKalmanSmoother(object):
@@ -273,8 +269,6 @@ cdef class cKalmanSmoother(object):
     cdef void initialize_smoother_object_pointers(self)
     cdef void initialize_function_pointers(self) except *
     cdef void select_missing(self)
-    cdef void _select_missing_entire_obs(self)
-    cdef void _select_missing_partial_obs(self)
 
 # Double precision complex
 cdef class zKalmanSmoother(object):
@@ -357,5 +351,3 @@ cdef class zKalmanSmoother(object):
     cdef void initialize_smoother_object_pointers(self)
     cdef void initialize_function_pointers(self) except *
     cdef void select_missing(self)
-    cdef void _select_missing_entire_obs(self)
-    cdef void _select_missing_partial_obs(self)

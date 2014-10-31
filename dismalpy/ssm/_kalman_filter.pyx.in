@@ -251,11 +251,6 @@ cdef class {{prefix}}KalmanFilter(object):
     # These matrices are used to temporarily hold selected observation vectors,
     # design matrices, and observation covariance matrices in the case of
     # missing data.  
-    # cdef readonly {{cython_type}} [:] selected_obs
-    # The following are contiguous memory segments which are then used to
-    # store the data in the above matrices.
-    # cdef readonly {{cython_type}} [:] selected_design
-    # cdef readonly {{cython_type}} [:] selected_obs_cov
     # `forecast_error_fac` is a forecast error covariance matrix **factorization** $(p \times p)$.
     # Depending on the method for handling the inverse of the forecast error covariance matrix, it may be:
     # - a Cholesky factorization if `cholesky_solve` is used
@@ -494,14 +489,6 @@ cdef class {{prefix}}KalmanFilter(object):
         dim3[0] = self.k_endog; dim3[1] = self.k_endog; dim3[2] = storage;
         self.tmp4 = np.PyArray_ZEROS(3, dim3, {{typenum}}, FORTRAN)
 
-        # Arrays for missing data
-        dim1[0] = self.k_endog;
-        self.selected_obs = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
-        dim1[0] = self.k_endog * self.k_states;
-        self.selected_design = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
-        dim1[0] = self.k_endog2;
-        self.selected_obs_cov = np.PyArray_ZEROS(1, dim1, {{typenum}}, FORTRAN)
-
         # Initialize time and convergence status
         self.t = 0
         self.converged = 0
@@ -707,112 +694,47 @@ cdef class {{prefix}}KalmanFilter(object):
         self._selected_state_cov = self.model._selected_state_cov
 
     cdef void select_missing(self):
-        # ### Perform missing selections
-        # In Durbin and Koopman (2012), these are represented as matrix
-        # multiplications, i.e. $Z_t^* = W_t Z_t$ where $W_t$ is a row
-        # selection matrix (it contains a subset of rows of the identity
-        # matrix).
-        #
-        # It's more efficient, though, to just copy over the data directly,
-        # which is what is done here. Note that the `selected_*` arrays are
-        # defined as single-dimensional, so the assignment indexes below are
-        # set such that the arrays can be interpreted by the BLAS and LAPACK
-        # functions as two-dimensional, column-major arrays.
-        #
-        # In the case that all data is missing (e.g. this is what happens in
-        # forecasting), we actually set don't change the dimension, but we set
-        # the design matrix to the zeros array.
+        self.k_endog = self.model.select_missing(self.t)
+        self.k_endog2 = self.k_endog**2
+        self.k_endogstates = self.k_endog * self.model.k_states
+
+        # If we are missing the entire observation
         if self.model.nmissing[self.t] == self.model.k_endog:
-            self._select_missing_entire_obs()
+            # Mark as not converged so that it does not inappropriately
+            # copy over steady state matrices
+            self.converged = 0
+            
+            # Change the forecasting step to set the forecast at the intercept
+            # $d_t$, so that the forecast error is $v_t = y_t - d_t$.
+            self.forecasting = {{prefix}}forecast_missing_conventional
+
+            # Change the updating step to just copy $a_{t|t} = a_t$ and
+            # $P_{t|t} = P_t$
+            self.updating = {{prefix}}updating_missing_conventional
+
+            # Change the inversion step to inverse to nans.
+            self.inversion = {{prefix}}inverse_missing_conventional
+
+            # Change the loglikelihood calculation to give zero.
+            self.calculate_loglikelihood = {{prefix}}loglikelihood_missing_conventional
+
+            # The prediction step is the same as the conventional Kalman
+            # filter
+
+            # Set the pointers for full missing obs
+            self._design = self.model._design
+
         elif self.model.nmissing[self.t] > 0:
-            self._select_missing_partial_obs()
-        else:
-            # Reset dimensions
-            self.k_endog = self.model.k_endog
-            self.k_endog2 = self.k_endog**2
-            self.k_endogstates = self.k_endog * self.k_states
+            # Mark as not converged so that it does not inappropriately
+            # copy over steady state matrices
+            self.converged = 0
 
-    cdef void _select_missing_entire_obs(self):
-        cdef:
-            int i, j
-        # Mark as not converged so that it does not inappropriately
-        # copy over steady state matrices
-        self.converged = 0
-
-        # Dimensions are the same as usual (have to reset in case previous
-        # obs was partially missing case)
-        self.k_endog = self.model.k_endog
-        self.k_endog2 = self.k_endog**2
-        self.k_endogstates = self.k_endog * self.k_states
-
-        # Design matrix is set to zeros
-        for i in range(self.model.k_states):
-            for j in range(self.model.k_endog):
-                self.selected_design[j + i*self.model.k_endog] = 0.0
-        self._design = &self.selected_design[0]
-
-        # Change the forecasting step to set the forecast at the intercept
-        # $d_t$, so that the forecast error is $v_t = y_t - d_t$.
-        self.forecasting = {{prefix}}forecast_missing_conventional
-
-        # Change the updating step to just copy $a_{t|t} = a_t$ and
-        # $P_{t|t} = P_t$
-        self.updating = {{prefix}}updating_missing_conventional
-
-        # Change the inversion step to inverse to nans.
-        self.inversion = {{prefix}}inverse_missing_conventional
-
-        # Change the loglikelihood calculation to give zero.
-        self.calculate_loglikelihood = {{prefix}}loglikelihood_missing_conventional
-
-        # The prediction step is the same as the conventional Kalman
-        # filter
-
-    cdef void _select_missing_partial_obs(self):
-        cdef:
-            int i, j, k, l
-            int inc = 1
-            int design_t = 0
-            int obs_cov_t = 0
-        # Mark as not converged so that it does not inappropriately
-        # copy over steady state matrices
-        self.converged = 0
-
-        # Set dimensions
-        self.k_endog = self.model.k_endog - self.model.nmissing[self.t]
-        self.k_endog2 = self.k_endog**2
-        self.k_endogstates = self.k_endog * self.k_states
-
-        if self.model.design.shape[2] > 1: design_t = self.t
-        if self.model.obs_cov.shape[2] > 1: obs_cov_t = self.t
-
-        k = 0
-        for i in range(self.model.k_endog):
-            if not self.model.missing[i, self.t]:
-
-                self.selected_obs[k] = self.model.obs[i, self.t]
-
-                # i is rows
-                # k is rows
-                blas.{{prefix}}copy(&self.model.k_states,
-                      &self.model.design[i, 0, design_t], &self.model.k_endog,
-                      &self.selected_design[k], &self.k_endog)
-
-                # i, k is columns
-                # j, l is rows
-                l = 0
-                for j in range(self.model.k_endog):
-                    if not self.model.missing[j, self.t]:
-                        self.selected_obs_cov[l + k*self.k_endog] = self.model.obs_cov[j, i, obs_cov_t]
-                        l += 1
-                k += 1
-        self._obs = &self.selected_obs[0]
-        self._design = &self.selected_design[0]
-        self._obs_cov = &self.selected_obs_cov[0]
+            # Set the pointers for partial missing obs
+            self._obs = self.model._obs
+            self._design = self.model._design
+            self._obs_cov = self.model._obs_cov
 
     cdef void post_convergence(self):
-        # TODO this should probably be defined separately for each Kalman filter type - e.g. `post_convergence_conventional`, etc.
-
         # Constants
         cdef:
             int inc = 1

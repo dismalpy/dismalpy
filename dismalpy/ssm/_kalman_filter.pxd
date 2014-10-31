@@ -163,8 +163,6 @@ cdef class sKalmanFilter(object):
     cdef void initialize_function_pointers(self) except *
     cdef void select_state_cov(self)
     cdef void select_missing(self)
-    cdef void _select_missing_entire_obs(self)
-    cdef void _select_missing_partial_obs(self)
     cdef void post_convergence(self)
     cdef void numerical_stability(self)
     cdef void check_convergence(self)
@@ -283,8 +281,6 @@ cdef class dKalmanFilter(object):
     cdef void initialize_function_pointers(self) except *
     cdef void select_state_cov(self)
     cdef void select_missing(self)
-    cdef void _select_missing_entire_obs(self)
-    cdef void _select_missing_partial_obs(self)
     cdef void post_convergence(self)
     cdef void numerical_stability(self)
     cdef void check_convergence(self)
@@ -403,8 +399,6 @@ cdef class cKalmanFilter(object):
     cdef void initialize_function_pointers(self) except *
     cdef void select_state_cov(self)
     cdef void select_missing(self)
-    cdef void _select_missing_entire_obs(self)
-    cdef void _select_missing_partial_obs(self)
     cdef void post_convergence(self)
     cdef void numerical_stability(self)
     cdef void check_convergence(self)
@@ -522,8 +516,6 @@ cdef class zKalmanFilter(object):
     cdef void initialize_function_pointers(self) except *
     cdef void select_state_cov(self)
     cdef void select_missing(self)
-    cdef void _select_missing_entire_obs(self)
-    cdef void _select_missing_partial_obs(self)
     cdef void post_convergence(self)
     cdef void numerical_stability(self)
     cdef void check_convergence(self)
