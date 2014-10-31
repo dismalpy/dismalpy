@@ -331,6 +331,22 @@ cdef class {{prefix}}Statespace(object):
         self._initial_state = &self.initial_state[0]
         self._initial_state_cov = &self.initial_state_cov[0,0]
 
+    cdef void select_state_cov(self, unsigned int t):
+        cdef int selected_state_cov_t = 0
+
+        # ### Get selected state covariance matrix
+        if t == 0 or self.selected_state_cov.shape[2] > 1:
+            selected_state_cov_t = t
+            self._selected_state_cov = &self.selected_state_cov[0, 0, selected_state_cov_t]
+
+            {{prefix}}select_state_cov(self.k_states, self.k_posdef,
+                                       &self.tmp[0,0],
+                                       self._selection,
+                                       self._state_cov,
+                                       self._selected_state_cov)
+        else:
+            self._selected_state_cov = &self.selected_state_cov[0, 0, 0]
+
 # ### Selected state covariance matrice
 cdef int {{prefix}}select_state_cov(int k_states, int k_posdef,
                                     {{cython_type}} * tmp,

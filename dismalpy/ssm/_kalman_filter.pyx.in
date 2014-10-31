@@ -72,7 +72,7 @@ cimport dismalpy.src.lapack as lapack
 cimport dismalpy.ssm._tools as tools
 
 {{for prefix, types in TYPES.items()}}
-from dismalpy.ssm._statespace cimport {{prefix}}Statespace, {{prefix}}select_state_cov
+from dismalpy.ssm._statespace cimport {{prefix}}Statespace
 from dismalpy.ssm._filters._conventional cimport (
     {{prefix}}forecast_missing_conventional,
     {{prefix}}updating_missing_conventional,
@@ -703,20 +703,8 @@ cdef class {{prefix}}KalmanFilter(object):
             raise NotImplementedError("Invalid filtering method")
 
     cdef void select_state_cov(self):
-        cdef int selected_state_cov_t = 0
-
-        # ### Get selected state covariance matrix
-        if self.t == 0 or self.model.selected_state_cov.shape[2] > 1:
-            selected_state_cov_t = self.t
-            self._selected_state_cov = &self.model.selected_state_cov[0, 0, selected_state_cov_t]
-
-            {{prefix}}select_state_cov(self.k_states, self.k_posdef,
-                                       self._tmp0,
-                                       self._selection,
-                                       self._state_cov,
-                                       self._selected_state_cov)
-        else:
-            self._selected_state_cov = &self.model.selected_state_cov[0, 0, 0]
+        self.model.select_state_cov(self.t)
+        self._selected_state_cov = self.model._selected_state_cov
 
     cdef void select_missing(self):
         # ### Perform missing selections
