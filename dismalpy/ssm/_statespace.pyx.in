@@ -133,8 +133,8 @@ cdef class {{prefix}}Statespace(object):
     # cdef readonly {{cython_type}} [:] selected_obs_cov
 
     # Temporary transformation arrays
-    # cdef readonly {{cython_type}} [::1,:] transform_ldl_l
-    # cdef readonly {{cython_type}} [::1,:] transform_ldl_d
+    # cdef readonly {{cython_type}} [::1,:] transform_cholesky
+    # cdef readonly {{cython_type}} [::1,:] transform_obs_cov
     # cdef readonly {{cython_type}} [::1,:] transform_design
 
     # Pointers  
@@ -253,8 +253,8 @@ cdef class {{prefix}}Statespace(object):
 
         # Arrays for transformations
         dim2[0] = self.k_endog; dim2[1] = self.k_endog;
-        self.transform_ldl_l = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
-        self.transform_ldl_d = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self.transform_cholesky = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
+        self.transform_obs_cov = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
         dim2[0] = self.k_endog; dim2[1] = self.k_states;
         self.transform_design = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
 
@@ -483,9 +483,9 @@ cdef class {{prefix}}Statespace(object):
             if t == 0 or self.obs_cov.shape[2] > 1 or reset_missing:
 
                 # Cholesky decomposition: $H = L L'$
-                blas.{{prefix}}copy(&k_endog2, self._obs_cov, &inc, &self.transform_ldl_l[0,0], &inc)
+                blas.{{prefix}}copy(&k_endog2, self._obs_cov, &inc, &self.transform_cholesky[0,0], &inc)
                 # Use LDA=self.k_endog so that we can use the memoryview slicing below
-                lapack.{{prefix}}potrf("L", &k_endog, &self.transform_ldl_l[0,0], &self.k_endog, &info)
+                lapack.{{prefix}}potrf("L", &k_endog, &self.transform_cholesky[0,0], &self.k_endog, &info)
 
                 # Check for errors
                 if info > 0:
@@ -500,13 +500,13 @@ cdef class {{prefix}}Statespace(object):
                     for j in range(k_endog): # j is columns
                         # Diagonal elements come from the Cholesky diagonal, squared
                         if i == j:
-                            self.transform_ldl_d[i,i] = self.transform_ldl_l[i, i]**2
+                            self.transform_obs_cov[i,i] = self.transform_cholesky[i, i]**2
                         # Other elements are zero
                         else:
-                            self.transform_ldl_d[i,j] = 0
+                            self.transform_obs_cov[i,j] = 0
 
                     # Convert from L to C simply by setting the diagonal elements to ones
-                    self.transform_ldl_l[i,i] = 1
+                    self.transform_cholesky[i,i] = 1
             
             # Solve for y_t^*
             # (unless this is a completely missing observation)
@@ -514,7 +514,7 @@ cdef class {{prefix}}Statespace(object):
                 # If we have some missing elements, selected_obs is already populated
                 if self.nmissing[t] == 0:
                     blas.{{prefix}}copy(&self.k_endog, &self.obs[0,t], &inc, &self.selected_obs[0], &inc)
-                lapack.{{prefix}}trtrs("L", "N", "U", &k_endog, &inc, &self.transform_ldl_l[0,0], &self.k_endog, &self.selected_obs[0], &k_endog, &info)
+                lapack.{{prefix}}trtrs("L", "N", "U", &k_endog, &inc, &self.transform_cholesky[0,0], &self.k_endog, &self.selected_obs[0], &k_endog, &info)
 
                 # Check for errors
                 if info > 0:
@@ -528,7 +528,7 @@ cdef class {{prefix}}Statespace(object):
             # Solve for Z_t^*, if necessary
             if t == 0 or self.design.shape[2] > 1 or reset_missing:
                 blas.{{prefix}}copy(&k_endogstates, self._design, &inc, &self.transform_design[0,0], &inc)
-                lapack.{{prefix}}trtrs("L", "N", "U", &k_endog, &k_states, &self.transform_ldl_l[0,0], &self.k_endog, &self.transform_design[0,0], &k_endog, &info)
+                lapack.{{prefix}}trtrs("L", "N", "U", &k_endog, &k_states, &self.transform_cholesky[0,0], &self.k_endog, &self.transform_design[0,0], &k_endog, &info)
 
                 # Check for errors
                 if info > 0:
@@ -538,7 +538,7 @@ cdef class {{prefix}}Statespace(object):
 
             # Setup final pointers            
             self._design = &self.transform_design[0,0]
-            self._obs_cov = &self.transform_ldl_d[0,0]
+            self._obs_cov = &self.transform_obs_cov[0,0]
 
     cdef void transform_collapse(self, unsigned int t) except *:
         pass

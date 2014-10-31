@@ -38,8 +38,8 @@ cdef class sStatespace(object):
     cdef readonly np.float32_t [:] selected_obs_cov
 
     # Temporary transformation arrays
-    cdef readonly np.float32_t [::1,:] transform_ldl_l
-    cdef readonly np.float32_t [::1,:] transform_ldl_d
+    cdef readonly np.float32_t [::1,:] transform_cholesky
+    cdef readonly np.float32_t [::1,:] transform_obs_cov
     cdef readonly np.float32_t [::1,:] transform_design
 
     # Pointers
@@ -93,8 +93,8 @@ cdef class dStatespace(object):
     cdef readonly np.float64_t [:] selected_obs_cov
 
     # Temporary transformation arrays
-    cdef readonly np.float64_t [::1,:] transform_ldl_l
-    cdef readonly np.float64_t [::1,:] transform_ldl_d
+    cdef readonly np.float64_t [::1,:] transform_cholesky
+    cdef readonly np.float64_t [::1,:] transform_obs_cov
     cdef readonly np.float64_t [::1,:] transform_design
 
     # Pointers
@@ -148,8 +148,8 @@ cdef class cStatespace(object):
     cdef readonly np.complex64_t [:] selected_obs_cov
 
     # Temporary transformation arrays
-    cdef readonly np.complex64_t [::1,:] transform_ldl_l
-    cdef readonly np.complex64_t [::1,:] transform_ldl_d
+    cdef readonly np.complex64_t [::1,:] transform_cholesky
+    cdef readonly np.complex64_t [::1,:] transform_obs_cov
     cdef readonly np.complex64_t [::1,:] transform_design
 
     # Pointers
@@ -203,8 +203,8 @@ cdef class zStatespace(object):
     cdef readonly np.complex128_t [:] selected_obs_cov
 
     # Temporary transformation arrays
-    cdef readonly np.complex128_t [::1,:] transform_ldl_l
-    cdef readonly np.complex128_t [::1,:] transform_ldl_d
+    cdef readonly np.complex128_t [::1,:] transform_cholesky
+    cdef readonly np.complex128_t [::1,:] transform_obs_cov
     cdef readonly np.complex128_t [::1,:] transform_design
 
     # Pointers
