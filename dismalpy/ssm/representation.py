@@ -382,7 +382,11 @@ class Representation(Model):
         if _type is str:
             if not key in self.shapes:
                 raise IndexError('"%s" is an invalid state space matrix name' % key)
-            return getattr(self, '_' + key)
+            matrix = getattr(self, '_' + key)
+
+            # See note on time-varying arrays, below
+            if matrix.shape[-1] == 1:
+                return np.squeeze(matrix, axis=-1)
         # Otherwise if we have a tuple, we want a slice of a matrix
         elif _type is tuple:
             name, slice_ = key[0], key[1:]
@@ -397,7 +401,7 @@ class Representation(Model):
             # it should be mod['transition',0,:,0]. Thus if the array in
             # question is time-invariant but the last slice was excluded,
             # add it in as a zero.
-            if matrix.shape[-1] == 1 and len(slice_) == matrix.ndim-1:
+            if matrix.shape[-1] == 1 and len(slice_) <= matrix.ndim-1:
                 slice_ = slice_ + (0,)
 
             return matrix[slice_]
