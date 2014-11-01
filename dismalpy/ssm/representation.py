@@ -975,12 +975,18 @@ class Representation(Model):
         -------
         SimulationSmoothResults
         """
+        # Check if we've filtered yet
+        have_filtered = len(self._kalman_filters) > 0
+
         # Initialize the results class
         if results_class is None:
             results_class = self.simulation_smooth_results_class
 
         results = results_class(self, simulation_output)
-        results.simulate(*args, **kwargs)
+
+        # Simulate if we have already filtered
+        if have_filtered > 0:
+            results.simulate(*args, **kwargs)
 
         return results
         
