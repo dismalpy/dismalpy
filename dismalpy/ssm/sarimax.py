@@ -806,6 +806,8 @@ class SARIMAX(Model):
             if self.exog is not None:
                 exog = diff(self.exog, self._k_diff,
                             self._k_seasonal_diff, self.k_seasons)
+            else:
+                exog = None
             trend_data = trend_data[:endog.shape[0], :]
         else:
             endog = self.endog.copy()[0, :]
