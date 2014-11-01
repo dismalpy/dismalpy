@@ -503,7 +503,8 @@ cdef class {{prefix}}Statespace(object):
                 if info > 0:
                     # Only warn, since it is sometimes possible to carry on anyway
                     # (e.g. if it is positive semi-definite)
-                    warnings.warn('Non-positive-definite observation covariance matrix encountered at period %d' % t)
+                    #warnings.warn('Non-positive-definite observation covariance matrix encountered at period %d' % t)
+                    pass
                 elif info < 0:
                     raise np.linalg.LinAlgError('Invalid value in observation covariance matrix encountered at period %d' % t)
 
@@ -597,7 +598,8 @@ cdef class {{prefix}}Statespace(object):
             # Check for errors
             if info > 0:
                 # Only warn, since it is sometimes possible to carry on anyway (e.g. if it is positive semi-definite)
-                warnings.warn('Non-positive-definite observation covariance matrix encountered at period %d' % t)
+                #warnings.warn('Non-positive-definite observation covariance matrix encountered at period %d' % t)
+                pass
             elif info < 0:
                 raise np.linalg.LinAlgError('Invalid value in observation covariance matrix encountered at period %d' % t)
 
@@ -631,7 +633,8 @@ cdef class {{prefix}}Statespace(object):
             # Check for errors
             if info > 0:
                 # Only warn, since it is sometimes possible to carry on anyway (e.g. if it is positive semi-definite)
-                warnings.warn('Non-positive-definite ZHZ matrix encountered at period %d' % t)
+                #warnings.warn('Non-positive-definite ZHZ matrix encountered at period %d' % t)
+                pass
             elif info < 0:
                 raise np.linalg.LinAlgError('Invalid value in ZHZ matrix encountered at period %d' % t)
 
