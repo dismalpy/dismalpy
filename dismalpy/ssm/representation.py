@@ -563,6 +563,33 @@ class Representation(Model):
         """
         self.initialization = 'stationary'
 
+    def _initialize_representation(self, *args, **kwargs):
+        prefix = kwargs['prefix'] if 'prefix' in kwargs else self.prefix
+        dtype = prefix_dtype_map[prefix]
+
+        # If the dtype-specific representation matrices do not exist, create
+        # them
+        if prefix not in self._representations:
+            # Copy the statespace representation matrices
+            self._representations[prefix] = {}
+            for matrix in self.shapes.keys():
+                if matrix == 'obs':
+                    self._representations[prefix][matrix] = self.obs.astype(dtype)
+                else:
+                    # Note: this always makes a copy
+                    self._representations[prefix][matrix] = (
+                        getattr(self, '_' + matrix).astype(dtype)
+                    )
+        # If they do exist, update them
+        else:
+            for matrix in self.shapes.keys():
+                if matrix == 'obs':
+                    self._representations[prefix][matrix] = self.obs.astype(dtype)[:]
+                else:
+                    self._representations[prefix][matrix][:] = (
+                        getattr(self, '_' + matrix).astype(dtype)[:]
+                    )
+
     def _initialize_filter(self, filter_method=None, inversion_method=None,
                            stability_method=None, conserve_memory=None,
                            tolerance=None, loglikelihood_burn=None,
@@ -592,26 +619,7 @@ class Representation(Model):
 
         # If the dtype-specific representation matrices do not exist, create
         # them
-        if prefix not in self._representations:
-            # Copy the statespace representation matrices
-            self._representations[prefix] = {}
-            for matrix in self.shapes.keys():
-                if matrix == 'obs':
-                    self._representations[prefix][matrix] = self.obs.astype(dtype)
-                else:
-                    # Note: this always makes a copy
-                    self._representations[prefix][matrix] = (
-                        getattr(self, '_' + matrix).astype(dtype)
-                    )
-        # If they do exist, update them
-        else:
-            for matrix in self.shapes.keys():
-                if matrix == 'obs':
-                    self._representations[prefix][matrix] = self.obs.astype(dtype)[:]
-                else:
-                    self._representations[prefix][matrix][:] = (
-                        getattr(self, '_' + matrix).astype(dtype)[:]
-                    )
+        self._initialize_representation(prefix=prefix)
 
         # Determine if we need to re-create the _statespace models
         # (if time-varying matrices changed)
@@ -1599,6 +1607,9 @@ class SimulationSmoothResults(object):
         self._simulated_state = None
         self._simulated_measurement_disturbance = None
         self._simulated_state_disturbance = None
+
+        # Re-initialize the _statespace representation
+        self.model._initialize_representation(self.prefix)
 
         # Draw the (independent) random variates for disturbances in the
         # simulation
