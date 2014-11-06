@@ -373,6 +373,12 @@ cdef class {{prefix}}KalmanFilter(object):
         # TODO replace with optimal work array size
         self.ldwork = self.model.k_endog
 
+        # Checks
+        if self.filter_method & FILTER_COLLAPSED and self.k_endog < self.k_states:
+            raise RuntimeError('Cannot collapse observation vector it the'
+                               ' state dimension is larger than the dimension'
+                               ' of the observation vector.')
+
         # #### Allocate arrays for calculations
 
         # Arrays for Kalman filter output
@@ -532,6 +538,10 @@ cdef class {{prefix}}KalmanFilter(object):
         if not self.t < self.model.nobs:
             raise StopIteration
 
+        # Clear values
+        if self.t == 0 or not (self.conserve_memory & MEMORY_NO_LIKELIHOOD):
+            self.loglikelihood[self.t] = 0
+
         # Initialize pointers to current-iteration objects
         self.initialize_statespace_object_pointers()
         self.initialize_filter_object_pointers()
@@ -559,16 +569,16 @@ cdef class {{prefix}}KalmanFilter(object):
         self.updating(self)
 
         # Retrieve the loglikelihood
-        if self.conserve_memory & MEMORY_NO_LIKELIHOOD > 0:
-            if self.t == 0:
-                self.loglikelihood[0] = 0
+        if self.conserve_memory & MEMORY_NO_LIKELIHOOD:
             if self.t >= self.loglikelihood_burn:
                 self.loglikelihood[0] = self.loglikelihood[0] + self.calculate_loglikelihood(
                     self, self.determinant
                 )
         else:
-            self.loglikelihood[self.t] = self.calculate_loglikelihood(
-                self, self.determinant
+            self.loglikelihood[self.t] = (
+                self.loglikelihood[self.t] + self.calculate_loglikelihood(
+                    self, self.determinant
+                )
             )
 
         # Prediction step
@@ -740,11 +750,13 @@ cdef class {{prefix}}KalmanFilter(object):
             self._design = self.model._design
             self._obs_cov = self.model._obs_cov
 
-    cdef void transform(self):
+    cdef void transform(self) except *:
         # Generalized collapse by transformation
         # (Note: this incorporates the conversion to a diagonal
         # observation covariance matrix)
-        if self.filter_method & FILTER_COLLAPSED:
+        # (Note: k_endog < k_states could occur with missing data, even if
+        # generally it would work)
+        if self.filter_method & FILTER_COLLAPSED and not self.k_endog < self.k_states:
             self.model.transform_generalized_collapse(self.t)
 
             # Reset pointers
@@ -752,15 +764,19 @@ cdef class {{prefix}}KalmanFilter(object):
             self._design = self.model._design
             self._obs_cov = self.model._obs_cov
 
+            # Reset dimensions
+            self.k_endog = self.k_states
+            self.k_endog2 = self.k_endog**2
+            self.k_endogstates = self.k_endog * self.model.k_states
+
             # Add the likelihood to the current iteration
             # Note: this is before it is set by the main prediction error
             # decomposition of the Kalman filter
-            print(self.model.collapse_loglikelihood)
             if self.conserve_memory & MEMORY_NO_LIKELIHOOD:
                 if self.t >= self.loglikelihood_burn:
                     self.loglikelihood[0] = self.loglikelihood[0] + self.model.collapse_loglikelihood
             else:
-                self.loglikelihood[self.t] = self.model.collapse_loglikelihood
+                self.loglikelihood[self.t] = self.loglikelihood[self.t] + self.model.collapse_loglikelihood
 
         # If we're not collapsing, we may need to perform a Cholesky
         # transformation
@@ -778,17 +794,19 @@ cdef class {{prefix}}KalmanFilter(object):
     cdef void post_convergence(self):
         # Constants
         cdef:
+            int k_endog2 = self.model.k_endog**2
+            int k_endogstates = self.model.k_endog*self.k_states
             int inc = 1
 
         if self.converged:
             # $F_t$
-            blas.{{prefix}}copy(&self.k_endog2, self._converged_forecast_error_cov, &inc, self._forecast_error_cov, &inc)
+            blas.{{prefix}}copy(&k_endog2, self._converged_forecast_error_cov, &inc, self._forecast_error_cov, &inc)
             # $P_{t|t}$
             blas.{{prefix}}copy(&self.k_states2, self._converged_filtered_state_cov, &inc, self._filtered_state_cov, &inc)
             # $P_t$
             blas.{{prefix}}copy(&self.k_states2, self._converged_predicted_state_cov, &inc, self._predicted_state_cov, &inc)
             # $K_t$
-            blas.{{prefix}}copy(&self.k_endogstates, self._converged_kalman_gain, &inc, self._kalman_gain, &inc)
+            blas.{{prefix}}copy(&k_endogstates, self._converged_kalman_gain, &inc, self._kalman_gain, &inc)
             # $|F_t|$
             self.determinant = self.converged_determinant
 
@@ -817,6 +835,8 @@ cdef class {{prefix}}KalmanFilter(object):
         # Constants
         cdef:
             int inc = 1
+            int k_endog2 = self.model.k_endog**2
+            int k_endogstates = self.model.k_endog*self.k_states
             {{cython_type}} alpha = 1.0
             {{cython_type}} beta = 0.0
             {{cython_type}} gamma = -1.0
@@ -860,7 +880,7 @@ cdef class {{prefix}}KalmanFilter(object):
             # converged storage
             if self.converged == 1:
                 # $F_t$
-                blas.{{prefix}}copy(&self.k_endog2, &self.forecast_error_cov[0, 0, forecast_t], &inc, self._converged_forecast_error_cov, &inc)
+                blas.{{prefix}}copy(&k_endog2, &self.forecast_error_cov[0, 0, forecast_t], &inc, self._converged_forecast_error_cov, &inc)
                 # $P_{t|t}$
                 blas.{{prefix}}copy(&self.k_states2, &self.filtered_state_cov[0, 0, filtered_t], &inc, self._converged_filtered_state_cov, &inc)
                 # $P_t$
@@ -868,7 +888,7 @@ cdef class {{prefix}}KalmanFilter(object):
                 # $|F_t|$
                 self.converged_determinant = self.determinant
                 # $K_t$
-                blas.{{prefix}}copy(&self.k_endogstates, &self.kalman_gain[0, 0, gain_t], &inc, self._converged_kalman_gain, &inc)
+                blas.{{prefix}}copy(&k_endogstates, &self.kalman_gain[0, 0, gain_t], &inc, self._converged_kalman_gain, &inc)
         elif self.period_converged > 0:
             # This is here so that the filter's state is reset to converged = 1
             # even if it was set to converged = 0 for the current iteration
@@ -876,13 +896,16 @@ cdef class {{prefix}}KalmanFilter(object):
             self.converged = 1
 
     cdef void migrate_storage(self):
-        cdef int inc = 1
+        cdef:
+            int inc = 1
+            int k_endog2 = self.model.k_endog**2
+
 
         # Forecast: 1 -> 0
         if self.conserve_memory & MEMORY_NO_FORECAST > 0:
             blas.{{prefix}}copy(&self.k_endog, &self.forecast[0, 1], &inc, &self.forecast[0, 0], &inc)
             blas.{{prefix}}copy(&self.k_endog, &self.forecast_error[0, 1], &inc, &self.forecast_error[0, 0], &inc)
-            blas.{{prefix}}copy(&self.k_endog2, &self.forecast_error_cov[0, 0, 1], &inc, &self.forecast_error_cov[0, 0, 0], &inc)
+            blas.{{prefix}}copy(&k_endog2, &self.forecast_error_cov[0, 0, 1], &inc, &self.forecast_error_cov[0, 0, 0], &inc)
 
         # Filtered: 1 -> 0
         if self.conserve_memory & MEMORY_NO_FILTERED > 0:

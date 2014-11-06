@@ -94,7 +94,7 @@ cdef int {{prefix}}forecast_conventional({{prefix}}KalmanFilter kfilter):
 
     # Constants
     cdef:
-        int inc = 1, ld
+        int inc = 1, ld, i, j
         {{cython_type}} alpha = 1.0
         {{cython_type}} beta = 0.0
         {{cython_type}} gamma = -1.0
@@ -137,14 +137,19 @@ cdef int {{prefix}}forecast_conventional({{prefix}}KalmanFilter kfilter):
     # 
     # *Note*: this and does nothing at all to `forecast_error_cov` if
     # converged == True
+    # TODO make sure when converged, the copies are made correctly
     if not kfilter.converged:
         # $\\# = H_t$
-        blas.{{prefix}}copy(&kfilter.k_endog2, kfilter._obs_cov, &inc, kfilter._forecast_error_cov, &inc)
+        # blas.{{prefix}}copy(&kfilter.k_endog2, kfilter._obs_cov, &inc, kfilter._forecast_error_cov, &inc)
+        for i in range(kfilter.k_endog): # rows
+            for j in range(kfilter.k_endog): # columns
+                kfilter._forecast_error_cov[i + j*kfilter.model.k_endog] = kfilter._obs_cov[i + j*kfilter.k_endog]
+
         # $F_t = 1.0 * Z_t \\#_1 + 1.0 * \\#$
         blas.{{prefix}}gemm("N", "N", &kfilter.k_endog, &kfilter.k_endog, &kfilter.k_states,
               &alpha, kfilter._design, &kfilter.k_endog,
                      kfilter._tmp1, &kfilter.k_states,
-              &alpha, kfilter._forecast_error_cov, &kfilter.k_endog)
+              &alpha, kfilter._forecast_error_cov, &kfilter.model.k_endog)
 
     return 0
 
@@ -179,7 +184,7 @@ cdef int {{prefix}}updating_conventional({{prefix}}KalmanFilter kfilter):
         # $(m \times m) = (m \times p) (p \times m)$
         blas.{{prefix}}gemm("N", "N", &kfilter.k_states, &kfilter.k_states, &kfilter.k_endog,
               &alpha, kfilter._tmp1, &kfilter.k_states,
-                      kfilter._tmp3, &kfilter.k_endog,
+                      kfilter._tmp3, &kfilter.model.k_endog,
               &beta, kfilter._tmp0, &kfilter.k_states)
 
         # $P_{t|t} = - 1.0 * \\# P_t + 1.0 * P_t$  
@@ -249,7 +254,7 @@ cdef int {{prefix}}prediction_conventional({{prefix}}KalmanFilter kfilter):
         # $(m \times p) = (m \times m) (m \times p)$
         blas.{{prefix}}gemm("N", "T", &kfilter.k_states, &kfilter.k_endog, &kfilter.k_states,
               &alpha, kfilter._tmp00, &kfilter.k_states,
-                      kfilter._tmp3, &kfilter.k_endog,
+                      kfilter._tmp3, &kfilter.model.k_endog,
               &beta, kfilter._kalman_gain, &kfilter.k_states)
 
     return 0
@@ -263,7 +268,7 @@ cdef {{cython_type}} {{prefix}}loglikelihood_conventional({{prefix}}KalmanFilter
         {{cython_type}} alpha = 1.0
         {{cython_type}} beta = 0.0
 
-    loglikelihood = -0.5*({{combined_prefix}}log((2*NPY_PI)**kfilter.k_endog * determinant))
+    loglikelihood = -0.5*(kfilter.k_endog*{{combined_prefix}}log(2*NPY_PI) + {{combined_prefix}}log(determinant))
 
     {{if combined_prefix == 'd'}}
     loglikelihood = loglikelihood - 0.5*blas.{{prefix}}dot(&kfilter.k_endog, kfilter._forecast_error, &inc, kfilter._tmp2, &inc)

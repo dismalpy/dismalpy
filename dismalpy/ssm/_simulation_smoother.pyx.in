@@ -127,7 +127,7 @@ cdef class {{prefix}}SimulationSmoother(object):
         self.smoother = smoother
 
         # Simulated model objects
-        dim2[0] = kfilter.k_endog; dim2[1] = model.nobs;
+        dim2[0] = model.k_endog; dim2[1] = model.nobs;
         obs = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
         self.simulated_model = {{prefix}}Statespace(
             obs, model.design, model.obs_intercept, model.obs_cov,
@@ -151,7 +151,7 @@ cdef class {{prefix}}SimulationSmoother(object):
         # Koopman (2002).
         self.has_missing = model.has_missing
         if self.has_missing:
-            dim2[0] = kfilter.k_endog; dim2[1] = model.nobs;
+            dim2[0] = model.k_endog; dim2[1] = model.nobs;
             secondary_obs = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
             blas.{{prefix}}copy(&nobs_endog, &model.obs[0,0], &inc, &secondary_obs[0,0], &inc)
             self.secondary_simulated_model = {{prefix}}Statespace(
@@ -190,24 +190,24 @@ cdef class {{prefix}}SimulationSmoother(object):
 
         # Simulated data (\tilde eta_t, \tilde eps_t, \tilde alpha_t)
         # Note that these are (k_endog x nobs), (k_posdef x nobs), (k_states x nobs)
-        dim2[0] = self.kfilter.k_endog; dim2[1] = self.model.nobs;
+        dim2[0] = self.model.k_endog; dim2[1] = self.model.nobs;
         self.simulated_measurement_disturbance = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
-        dim2[0] = self.kfilter.k_posdef; dim2[1] = self.model.nobs+1;
+        dim2[0] = self.model.k_posdef; dim2[1] = self.model.nobs+1;
         self.simulated_state_disturbance = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
-        dim2[0] = self.kfilter.k_states; dim2[1] = self.model.nobs+1;
+        dim2[0] = self.model.k_states; dim2[1] = self.model.nobs+1;
         self.simulated_state = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
 
         # Generated data (y_t^+, alpha_t^+)
-        dim2[0] = self.kfilter.k_endog; dim2[1] = self.model.nobs;
+        dim2[0] = self.model.k_endog; dim2[1] = self.model.nobs;
         self.generated_obs = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
-        dim2[0] = self.kfilter.k_states; dim2[1] = self.model.nobs+1;
+        dim2[0] = self.model.k_states; dim2[1] = self.model.nobs+1;
         self.generated_state = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
 
         # Temporary arrays
-        dim2[0] = self.kfilter.k_states; dim2[1] = self.kfilter.k_states;
+        dim2[0] = self.model.k_states; dim2[1] = self.model.k_states;
         self.tmp0 = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN) # chol(P_1)
         self.tmp2 = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN) # chol(Q_t)
-        dim2[0] = self.kfilter.k_endog; dim2[1] = self.kfilter.k_endog;
+        dim2[0] = self.model.k_endog; dim2[1] = self.model.k_endog;
         self.tmp1 = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN) # chol(H_t)
 
         # Pointers
@@ -242,11 +242,11 @@ cdef class {{prefix}}SimulationSmoother(object):
             int inc = 1
             int info
             int measurement_idx, state_idx, t
-            int k_endog = self.kfilter.k_endog
+            int k_endog = self.model.k_endog
             int k_states = self.kfilter.k_states
             int k_posdef = self.kfilter.k_posdef
             int k_posdef2 = self.kfilter.k_posdef**2
-            int nobs_endog = self.model.nobs * self.kfilter.k_endog
+            int nobs_endog = self.model.nobs * self.model.k_endog
             int nobs1_kstates = (self.model.nobs+1) * self.kfilter.k_states
             int nobs_posdef = self.model.nobs * self.kfilter.k_posdef
         cdef:
@@ -275,6 +275,7 @@ cdef class {{prefix}}SimulationSmoother(object):
         blas.{{prefix}}copy(&k_states, &self.initial_state_variates[0], &inc, &self.generated_state[0,0], &inc)
         self.transform_variates(&self.generated_state[0,0], self._tmp0, k_states)
         blas.{{prefix}}axpy(&k_states, &alpha, &self.model.initial_state[0], &inc, &self.generated_state[0,0], &inc)
+
 
         self.simulated_kfilter.seek(0) # reset the filter
         if self.has_missing:
@@ -379,7 +380,7 @@ cdef class {{prefix}}SimulationSmoother(object):
 
             # \tilde eta_t = \hat eta_t^* + eta_t^+
             blas.{{prefix}}copy(&nobs_posdef, &self.disturbance_variates[nobs_endog], &inc, &self.simulated_state_disturbance[0,0], &inc)
-            blas.{{prefix}}axpy(&nobs_endog, &alpha, &self.simulated_smoother.smoothed_state_disturbance[0,0], &inc,
+            blas.{{prefix}}axpy(&nobs_posdef, &alpha, &self.simulated_smoother.smoothed_state_disturbance[0,0], &inc,
                                                      &self.simulated_state_disturbance[0,0], &inc)
 
         if self.simulation_output & SIMULATE_STATE:
@@ -391,7 +392,7 @@ cdef class {{prefix}}SimulationSmoother(object):
     cdef {{cython_type}} generate_obs(self, int t, {{cython_type}} * obs, {{cython_type}} * state, {{cython_type}} * variates):
         cdef:
             int inc = 1
-            int k_endog = self.kfilter.k_endog
+            int k_endog = self.model.k_endog
             int k_states = self.kfilter.k_states
             int design_t = 0
             int obs_intercept_t = 0

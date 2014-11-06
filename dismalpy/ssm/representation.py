@@ -563,7 +563,8 @@ class Representation(Model):
         """
         self.initialization = 'stationary'
 
-    def _initialize_representation(self, *args, **kwargs):
+    def _initialize_representation(self, recreate_statespace=False,
+                                   *args, **kwargs):
         prefix = kwargs['prefix'] if 'prefix' in kwargs else self.prefix
         dtype = prefix_dtype_map[prefix]
 
@@ -589,6 +590,21 @@ class Representation(Model):
                     self._representations[prefix][matrix][:] = (
                         getattr(self, '_' + matrix).astype(dtype)[:]
                     )
+
+        # If the dtype-specific _statespace model does not exist, create it
+        if prefix not in self._statespaces or recreate_statespace:
+            # Setup the base statespace object
+            cls = prefix_statespace_map[prefix]
+            self._statespaces[prefix] = cls(
+                self._representations[prefix]['obs'],
+                self._representations[prefix]['design'],
+                self._representations[prefix]['obs_intercept'],
+                self._representations[prefix]['obs_cov'],
+                self._representations[prefix]['transition'],
+                self._representations[prefix]['state_intercept'],
+                self._representations[prefix]['selection'],
+                self._representations[prefix]['state_cov']
+            )
 
     def _initialize_filter(self, filter_method=None, inversion_method=None,
                            stability_method=None, conserve_memory=None,
@@ -617,10 +633,6 @@ class Representation(Model):
         prefix = kwargs['prefix'] if 'prefix' in kwargs else self.prefix
         dtype = prefix_dtype_map[prefix]
 
-        # If the dtype-specific representation matrices do not exist, create
-        # them
-        self._initialize_representation(prefix=prefix)
-
         # Determine if we need to re-create the _statespace models
         # (if time-varying matrices changed)
         recreate_statespace = False
@@ -638,20 +650,9 @@ class Representation(Model):
                 not ss.state_cov.shape[2] == self.state_cov.shape[2]
             )
 
-        # If the dtype-specific _statespace model does not exist, create it
-        if prefix not in self._statespaces or recreate_statespace:
-            # Setup the base statespace object
-            cls = prefix_statespace_map[prefix]
-            self._statespaces[prefix] = cls(
-                self._representations[prefix]['obs'],
-                self._representations[prefix]['design'],
-                self._representations[prefix]['obs_intercept'],
-                self._representations[prefix]['obs_cov'],
-                self._representations[prefix]['transition'],
-                self._representations[prefix]['state_intercept'],
-                self._representations[prefix]['selection'],
-                self._representations[prefix]['state_cov']
-            )
+        # If the dtype-specific representation matrices do not exist, create
+        # them
+        self._initialize_representation(recreate_statespace, prefix=prefix)
 
         # Determine if we need to re-create the filter
         # (definitely need to recreate if we recreated the _statespace object)
@@ -990,7 +991,7 @@ class Representation(Model):
         if results_class is None:
             results_class = self.simulation_smooth_results_class
 
-        results = results_class(self, simulation_output)
+        results = results_class(self, simulation_output, *args, **kwargs)
 
         # Simulate if we have already filtered
         if have_filtered > 0:
@@ -1192,6 +1193,19 @@ class FilterResults(object):
         self.forecasts_error_cov = np.array(kalman_filter.forecast_error_cov, copy=True)
         self.loglikelihood = np.array(kalman_filter.loglikelihood, copy=True)
 
+        # Save the collapsed values
+        self.collapsed_forecasts = None
+        self.collapsed_forecasts_error = None
+        self.collapsed_forecasts_error_cov = None
+        if self.filter_method & FILTER_COLLAPSED:
+            self.collapsed_forecasts = self.forecasts[:self.k_states,:]
+            self.collapsed_forecasts_error = (
+                self.forecasts_error[:self.k_states,:]
+            )
+            self.collapsed_forecasts_error_cov = (
+                self.forecasts_error_cov[:self.k_states,:self.k_states,:]
+            )
+
         # Setup caches for uninitialized objects
         self._kalman_gain = None
         self._standardized_forecasts_error = None
@@ -1208,13 +1222,18 @@ class FilterResults(object):
                 obs_intercept_t = 0 if self.obs_intercept.shape[1] == 1 else t
 
                 # Skip anything that is less than completely missing
-                if self.nmissing[t] < self.k_endog:
+                # except for in the collapsed case, we need to rebuild all of
+                # these from scratch
+                if not (self.filter_method & FILTER_COLLAPSED) and self.nmissing[t] < self.k_endog:
                     continue
 
                 self.forecasts[:, t] = np.dot(
                     self.design[:, :, design_t], self.predicted_state[:, t]
                 ) + self.obs_intercept[:, obs_intercept_t]
-                self.forecasts_error[:, t] = np.nan
+                if self.nmissing[t] == self.k_endog:
+                    self.forecasts_error[:, t] = np.nan
+                else:
+                    self.forecasts_error[:, t] = self.endog[:, t] - self.forecasts[:, t]
                 self.forecasts_error_cov[:, :, t] = np.dot(
                     np.dot(self.design[:, :, design_t],
                            self.predicted_state_cov[:, :, t]),

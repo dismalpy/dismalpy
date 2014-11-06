@@ -65,11 +65,10 @@ cdef int {{prefix}}forecast_univariate({{prefix}}KalmanFilter kfilter):
                                             kfilter._filtered_state_cov, &inc)
 
     # Make sure the loglikelihood is set to zero if necessary
-    if not (kfilter.conserve_memory & MEMORY_NO_LIKELIHOOD):
-        kfilter._loglikelihood[0] = 0
 
     # Iterate over the observations at time t
     for i in range(kfilter.k_endog):
+
         # #### Forecast for time t
         # `forecast` $= Z_{t,i} a_{t,i} + d_{t,i}$
         # Note: $Z_{t,i}$ is a row vector starting at [i,0,t] and ending at
@@ -218,6 +217,6 @@ cdef {{cython_type}} {{prefix}}inverse_noop_univariate({{prefix}}KalmanFilter kf
     return 0
 
 cdef {{cython_type}} {{prefix}}loglikelihood_univariate({{prefix}}KalmanFilter kfilter, {{cython_type}} determinant):
-    return kfilter._loglikelihood[0]
+    return 0
 
 {{endfor}}

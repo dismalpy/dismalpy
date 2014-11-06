@@ -44,8 +44,10 @@ cdef class sStatespace(object):
     cdef readonly np.float32_t transform_determinant
 
     cdef readonly np.float32_t [:] collapse_obs
+    cdef readonly np.float32_t [:] collapse_obs_tmp
     cdef readonly np.float32_t [::1,:] collapse_design
     cdef readonly np.float32_t [::1,:] collapse_obs_cov
+    cdef readonly np.float32_t [::1,:] collapse_cholesky
     cdef readonly np.float32_t collapse_loglikelihood
 
     # Pointers
@@ -104,8 +106,10 @@ cdef class dStatespace(object):
     cdef readonly np.float64_t transform_determinant
 
     cdef readonly np.float64_t [:] collapse_obs
+    cdef readonly np.float64_t [:] collapse_obs_tmp
     cdef readonly np.float64_t [::1,:] collapse_design
     cdef readonly np.float64_t [::1,:] collapse_obs_cov
+    cdef readonly np.float64_t [::1,:] collapse_cholesky
     cdef readonly np.float64_t collapse_loglikelihood
 
     # Pointers
@@ -164,8 +168,10 @@ cdef class cStatespace(object):
     cdef readonly np.complex64_t transform_determinant
 
     cdef readonly np.complex64_t [:] collapse_obs
+    cdef readonly np.complex64_t [:] collapse_obs_tmp
     cdef readonly np.complex64_t [::1,:] collapse_design
     cdef readonly np.complex64_t [::1,:] collapse_obs_cov
+    cdef readonly np.complex64_t [::1,:] collapse_cholesky
     cdef readonly np.complex64_t collapse_loglikelihood
 
     # Pointers
@@ -224,8 +230,10 @@ cdef class zStatespace(object):
     cdef readonly np.complex128_t transform_determinant
 
     cdef readonly np.complex128_t [:] collapse_obs
+    cdef readonly np.complex128_t [:] collapse_obs_tmp
     cdef readonly np.complex128_t [::1,:] collapse_design
     cdef readonly np.complex128_t [::1,:] collapse_obs_cov
+    cdef readonly np.complex128_t [::1,:] collapse_cholesky
     cdef readonly np.complex128_t collapse_loglikelihood
 
     # Pointers
