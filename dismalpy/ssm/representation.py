@@ -1619,7 +1619,7 @@ class SimulationSmoothResults(object):
         return self._simulated_state_disturbance
 
     def simulate(self, simulation_output=-1, disturbance_variates=None,
-                 initial_state_variates=None):
+                 initial_state_variates=None, *args, **kwargs):
         # Clear any previous output
         self._generated_obs = None
         self._generated_state = None
@@ -1628,7 +1628,7 @@ class SimulationSmoothResults(object):
         self._simulated_state_disturbance = None
 
         # Re-initialize the _statespace representation
-        self.model._initialize_representation(self.prefix)
+        self.model._initialize_representation(self.prefix, *args, **kwargs)
 
         # Draw the (independent) random variates for disturbances in the
         # simulation
