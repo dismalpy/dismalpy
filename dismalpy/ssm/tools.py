@@ -7,6 +7,7 @@ License: Simplified-BSD
 from __future__ import division, absolute_import, print_function
 
 import numpy as np
+import pandas as pd
 from statsmodels.tools.data import _is_using_pandas
 from . import (
     _statespace, _kalman_filter, _kalman_smoother, _simulation_smoother
@@ -136,6 +137,39 @@ def diff(series, diff=1, seasonal_diff=None, k_seasons=1):
         differenced = differenced.diff(diff)[diff:]
     return differenced
 
+
+def concat(series, axis=0, allow_mix=False):
+    """
+    Concatenate a set of series.
+
+    Parameters
+    ----------
+    series : iterable
+        An iterable of series to be concatenated
+    axis : int, optional
+        The axis along which to concatenate. Default is 1 (columns).
+    allow_mix : bool
+        Whether or not to allow a mix of pandas and non-pandas objects. Default
+        is False. If true, the returned object is an ndarray, and additional
+        pandas metadata (e.g. column names, indices, etc) is lost.
+    
+    Returns
+    -------
+    concatenated : array or pd.DataFrame
+        The concatenated array. Will be a DataFrame if series are pandas
+        objects.
+    """
+    is_pandas = np.r_[[_is_using_pandas(s, None) for s in series]]
+
+    if np.all(is_pandas):
+        concatenated = pd.concat(series, axis=axis)
+    elif np.all(~is_pandas) or allow_mix:
+        concatenated = np.concatenate(series, axis=axis)
+    else:
+        raise ValueError('Attempted to concatenate Pandas objects with'
+                         ' non-Pandas objects with `allow_mix=False`.')
+
+    return concatenated
 
 def is_invertible(params):
     """
