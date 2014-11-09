@@ -9,6 +9,7 @@ else:
 
 cdef:
     sdot_t *sdot = <sdot_t*>Capsule_AsVoidPtr(blas.sdot._cpointer)
+    sger_t *sger = <sger_t*>Capsule_AsVoidPtr(blas.sger._cpointer)
     sgemm_t *sgemm = <sgemm_t*>Capsule_AsVoidPtr(blas.sgemm._cpointer)
     sgemv_t *sgemv = <sgemv_t*>Capsule_AsVoidPtr(blas.sgemv._cpointer)
     strmv_t *strmv = <strmv_t*>Capsule_AsVoidPtr(blas.strmv._cpointer)
@@ -17,6 +18,7 @@ cdef:
     saxpy_t *saxpy = <saxpy_t*>Capsule_AsVoidPtr(blas.saxpy._cpointer)
     sscal_t *sscal = <sscal_t*>Capsule_AsVoidPtr(blas.sscal._cpointer)
     ddot_t *ddot = <ddot_t*>Capsule_AsVoidPtr(blas.ddot._cpointer)
+    dger_t *dger = <dger_t*>Capsule_AsVoidPtr(blas.dger._cpointer)
     dgemm_t *dgemm = <dgemm_t*>Capsule_AsVoidPtr(blas.dgemm._cpointer)
     dgemv_t *dgemv = <dgemv_t*>Capsule_AsVoidPtr(blas.dgemv._cpointer)
     dtrmv_t *dtrmv = <dtrmv_t*>Capsule_AsVoidPtr(blas.dtrmv._cpointer)
@@ -25,6 +27,7 @@ cdef:
     daxpy_t *daxpy = <daxpy_t*>Capsule_AsVoidPtr(blas.daxpy._cpointer)
     dscal_t *dscal = <dscal_t*>Capsule_AsVoidPtr(blas.dscal._cpointer)
     cdotu_t *cdot = <cdotu_t*>Capsule_AsVoidPtr(blas.cdotu._cpointer)
+    cgeru_t *cgeru = <cgeru_t*>Capsule_AsVoidPtr(blas.cgeru._cpointer)
     cgemm_t *cgemm = <cgemm_t*>Capsule_AsVoidPtr(blas.cgemm._cpointer)
     cgemv_t *cgemv = <cgemv_t*>Capsule_AsVoidPtr(blas.cgemv._cpointer)
     ctrmv_t *ctrmv = <ctrmv_t*>Capsule_AsVoidPtr(blas.ctrmv._cpointer)
@@ -33,6 +36,7 @@ cdef:
     caxpy_t *caxpy = <caxpy_t*>Capsule_AsVoidPtr(blas.caxpy._cpointer)
     cscal_t *cscal = <cscal_t*>Capsule_AsVoidPtr(blas.cscal._cpointer)
     zdotu_t *zdot = <zdotu_t*>Capsule_AsVoidPtr(blas.zdotu._cpointer)
+    zgeru_t *zgeru = <zgeru_t*>Capsule_AsVoidPtr(blas.zgeru._cpointer)
     zgemm_t *zgemm = <zgemm_t*>Capsule_AsVoidPtr(blas.zgemm._cpointer)
     zgemv_t *zgemv = <zgemv_t*>Capsule_AsVoidPtr(blas.zgemv._cpointer)
     ztrmv_t *ztrmv = <ztrmv_t*>Capsule_AsVoidPtr(blas.ztrmv._cpointer)

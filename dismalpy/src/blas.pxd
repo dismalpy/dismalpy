@@ -3,6 +3,19 @@ cimport numpy as np
 cdef extern from "capsule.h":
     void *Capsule_AsVoidPtr(object ptr)
 
+ctypedef int sger_t(
+    # SGER - perform the rank 1 operation   A := alpha*x*y' + A,
+    int *m,               # Rows of A
+    int *n,               # Columns of A
+    np.float32_t *alpha,  # Scalar multiple
+    np.float32_t *x,      # Vector x
+    int *incx,            # The increment between elements of x (usually 1)
+    np.float32_t *y,      # Vector y
+    int *incy,            # The increment between elements of y (usually 1)
+    np.float32_t *a,      # Matrix A: mxn
+    int *lda,             # The size of the first dimension of A (in memory)
+) nogil
+
 ctypedef int sgemm_t(
     # Compute C := alpha*A*B + beta*C
     char *transa,         # {'T','C'}: o(A)=A'; {'N'}: o(A)=A
@@ -138,6 +151,19 @@ ctypedef np.float64_t sdot_t(
     int *incx,        # The increment between elements of x (usually 1)
     np.float32_t *y,  # Vector y, min(len(y)) = m
     int *incy         # The increment between elements of y (usually 1)
+) nogil
+
+ctypedef int dger_t(
+    # DGER - perform the rank 1 operation   A := alpha*x*y' + A,
+    int *m,               # Rows of A
+    int *n,               # Columns of A
+    np.float64_t *alpha,  # Scalar multiple
+    np.float64_t *x,      # Vector x
+    int *incx,            # The increment between elements of x (usually 1)
+    np.float64_t *y,      # Vector y
+    int *incy,            # The increment between elements of y (usually 1)
+    np.float64_t *a,      # Matrix A: mxn
+    int *lda,             # The size of the first dimension of A (in memory)
 ) nogil
 
 ctypedef int dgemm_t(
@@ -277,6 +303,19 @@ ctypedef double ddot_t(
     int *incy            # The increment between elements of y (usually 1)
 ) nogil
 
+ctypedef int cgeru_t(
+    # CGERU - perform the rank 1 operation   A := alpha*x*y' + A,
+    int *m,               # Rows of A
+    int *n,               # Columns of A
+    np.complex64_t *alpha,  # Scalar multiple
+    np.complex64_t *x,      # Vector x
+    int *incx,            # The increment between elements of x (usually 1)
+    np.complex64_t *y,      # Vector y
+    int *incy,            # The increment between elements of y (usually 1)
+    np.complex64_t *a,      # Matrix A: mxn
+    int *lda,             # The size of the first dimension of A (in memory)
+) nogil
+
 ctypedef int cgemm_t(
     # Compute C := alpha*A*B + beta*C
     char *transa,           # {'T','C'}: o(A)=A'; {'N'}: o(A)=A
@@ -412,6 +451,19 @@ ctypedef np.complex64_t cdotu_t(
     int *incx,          # The increment between elements of x (usually 1)
     np.complex64_t *y,  # Vector y, min(len(y)) = m
     int *incy           # The increment between elements of y (usually 1)
+) nogil
+
+ctypedef int zgeru_t(
+    # ZGERU - perform the rank 1 operation   A := alpha*x*y' + A,
+    int *m,               # Rows of A
+    int *n,               # Columns of A
+    np.complex128_t *alpha,  # Scalar multiple
+    np.complex128_t *x,      # Vector x
+    int *incx,            # The increment between elements of x (usually 1)
+    np.complex128_t *y,      # Vector y
+    int *incy,            # The increment between elements of y (usually 1)
+    np.complex128_t *a,      # Matrix A: mxn
+    int *lda,             # The size of the first dimension of A (in memory)
 ) nogil
 
 ctypedef int zgemm_t(
@@ -553,6 +605,7 @@ ctypedef np.complex128_t zdotu_t(
 
 cdef:
     sdot_t *sdot
+    sger_t *sger
     sgemm_t *sgemm
     sgemv_t *sgemv
     strmv_t *strmv
@@ -561,6 +614,7 @@ cdef:
     saxpy_t *saxpy
     sscal_t *sscal
     ddot_t *ddot
+    dger_t *dger
     dgemm_t *dgemm
     dgemv_t *dgemv
     dtrmv_t *dtrmv
@@ -569,6 +623,7 @@ cdef:
     daxpy_t *daxpy
     dscal_t *dscal
     cdotu_t *cdot
+    cgeru_t *cgeru
     cgemm_t *cgemm
     cgemv_t *cgemv
     ctrmv_t *ctrmv
@@ -577,6 +632,7 @@ cdef:
     caxpy_t *caxpy
     cscal_t *cscal
     zdotu_t *zdot
+    zgeru_t *zgeru
     zgemm_t *zgemm
     zgemv_t *zgemv
     ztrmv_t *ztrmv
