@@ -639,17 +639,17 @@ cdef class {{prefix}}Statespace(object):
                    &beta, &self.collapse_cholesky[0,0], &k_states)
 
             # Calculate $(Z_t' H_t^{-1} Z_t)^{-1}$ via Cholesky inversion  
-            lapack.{{prefix}}potrf("L", &k_states, &self.collapse_cholesky[0,0], &self.k_states, &info)
-            lapack.{{prefix}}potri("L", &k_states, &self.collapse_cholesky[0,0], &self.k_states, &info)
+            lapack.{{prefix}}potrf("U", &k_states, &self.collapse_cholesky[0,0], &self.k_states, &info)
+            lapack.{{prefix}}potri("U", &k_states, &self.collapse_cholesky[0,0], &self.k_states, &info)
 
-            # Calculate $C_t$ (the cholesky decomposition of $(Z_t' H_t^{-1} Z_t)^{-1}$)  
-            lapack.{{prefix}}potrf("L", &k_states, &self.collapse_cholesky[0,0], &self.k_states, &info)
+            # Calculate $C_t$ (the upper triangular cholesky decomposition of $(Z_t' H_t^{-1} Z_t)^{-1}$)  
+            lapack.{{prefix}}potrf("U", &k_states, &self.collapse_cholesky[0,0], &self.k_states, &info)
 
-            # Calculate $C_t^{-1} \equiv Z_t$  
-            # Do so by solving the system: $C_t x = I$  
+            # Calculate $C_t'^{-1} \equiv Z_t$  
+            # Do so by solving the system: $C_t' x = I$  
             # (Recall that collapse_obs_cov is an identity matrix)
             blas.{{prefix}}copy(&k_states2, &self.collapse_obs_cov[0,0], &inc, &self.collapse_design[0,0], &inc)
-            lapack.{{prefix}}trtrs("L", "N", "N", &k_states, &k_states, &self.collapse_cholesky[0,0], &k_states, &self.collapse_design[0,0], &k_states, &info)
+            lapack.{{prefix}}trtrs("U", "T", "N", &k_states, &k_states, &self.collapse_cholesky[0,0], &k_states, &self.collapse_design[0,0], &k_states, &info)
 
             # Check for errors
             if info > 0:
@@ -671,12 +671,11 @@ cdef class {{prefix}}Statespace(object):
             blas.{{prefix}}gemv("T", &k_endog, &k_states,
                   &alpha, &self.transform_design[0,0], &k_endog,
                           &self.selected_obs[0], &inc,
-                  &beta, &self.collapse_obs_tmp[0], &inc)
-            # $y_t^* = C_t \\#$  
-            blas.{{prefix}}gemv("N", &k_states, &k_states,
-                  &alpha, &self.collapse_cholesky[0,0], &k_states,
-                          &self.collapse_obs_tmp[0], &inc,
                   &beta, &self.collapse_obs[0], &inc)
+            # $y_t^* = C_t \\#$  
+            blas.{{prefix}}trmv("U", "N", "N", &k_states,
+                                &self.collapse_cholesky[0,0], &k_states,
+                                &self.collapse_obs[0], &inc)
 
             # Get residuals for loglikelihood calculation
             # Note: Durbin and Koopman (2012) appears to have an error in the
@@ -688,10 +687,10 @@ cdef class {{prefix}}Statespace(object):
             # 
 
             # $ \\# = C_t' y_t^*$
-            blas.{{prefix}}gemv("T", &k_states, &k_states,
-                  &alpha, &self.collapse_cholesky[0,0], &k_states,
-                          &self.collapse_obs[0], &inc,
-                  &beta, &self.collapse_obs_tmp[0], &inc)
+            blas.{{prefix}}copy(&k_states, &self.collapse_obs[0], &inc, &self.collapse_obs_tmp[0], &inc)
+            blas.{{prefix}}trmv("U", "T", "N", &k_states,
+                                &self.collapse_cholesky[0,0], &k_states,
+                                &self.collapse_obs_tmp[0], &inc)
 
             # $e_t = - Z_t C_t' y_t^* + y_t$
             blas.{{prefix}}gemv("N", &k_endog, &k_states,
@@ -752,6 +751,9 @@ cdef int {{prefix}}select_state_cov(int k_states, int k_posdef,
         # matrix (see e.g. Durbin and Koopman p. 43)
 
         # `tmp0` array used here, dimension $(m \times r)$  
+
+        # TODO this does not require two ?gemm calls, since we know that it
+        # is just selection rows and columns of the Q matrix
 
         # $\\#_0 = 1.0 * R_t Q_t$  
         # $(m \times r) = (m \times r) (r \times r)$
