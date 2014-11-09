@@ -65,7 +65,8 @@ class TestStatesAR3(sarimax.SARIMAX):
 
         # Perform simulation smoothing
         n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
-        self.sim = self.simulation_smoother(
+        self.sim = self.simulation_smoother()
+        self.sim.simulate(
             disturbance_variates=np.zeros(n_disturbance_variates),
             initial_state_variates=np.zeros(self.k_states)
         )
@@ -146,6 +147,7 @@ class TestStatesAR3(sarimax.SARIMAX):
         )
 
     def test_simulation_smoothed_state(self):
+        # TODO this sometimes fails, possibly somtimes segfaults
         # regression test
         assert_almost_equal(
             self.sim.simulated_state.T,
@@ -209,7 +211,8 @@ class TestStatesMissingAR3(sarimax.SARIMAX):
 
         # Perform simulation smoothing
         n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
-        self.sim = self.simulation_smoother(
+        self.sim = self.simulation_smoother()
+        self.sim.simulate(
             disturbance_variates=np.zeros(n_disturbance_variates),
             initial_state_variates=np.zeros(self.k_states)
         )

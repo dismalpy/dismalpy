@@ -4,6 +4,16 @@
 """
 State Space Models
 
+TODO: lots of duplicated index multiplications here
+TODO: This can give slightly different measurement disturbance estimates from
+      the conventional smoother and radically different measurement disturbance
+      covariance estimates. Not sure why. Although since the forecast error
+      covariance matrix in the conventional is not necessarily diagonal, but
+      in the univariate version it must be. For example, if H = I, then in the
+      conventional version, for t = n, Var(eps|Y_n) = I - F^{-1}. If F^{-1} is
+      not diagonal, then the two cannot be the same.
+      However, possibly this is expected (???) insofar as 
+
 Author: Chad Fulton  
 License: Simplified-BSD
 """
@@ -20,6 +30,7 @@ TYPES = {
 }}
 
 # Typical imports
+import numpy as np
 cimport numpy as np
 from dismalpy.src.math cimport *
 cimport dismalpy.src.blas as blas
@@ -40,6 +51,9 @@ if prefix == 'c':
 if prefix == 's':
     combined_prefix = 'd'
     combined_cython_type = 'np.float64_t'
+combined_suffix = ''
+if combined_prefix == 'z':
+    combined_suffix = 'u'
 }}
 
 # ### Univariate Kalman smoother
@@ -87,6 +101,44 @@ cdef int {{prefix}}smoothed_estimators_univariate({{prefix}}KalmanSmoother smoot
 
     # Iterate
     for i in range(smoother.k_endog-1,-1,-1):
+        # If we want smoothed disturbances, then we need to calculate
+        # and store K_{t,i}' r_{t,i} for later (otherwise r_{t,i} will not be
+        # available)
+        if smoother.smoother_output & SMOOTHER_DISTURBANCE:
+            # Note: zdot and cdot are broken, so have to use gemv for those
+            {{if combined_prefix == 'd'}}
+            smoother._smoothed_measurement_disturbance[i] = (
+                blas.{{prefix}}dot(&smoother.k_states, &smoother._kalman_gain[i*smoother.k_states], &inc,
+                                                       smoother._scaled_smoothed_estimator, &inc)
+            )
+            {{else}}
+            blas.{{prefix}}gemv("N", &inc, &smoother.k_states,
+                           &alpha, smoother._scaled_smoothed_estimator, &inc,
+                                   &smoother._kalman_gain[i*smoother.k_states], &smoother.k_states,
+                           &beta, &smoother._smoothed_measurement_disturbance[i], &inc)
+            {{endif}}
+
+        # If we want smoothed disturbance covs, then we need to calculate
+        # and store K_{t,i}' N_{t,i} K_{t,i} for later (otherwise N_{t,i} will not be
+        # available)
+        if smoother.smoother_output & SMOOTHER_DISTURBANCE_COV:
+            blas.{{prefix}}gemv("N", &smoother.k_states, &smoother.k_states,
+                                     &alpha, smoother._scaled_smoothed_estimator_cov, &smoother.k_states,
+                                             &smoother._kalman_gain[i*smoother.k_states], &smoother.k_states,
+                                     &beta, smoother._tmpL, &smoother.k_states)
+            # Note: zdot and cdot are broken, so have to use gemv for those
+            {{if combined_prefix == 'd'}}
+            smoother._smoothed_measurement_disturbance_cov[i*smoother.k_endog + i] = (
+                blas.{{prefix}}dot(&smoother.k_states, &smoother._kalman_gain[i*smoother.k_states], &inc,
+                                                      smoother._tmpL, &inc)
+            )
+            {{else}}
+            blas.{{prefix}}gemv("N", &inc, &smoother.k_states,
+                           &alpha, smoother._tmpL, &inc,
+                                   &smoother._kalman_gain[i*smoother.k_states], &smoother.k_states,
+                           &beta, &smoother._smoothed_measurement_disturbance_cov[i*smoother.k_endog + i], &inc)
+            {{endif}}
+
         # $L_{t,i} = (I_m - K_{t,i} Z_{t,i})$  
         # $(m \times m) = (m \times m) - (m \times 1) (1 \times m)$
         blas.{{prefix}}gemm("N", "N", &smoother.k_states, &smoother.k_states, &inc,
@@ -112,23 +164,6 @@ cdef int {{prefix}}smoothed_estimators_univariate({{prefix}}KalmanSmoother smoot
             blas.{{prefix}}axpy(&smoother.k_states, &smoother._tmp2[i], &smoother._design[i], &smoother.k_endog,
                                                                         smoother._scaled_smoothed_estimator, &inc)
 
-        # If we want smoothed disturbances, then we need to calculate
-        # and store K_{t,i}' r_{t,i} for later (otherwise r_{t,i} will not be
-        # available)
-        if smoother.smoother_output & SMOOTHER_DISTURBANCE:
-            # Note: zdot and cdot are broken, so have to use gemv for those
-            {{if combined_prefix == 'd'}}
-            smoother._smoothed_measurement_disturbance[i] = (
-                blas.{{prefix}}dot(&smoother.k_states, &smoother._kalman_gain[i*smoother.k_states], &smoother.k_states,
-                                                       smoother._scaled_smoothed_estimator, &inc)
-            )
-            {{else}}
-            blas.{{prefix}}gemv("N", &inc, &smoother.k_states,
-                           &alpha, smoother._scaled_smoothed_estimator, &inc,
-                                   &smoother._kalman_gain[i*smoother.k_states], &smoother.k_states,
-                           &beta, &smoother._smoothed_measurement_disturbance[i], &inc)
-            {{endif}}
-
         if smoother.smoother_output & (SMOOTHER_STATE_COV | SMOOTHER_DISTURBANCE_COV):
             # Scaled smoothed estimator covariance matrix  
             # $N_{t,i-1} = Z_{t,i}' Z_{t,i} / F_{t,i} + L_{t,i}' N_{t,i} L_{t,i}$  
@@ -144,31 +179,16 @@ cdef int {{prefix}}smoothed_estimators_univariate({{prefix}}KalmanSmoother smoot
                       &alpha, smoother._tmpL, &smoother.k_states,
                               smoother._tmp0, &smoother.k_states,
                       &beta, smoother._scaled_smoothed_estimator_cov, &smoother.k_states)
-            blas.{{prefix}}gemm("T", "N", &smoother.k_states, &smoother.k_states, &inc,
-                      &alpha, &smoother._design[i], &smoother.k_endog,
-                              &smoother._tmp3[i], &smoother.k_endog,
-                      &alpha, smoother._scaled_smoothed_estimator_cov, &smoother.k_states)
-
-            # If we want smoothed disturbance covs, then we need to calculate
-            # and store K_{t,i}' N_{t,i} K_{t,i} for later (otherwise N_{t,i} will not be
-            # available)
-        if smoother.smoother_output & SMOOTHER_DISTURBANCE_COV:
-            blas.{{prefix}}gemv("N", &smoother.k_states, &smoother.k_states,
-                                     &alpha, smoother._scaled_smoothed_estimator_cov, &smoother.k_states,
-                                             &smoother._kalman_gain[i*smoother.k_states], &smoother.k_states,
-                                     &beta, smoother._tmpL, &smoother.k_states)
-            # Note: zdot and cdot are broken, so have to use gemv for those
-            {{if combined_prefix == 'd'}}
-            smoother._smoothed_measurement_disturbance_cov[i*smoother.k_endog + i] = (
-                blas.{{prefix}}dot(&smoother.k_states, &smoother._kalman_gain[i*smoother.k_states], &smoother.k_states,
-                                                      smoother._tmpL, &inc)
+            # TODO wrong ?
+            # blas.{{prefix}}gemm("T", "N", &smoother.k_states, &smoother.k_states, &inc,
+            #           &alpha, &smoother._design[i], &smoother.k_endog,
+            #                   &smoother._tmp3[i], &smoother.kfilter.model.k_endog,
+            #           &alpha, smoother._scaled_smoothed_estimator_cov, &smoother.k_states)
+            blas.{{prefix}}ger{{combined_suffix}}(&smoother.k_states, &smoother.k_states,
+                &alpha, &smoother._design[i], &smoother.k_endog,
+                        &smoother._tmp3[i], &smoother.kfilter.model.k_endog,
+                smoother._scaled_smoothed_estimator_cov, &smoother.k_states
             )
-            {{else}}
-            blas.{{prefix}}gemv("N", &inc, &smoother.k_states,
-                           &alpha, smoother._tmpL, &inc,
-                                   &smoother._kalman_gain[i*smoother.k_states], &smoother.k_states,
-                           &beta, &smoother._smoothed_measurement_disturbance_cov[i*smoother.k_endog + i], &inc)
-            {{endif}}
 
 cdef int {{prefix}}smoothed_disturbances_univariate({{prefix}}KalmanSmoother smoother):
     # Note: this only differs from the conventional version in the
@@ -199,7 +219,7 @@ cdef int {{prefix}}smoothed_disturbances_univariate({{prefix}}KalmanSmoother smo
             # (this is because we do not otherwise store the r_{t,i} values)  
             # $(p \times 1) = (p \times p) (p \times 1)$  
             smoother._smoothed_measurement_disturbance[i] = (
-                smoother._tmp4[i] * (smoother.kfilter.forecast[i, smoother.t] - smoother._smoothed_measurement_disturbance[i])
+                smoother._tmp4[i*smoother.kfilter.model.k_endog + i] * (smoother.kfilter.forecast_error[i, smoother.t] - smoother._smoothed_measurement_disturbance[i])
             )
 
         # Smoothed state disturbance  
@@ -220,7 +240,7 @@ cdef int {{prefix}}smoothed_disturbances_univariate({{prefix}}KalmanSmoother smo
             # (this is because we do not otherwise store the N_{t,i} values)  
             # $(1 \times 1) = (p \times p) - (p \times p) (p \times p) - (p \times m) (m \times m) (m \times p)$  
             smoother._smoothed_measurement_disturbance_cov[i*smoother.k_endog + i] = (
-                (smoother._tmp4[i]**2) * (
+                (smoother._tmp4[i*smoother.kfilter.model.k_endog + i]**2) * (
                     smoother.kfilter.forecast_error_cov[i, i, smoother.t] +
                     smoother._smoothed_measurement_disturbance_cov[i*smoother.k_endog + i]
                 )

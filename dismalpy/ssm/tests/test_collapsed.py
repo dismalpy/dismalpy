@@ -1,6 +1,9 @@
 """
 Tests for collapsed observation vector
 
+These tests cannot be run for the Clark 1989 model since the dimension of
+observations (2) is smaller than the number of states (6).
+
 Author: Chad Fulton
 License: Simplified-BSD
 """
@@ -183,46 +186,46 @@ class Clark1989(ssm.Representation):
             self.sim_a.simulated_state_disturbance, 9
         )
 
-class TestClark1989Conventional(Clark1989):
+# class TestClark1989Conventional(Clark1989):
 
-    def __init__(self, dtype=float, **kwargs):
-        super(TestClark1989Conventional, self).__init__(dtype, **kwargs)
+#     def __init__(self, dtype=float, **kwargs):
+#         super(TestClark1989Conventional, self).__init__(dtype, **kwargs)
 
-        # Conventional filtering, smoothing, and simulation smoothing
-        self.filter_method = ssm.FILTER_CONVENTIONAL
-        self.results_a = self.smooth()
-        n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
-        self.sim_a = self.simulation_smoother(
-            disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
-        )
+#         # Conventional filtering, smoothing, and simulation smoothing
+#         self.filter_method = ssm.FILTER_CONVENTIONAL
+#         self.results_a = self.smooth()
+#         n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
+#         self.sim_a = self.simulation_smoother(
+#             disturbance_variates=np.zeros(n_disturbance_variates),
+#             initial_state_variates=np.zeros(self.k_states)
+#         )
 
-        # Univariate filtering, smoothing, and simulation smoothing
-        self.filter_method = ssm.FILTER_CONVENTIONAL | ssm.FILTER_COLLAPSED
-        self.results_b = self.smooth()
-        self.sim_b = self.simulation_smoother(
-            disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
-        )
+#         # Univariate filtering, smoothing, and simulation smoothing
+#         self.filter_method = ssm.FILTER_CONVENTIONAL | ssm.FILTER_COLLAPSED
+#         self.results_b = self.smooth()
+#         self.sim_b = self.simulation_smoother(
+#             disturbance_variates=np.zeros(n_disturbance_variates),
+#             initial_state_variates=np.zeros(self.k_states)
+#         )
 
-class TestClark1989Univariate(Clark1989):
+# class TestClark1989Univariate(Clark1989):
 
-    def __init__(self, dtype=float, **kwargs):
-        super(TestClark1989Univariate, self).__init__(dtype, **kwargs)
+#     def __init__(self, dtype=float, **kwargs):
+#         super(TestClark1989Univariate, self).__init__(dtype, **kwargs)
 
-        # Conventional filtering, smoothing, and simulation smoothing
-        self.filter_method = ssm.FILTER_UNIVARIATE
-        self.results_a = self.smooth()
-        n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
-        self.sim_a = self.simulation_smoother(
-            disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
-        )
+#         # Conventional filtering, smoothing, and simulation smoothing
+#         self.filter_method = ssm.FILTER_UNIVARIATE
+#         self.results_a = self.smooth()
+#         n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
+#         self.sim_a = self.simulation_smoother(
+#             disturbance_variates=np.zeros(n_disturbance_variates),
+#             initial_state_variates=np.zeros(self.k_states)
+#         )
 
-        # Univariate filtering, smoothing, and simulation smoothing
-        self.filter_method = ssm.FILTER_UNIVARIATE | ssm.FILTER_COLLAPSED
-        self.results_b = self.smooth()
-        self.sim_b = self.simulation_smoother(
-            disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
-        )
+#         # Univariate filtering, smoothing, and simulation smoothing
+#         self.filter_method = ssm.FILTER_UNIVARIATE | ssm.FILTER_COLLAPSED
+#         self.results_b = self.smooth()
+#         self.sim_b = self.simulation_smoother(
+#             disturbance_variates=np.zeros(n_disturbance_variates),
+#             initial_state_variates=np.zeros(self.k_states)
+#         )

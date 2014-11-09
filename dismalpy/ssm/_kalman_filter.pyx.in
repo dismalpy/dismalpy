@@ -532,6 +532,12 @@ cdef class {{prefix}}KalmanFilter(object):
     def __next__(self):
         """
         Perform an iteration of the Kalman filter
+
+        TODO in the univariate case, some arrays are not completely overwritten
+        (e.g. forecast error covariance, etc.). Thus, if the filter had been
+        run previously via a different method, there might be some overlap.
+        For now, this is dealt with at the Python Representation level, as it
+        forces re-creating the _kalman_filter if the filter_method changes.
         """
 
         # Get time subscript, and stop the iterator if at the end

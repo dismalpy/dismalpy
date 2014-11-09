@@ -358,6 +358,10 @@ class Representation(Model):
         self.conserve_memory = kwargs.get('conserve_memory', 0)
         self.tolerance = kwargs.get('tolerance', 1e-19)
 
+        self.smoother_output = kwargs.get(
+            'smoother_output', SMOOTHER_ALL
+        )
+
     def __len__(self):
         return self.nobs
 
@@ -591,8 +595,29 @@ class Representation(Model):
                         getattr(self, '_' + matrix).astype(dtype)[:]
                     )
 
-        # If the dtype-specific _statespace model does not exist, create it
-        if prefix not in self._statespaces or recreate_statespace:
+        # Determine if we need to (re-)create the _statespace models
+        # (if time-varying matrices changed)
+        if prefix in self._statespaces:
+            ss = self._statespaces[prefix]
+            create = (
+                not ss.obs.shape[1] == self.endog.shape[1] or
+                not ss.design.shape[2] == self.design.shape[2] or
+                not ss.obs_intercept.shape[1] == self.obs_intercept.shape[1] or
+                not ss.obs_cov.shape[2] == self.obs_cov.shape[2] or
+                not ss.transition.shape[2] == self.transition.shape[2] or
+                not (ss.state_intercept.shape[1] ==
+                     self.state_intercept.shape[1]) or
+                not ss.selection.shape[2] == self.selection.shape[2] or
+                not ss.state_cov.shape[2] == self.state_cov.shape[2]
+            )
+        else:
+            create = True
+
+        # (re-)create if necessary
+        if create:
+            if prefix in self._statespaces:
+                del self._statespaces[prefix]
+
             # Setup the base statespace object
             cls = prefix_statespace_map[prefix]
             self._statespaces[prefix] = cls(
@@ -605,6 +630,27 @@ class Representation(Model):
                 self._representations[prefix]['selection'],
                 self._representations[prefix]['state_cov']
             )
+
+        return prefix, dtype, create
+
+    def _initialize_state(self, *args, **kwargs):
+        prefix = kwargs['prefix'] if 'prefix' in kwargs else self.prefix
+        dtype = prefix_dtype_map[prefix]
+
+        # (Re-)initialize the statespace model
+        if self.initialization == 'known':
+            self._statespaces[prefix].initialize_known(
+                self._initial_state.astype(dtype),
+                self._initial_state_cov.astype(dtype)
+            )
+        elif self.initialization == 'approximate_diffuse':
+            self._statespaces[prefix].initialize_approximate_diffuse(
+                self._initial_variance
+            )
+        elif self.initialization == 'stationary':
+            self._statespaces[prefix].initialize_stationary()
+        else:
+            raise RuntimeError('Statespace model not initialized.')
 
     def _initialize_filter(self, filter_method=None, inversion_method=None,
                            stability_method=None, conserve_memory=None,
@@ -629,50 +675,29 @@ class Representation(Model):
             raise RuntimeError('Must bind a dataset to the model before'
                                ' filtering or smoothing.')
 
-        # Determine which filter to call
-        prefix = kwargs['prefix'] if 'prefix' in kwargs else self.prefix
-        dtype = prefix_dtype_map[prefix]
+        # Initialize the representation matrices
+        prefix, dtype, create_statespace = self._initialize_representation()
 
-        # Determine if we need to re-create the _statespace models
-        # (if time-varying matrices changed)
-        recreate_statespace = False
-        if recreate and prefix in self._statespaces:
-            ss = self._statespaces[prefix]
-            recreate_statespace = (
-                not ss.obs.shape[1] == self.endog.shape[1] or
-                not ss.design.shape[2] == self.design.shape[2] or
-                not ss.obs_intercept.shape[1] == self.obs_intercept.shape[1] or
-                not ss.obs_cov.shape[2] == self.obs_cov.shape[2] or
-                not ss.transition.shape[2] == self.transition.shape[2] or
-                not (ss.state_intercept.shape[1] ==
-                     self.state_intercept.shape[1]) or
-                not ss.selection.shape[2] == self.selection.shape[2] or
-                not ss.state_cov.shape[2] == self.state_cov.shape[2]
-            )
-
-        # If the dtype-specific representation matrices do not exist, create
-        # them
-        self._initialize_representation(recreate_statespace, prefix=prefix)
-
-        # Determine if we need to re-create the filter
+        # Determine if we need to (re-)create the filter
         # (definitely need to recreate if we recreated the _statespace object)
-        recreate_filter = recreate_statespace
-        if recreate and not recreate_filter and prefix in self._kalman_filters:
+        create_filter = create_statespace or prefix not in self._kalman_filters
+        if not create_filter:
             kalman_filter = self._kalman_filters[prefix]
 
-            recreate_filter = (
+            create_filter = (
                 not kalman_filter.k_endog == self.k_endog or
                 not kalman_filter.k_states == self.k_states or
                 not kalman_filter.k_posdef == self.k_posdef or
                 not kalman_filter.k_posdef == self.k_posdef or
+                not kalman_filter.filter_method == filter_method or
                 not kalman_filter.conserve_memory == conserve_memory or
                 not kalman_filter.loglikelihood_burn == loglikelihood_burn
             )
 
         # If the dtype-specific _kalman_filter does not exist (or if we need
-        # to recreate it), create it
-        if prefix not in self._kalman_filters or recreate_filter:
-            if recreate_filter:
+        # to re-create it), create it
+        if create_filter:
+            if prefix in self._kalman_filters:
                 # Delete the old filter
                 del self._kalman_filters[prefix]
             # Setup the filter
@@ -688,37 +713,32 @@ class Representation(Model):
             self._kalman_filters[prefix].inversion_method = inversion_method
             self._kalman_filters[prefix].stability_method = stability_method
             self._kalman_filters[prefix].tolerance = tolerance
+            # conserve_memory and loglikelihood_burn changes always lead to
+            # re-created filters
 
-        # (Re-)initialize the statespace model
-        if self.initialization == 'known':
-            self._statespaces[prefix].initialize_known(
-                self._initial_state.astype(dtype),
-                self._initial_state_cov.astype(dtype)
-            )
-        elif self.initialization == 'approximate_diffuse':
-            self._statespaces[prefix].initialize_approximate_diffuse(
-                self._initial_variance
-            )
-        elif self.initialization == 'stationary':
-            self._statespaces[prefix].initialize_stationary()
-        else:
-            raise RuntimeError('Statespace model not initialized.')
+        return prefix, dtype, create_filter
 
-        return prefix, dtype
-
-    def _initialize_smoother(self, smoother_output, *args, **kwargs):
-        # Determine which smoother to call
-        prefix = kwargs['prefix'] if 'prefix' in kwargs else self.prefix
-        dtype = prefix_dtype_map[prefix]
+    def _initialize_smoother(self, smoother_output=None, *args, **kwargs):
+        if smoother_output is None:
+            smoother_output = self.smoother_output
 
         # Make sure we have the required Kalman filter
-        if prefix not in self._kalman_filters:
-            kwargs['prefix'] = prefix
-            self._initialize_filter(*args, **kwargs)
+        prefix, dtype, create_filter = self._initialize_filter(*args, **kwargs)
 
-        # If the dtype-specific _kalman_smoother does not exist, create it
-        if prefix not in self._kalman_smoothers:
-            # Setup the filter
+        # Determine if we need to (re-)create the smoother
+        # (definitely need to recreate if we recreated the filter)
+        create_smoother = create_filter or prefix not in self._kalman_smoothers
+        if not create_smoother:
+            kalman_smoother = self._kalman_smoothers[prefix]
+
+            create_smoother = (
+                not kalman_smoother.kfilter is self._kalman_filters[prefix]
+            )
+
+        # If the dtype-specific _kalman_smoother does not exist (or if we need
+        # to re-create it), create it
+        if create_smoother:
+            # Setup the smoother
             cls = prefix_kalman_smoother_map[prefix]
             self._kalman_smoothers[prefix] = cls(
                 self._statespaces[prefix], self._kalman_filters[prefix],
@@ -728,41 +748,7 @@ class Representation(Model):
         else:
             self._kalman_smoothers[prefix].smoother_output = smoother_output
 
-        return prefix, dtype
-
-    def _initialize_simulation_smoother(self, simulation_output,
-                                        *args, **kwargs):
-        # Determine which smoother to call
-        prefix = kwargs['prefix'] if 'prefix' in kwargs else self.prefix
-        dtype = prefix_dtype_map[prefix]
-
-        # Make sure we have the required Kalman filter
-        if prefix not in self._kalman_filters:
-            kwargs['prefix'] = prefix
-            self._initialize_filter(*args, **kwargs)
-
-        # Make sure we have the required Kalman smoother
-        if prefix not in self._kalman_smoothers:
-            kwargs.setdefault('smoother_output', simulation_output)
-            kwargs['prefix'] = prefix
-            self._initialize_smoother(*args, **kwargs)
-
-        # If the dtype-specific _simulation_smoother does not exist, create it
-        if prefix not in self._simulation_smoothers:
-            # Setup the filter
-            cls = prefix_simulation_smoother_map[prefix]
-            self._simulation_smoothers[prefix] = cls(
-                self._statespaces[prefix], self._kalman_filters[prefix],
-                self._kalman_smoothers[prefix], simulation_output
-            )
-        # Otherwise, update the smoother parameters
-        else:
-            self._simulation_smoothers[prefix].simulation_output = (
-                simulation_output
-            )
-
-        return prefix, dtype
-
+        return prefix, dtype, create_smoother
 
     def filter(self, filter_method=None, inversion_method=None,
                stability_method=None, conserve_memory=None, tolerance=None,
@@ -804,11 +790,14 @@ class Representation(Model):
             results_class = self.filter_results_class
 
         # Initialize the filter
-        prefix, dtype = self._initialize_filter(
+        prefix, dtype, create_filter = self._initialize_filter(
             filter_method, inversion_method, stability_method, conserve_memory,
             tolerance, loglikelihood_burn, recreate, return_loglike,
             *args, **kwargs
         )
+
+        # Initialize the state
+        self._initialize_state(prefix=prefix)
 
         # Run the filter
         self._kalman_filters[prefix]()
@@ -860,8 +849,7 @@ class Representation(Model):
             kwargs['return_loglike'] = True
             self.filter(*args, **kwargs)
 
-        results = self._smooth(SMOOTHER_STATE | SMOOTHER_STATE_COV,
-                               *args, **kwargs)
+        results = self._smooth(SMOOTHER_STATE, *args, **kwargs)
 
         return results[3:5]
 
@@ -889,12 +877,11 @@ class Representation(Model):
             kwargs['return_loglike'] = True
             self.filter(*args, **kwargs)
 
-        results = self._smooth(SMOOTHER_DISTURBANCE | SMOOTHER_DISTURBANCE_COV,
-                               *args, **kwargs)
+        results = self._smooth(SMOOTHER_DISTURBANCE, *args, **kwargs)
 
         return results[5:9]
 
-    def smooth(self, smoother_output=SMOOTHER_ALL, results_class=None,
+    def smooth(self, smoother_output=None, results_class=None,
                refilter=False, *args, **kwargs):
         """
         Apply the Kalman smoother to the statespace model.
@@ -918,10 +905,17 @@ class Representation(Model):
         if results_class is None:
             results_class = self.filter_results_class
 
-        prefix = self.prefix
+        # Check if the filter method has changed (in which case we need to
+        # refilter)
+        filter_method = kwargs.get('filter_method', self.filter_method)
+        kwargs.setdefault('prefix', self.prefix)
+        if kwargs['prefix'] in self._kalman_filters:
+            if not self._kalman_filters[kwargs['prefix']].filter_method == filter_method:
+                refilter = True
 
-        if refilter or prefix not in self._kalman_filters:
-            kwargs['prefix'] = prefix
+        prefix, dtype, create_filter = self._initialize_filter(*args, **kwargs)
+
+        if refilter or create_filter:
             kwargs['return_loglike'] = True
             self.filter(*args, **kwargs)
 
@@ -930,10 +924,11 @@ class Representation(Model):
 
         return results
 
-    def _smooth(self, smoother_output, *args, **kwargs):
+    def _smooth(self, smoother_output=None, *args, **kwargs):
         # Initialize the smoother
-        prefix, dtype = self._initialize_smoother(smoother_output,
-                                                  *args, **kwargs)
+        prefix, dtype, create_smoother = self._initialize_smoother(
+            smoother_output, *args, **kwargs
+        )
 
         # Run the smoother
         smoother = self._kalman_smoothers[prefix]
@@ -945,22 +940,22 @@ class Representation(Model):
             np.array(smoother.scaled_smoothed_estimator_cov, copy=True),
             np.array(smoother.smoothing_error, copy=True),
         )
-        if smoother_output & SMOOTHER_STATE:
+        if smoother.smoother_output & SMOOTHER_STATE:
             results += (np.array(smoother.smoothed_state, copy=True),)
         else:
             results += (None,)
-        if smoother_output & SMOOTHER_STATE_COV:
+        if smoother.smoother_output & SMOOTHER_STATE_COV:
             results += (np.array(smoother.smoothed_state_cov, copy=True),)
         else:
             results += (None,)
-        if smoother_output & SMOOTHER_DISTURBANCE:
+        if smoother.smoother_output & SMOOTHER_DISTURBANCE:
             results += (
                 np.array(smoother.smoothed_measurement_disturbance, copy=True),
                 np.array(smoother.smoothed_state_disturbance, copy=True),
             )
         else:
             results += (None, None)
-        if smoother_output & SMOOTHER_DISTURBANCE_COV:
+        if smoother.smoother_output & SMOOTHER_DISTURBANCE_COV:
             results += (
                 np.array(smoother.smoothed_measurement_disturbance_cov, copy=True),
                 np.array(smoother.smoothed_state_disturbance_cov, copy=True),
@@ -970,7 +965,7 @@ class Representation(Model):
 
         return results
 
-    def simulation_smoother(self, simulation_output=SIMULATION_ALL,
+    def simulation_smoother(self, simulation_output=None,
                             results_class=None, *args, **kwargs):
         """
         Retrieve a simulation smoother for the statespace model.
@@ -984,18 +979,38 @@ class Representation(Model):
         -------
         SimulationSmoothResults
         """
-        # Check if we've filtered yet
-        have_filtered = len(self._kalman_filters) > 0
+        # Make sure we have the required Statespace representation
+        prefix, dtype, create_statespace = self._initialize_representation(
+            *args, **kwargs
+        )
+
+        # Simulation smoother parameters
+        if simulation_output is None:
+            simulation_output = kwargs.get('smoother_output', self.smoother_output)
+
+        # Kalman smoother parameters
+        smoother_output = kwargs.get('smoother_output', simulation_output)
+
+        # Kalman filter parameters
+        filter_method = kwargs.get('filter_method', self.filter_method)
+        inversion_method = kwargs.get('inversion_method', self.inversion_method)
+        stability_method = kwargs.get('stability_method', self.stability_method)
+        conserve_memory = kwargs.get('conserve_memory', self.conserve_memory)
+        loglikelihood_burn = kwargs.get('loglikelihood_burn', self.loglikelihood_burn)
+        tolerance = kwargs.get('tolerance', self.tolerance)
+
+        # Create a new simulation smoother object
+        cls = prefix_simulation_smoother_map[prefix]
+        simulation_smoother = cls(
+            self._statespaces[prefix],
+            filter_method, inversion_method, stability_method, conserve_memory,
+            tolerance, loglikelihood_burn, smoother_output, simulation_output
+        )
 
         # Initialize the results class
         if results_class is None:
             results_class = self.simulation_smooth_results_class
-
-        results = results_class(self, simulation_output, *args, **kwargs)
-
-        # Simulate if we have already filtered
-        if have_filtered > 0:
-            results.simulate(*args, **kwargs)
+        results = results_class(self, simulation_smoother, *args, **kwargs)
 
         return results
         
@@ -1277,7 +1292,7 @@ class FilterResults(object):
 
         return self._standardized_forecasts_error
 
-    def smooth(self, smoother_output=SMOOTHER_ALL):
+    def smooth(self, smoother_output=None):
         """
         Apply the Kalman smoother to the statespace model.
 
@@ -1308,11 +1323,12 @@ class FilterResults(object):
         either first re-run the filter or else use the `Representation.smooth`
         method (which always first re-runs the filter).
         """
+        if smoother_output is None:
+            smoother_output = self.model.smoother_output
+
         # Run the smoother
         smoothed = self.model._smooth(smoother_output)
 
-        # Set the output
-        self.smoother_output = smoother_output
         # For r_t (and similarly for N_t), what was calculated was
         # r_T, ..., r_{-1}, and stored such that
         # scaled_smoothed_estimator[0] == r_{-1}. We only want r_0, ..., r_T
@@ -1510,6 +1526,7 @@ class FilterResults(object):
                 self.predicted_state_cov[:, :, 0]
             )
             model._initialize_filter(*args, **kwargs)
+            model._initialize_state(*args, **kwargs)
 
             result = self._predict(ninsample, ndynamic, nforecast, model)
 
@@ -1559,15 +1576,11 @@ class FilterResults(object):
 
 class SimulationSmoothResults(object):
     
-    def __init__(self, model, simulation_output=SIMULATION_ALL,
-                 *args, **kwargs):
+    def __init__(self, model, simulation_smoother, *args, **kwargs):
         self.model = model
-
-        # Initialize the simulation smoother
-        self.prefix, self.dtype = model._initialize_simulation_smoother(
-            simulation_output, *args, **kwargs
-        )
-        self.simulation_smoother = model._simulation_smoothers[self.prefix]
+        self.prefix = model.prefix
+        self.dtype = prefix_dtype_map[self.prefix]
+        self._simulation_smoother = simulation_smoother
 
         # Output
         self._generated_obs = None
@@ -1577,10 +1590,17 @@ class SimulationSmoothResults(object):
         self._simulated_state_disturbance = None
 
     @property
+    def simulation_output(self):
+        return self._simulation_smoother.simulation_output
+    @simulation_output.setter
+    def simulation_output(self, value):
+        self._simulation_smoother.simulation_output = value
+
+    @property
     def generated_obs(self):
         if self._generated_obs is None:
             self._generated_obs = np.array(
-                self.simulation_smoother.generated_obs, copy=True
+                self._simulation_smoother.generated_obs, copy=True
             )
         return self._generated_obs
 
@@ -1588,7 +1608,7 @@ class SimulationSmoothResults(object):
     def generated_state(self):
         if self._generated_state is None:
             self._generated_state = np.array(
-                self.simulation_smoother.generated_state, copy=True
+                self._simulation_smoother.generated_state, copy=True
             )
         return self._generated_state
 
@@ -1596,7 +1616,7 @@ class SimulationSmoothResults(object):
     def simulated_state(self):
         if self._simulated_state is None:
             self._simulated_state = np.array(
-                self.simulation_smoother.simulated_state, copy=True
+                self._simulation_smoother.simulated_state, copy=True
             )
         return self._simulated_state
 
@@ -1604,7 +1624,7 @@ class SimulationSmoothResults(object):
     def simulated_measurement_disturbance(self):
         if self._simulated_measurement_disturbance is None:
             self._simulated_measurement_disturbance = np.array(
-                self.simulation_smoother.simulated_measurement_disturbance,
+                self._simulation_smoother.simulated_measurement_disturbance,
                 copy=True
             )
         return self._simulated_measurement_disturbance
@@ -1613,7 +1633,7 @@ class SimulationSmoothResults(object):
     def simulated_state_disturbance(self):
         if self._simulated_state_disturbance is None:
             self._simulated_state_disturbance = np.array(
-                self.simulation_smoother.simulated_state_disturbance,
+                self._simulation_smoother.simulated_state_disturbance,
                 copy=True
             )
         return self._simulated_state_disturbance
@@ -1628,27 +1648,30 @@ class SimulationSmoothResults(object):
         self._simulated_state_disturbance = None
 
         # Re-initialize the _statespace representation
-        self.model._initialize_representation(self.prefix, *args, **kwargs)
+        self.model._initialize_representation(prefix=self.prefix, *args, **kwargs)
+
+        # Initialize the state
+        self.model._initialize_state(prefix=self.prefix)
 
         # Draw the (independent) random variates for disturbances in the
         # simulation
         if disturbance_variates is not None:
-            self.simulation_smoother.set_disturbance_variates(
+            self._simulation_smoother.set_disturbance_variates(
                 np.array(disturbance_variates, dtype=self.dtype)
             )
         else:
-            self.simulation_smoother.draw_disturbance_variates()
+            self._simulation_smoother.draw_disturbance_variates()
 
         # Draw the (independent) random variates for the initial states in the
         # simulation
         if initial_state_variates is not None:
-            self.simulation_smoother.set_initial_state_variates(
+            self._simulation_smoother.set_initial_state_variates(
                 np.array(initial_state_variates, dtype=self.dtype)
             )
         else:
-            self.simulation_smoother.draw_initial_state_variates()
+            self._simulation_smoother.draw_initial_state_variates()
 
         # Perform simulation smoothing
         # Note: simulation_output=-1 corresponds to whatever was setup when
         # the simulation smoother was constructed
-        self.simulation_smoother.simulate(simulation_output)
+        self._simulation_smoother.simulate(simulation_output)

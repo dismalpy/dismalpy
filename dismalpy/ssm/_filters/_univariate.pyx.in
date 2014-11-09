@@ -107,7 +107,7 @@ cdef int {{prefix}}forecast_univariate({{prefix}}KalmanFilter kfilter):
         # Note: zdot and cdot are broken, so have to use gemv for those
         {{if combined_prefix == 'd'}}
         forecast_error_cov = (
-            kfilter._obs_cov[i + i*kfilter.k_endog] +
+            kfilter._obs_cov[i + i*kfilter.model.k_endog] +
             blas.{{prefix}}dot(&kfilter.k_states, &kfilter._design[i], &kfilter.k_endog,
                                                   kfilter._tmp1, &inc)
         )
@@ -116,9 +116,9 @@ cdef int {{prefix}}forecast_univariate({{prefix}}KalmanFilter kfilter):
                        &alpha, kfilter._tmp1, &inc,
                                &kfilter._design[i], &kfilter.k_endog,
                        &beta, kfilter._tmp0, &inc)
-        forecast_error_cov = kfilter._obs_cov[i + i*kfilter.k_endog] + kfilter._tmp0[0]
+        forecast_error_cov = kfilter._obs_cov[i + i*kfilter.model.k_endog] + kfilter._tmp0[0]
         {{endif}}
-        kfilter._forecast_error_cov[i + i*kfilter.k_endog] = forecast_error_cov
+        kfilter._forecast_error_cov[i + i*kfilter.model.k_endog] = forecast_error_cov
 
         # If we have a non-zero variance
         # (if we have a zero-variance then we are done with this iteration)
@@ -131,10 +131,10 @@ cdef int {{prefix}}forecast_univariate({{prefix}}KalmanFilter kfilter):
             kfilter._tmp2[i] = kfilter._forecast_error[i] * forecast_error_cov_inv
             # $\\#_3 = Z_{t,i} / F_{t,i}$
             blas.{{prefix}}copy(&kfilter.k_states, &kfilter._design[i], &kfilter.k_endog,
-                                                   &kfilter._tmp3[i], &kfilter.k_endog)
-            blas.{{prefix}}scal(&kfilter.k_states, &forecast_error_cov_inv, &kfilter._tmp3[i], &kfilter.k_endog)
+                                                   &kfilter._tmp3[i], &kfilter.model.k_endog)
+            blas.{{prefix}}scal(&kfilter.k_states, &forecast_error_cov_inv, &kfilter._tmp3[i], &kfilter.model.k_endog)
             # $\\#_4 = H_{t,i} / F_{t,i}$
-            kfilter._tmp4[i*kfilter.k_endog + i] = kfilter._obs_cov[i*kfilter.k_endog + i] * forecast_error_cov_inv
+            kfilter._tmp4[i*kfilter.model.k_endog + i] = kfilter._obs_cov[i*kfilter.model.k_endog + i] * forecast_error_cov_inv
 
             # #### Filtered state for time t
             # $a_{t,i+1} = a_{t,i} + P_{t,i} Z_{t,i}' F_{t,i}^{-1} v_{t,i}$  
@@ -149,7 +149,7 @@ cdef int {{prefix}}forecast_univariate({{prefix}}KalmanFilter kfilter):
             #                                                                    kfilter._filtered_state, &inc)
 
             # #### Filtered state covariance for time t
-            # $P_{t,i+1} = P_{t,i} Z_{t,i}' F_{t,i}^{-1} Z_{t,i} P_{t,i}'$
+            # $P_{t,i+1} = P_{t,i} - P_{t,i} Z_{t,i}' F_{t,i}^{-1} Z_{t,i} P_{t,i}'$
             blas.{{prefix}}gemm("N", "T", &kfilter.k_states, &kfilter.k_states, &inc,
                                           &gamma, kfilter._tmp1, &kfilter.k_states,
                                                   &kfilter._kalman_gain[i*kfilter.k_states], &kfilter.k_states,

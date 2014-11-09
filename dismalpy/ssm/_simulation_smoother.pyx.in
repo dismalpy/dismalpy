@@ -30,6 +30,14 @@ cdef int SIMULATE_ALL = (
     SIMULATE_STATE | SIMULATE_DISTURBANCE
 )
 
+from dismalpy.ssm._kalman_filter cimport (
+    FILTER_CONVENTIONAL, INVERT_UNIVARIATE, SOLVE_CHOLESKY,
+    STABILITY_FORCE_SYMMETRY, MEMORY_STORE_ALL
+)
+from dismalpy.ssm._kalman_smoother cimport (
+    SMOOTHER_ALL
+)
+
 # Typical imports
 import numpy as np
 import warnings
@@ -109,8 +117,13 @@ cdef class {{prefix}}SimulationSmoother(object):
 
     def __init__(self,
                  {{prefix}}Statespace model,
-                 {{prefix}}KalmanFilter kfilter,
-                 {{prefix}}KalmanSmoother smoother,
+                 int filter_method=FILTER_CONVENTIONAL,
+                 int inversion_method=INVERT_UNIVARIATE | SOLVE_CHOLESKY,
+                 int stability_method=STABILITY_FORCE_SYMMETRY,
+                 int conserve_memory=MEMORY_STORE_ALL,
+                 np.float64_t tolerance=1e-19,
+                 int loglikelihood_burn=0,
+                 int smoother_output=SMOOTHER_ALL,
                  int simulation_output=SIMULATE_ALL,
                  ):
         cdef int inc = 1
@@ -123,8 +136,14 @@ cdef class {{prefix}}SimulationSmoother(object):
 
         # Model objects
         self.model = model
-        self.kfilter = kfilter
-        self.smoother = smoother
+        # self.kfilter = {{prefix}}KalmanFilter(
+        #     self.model, filter_method, inversion_method,
+        #     stability_method, conserve_memory,
+        #     tolerance, loglikelihood_burn
+        # )
+        # self.smoother = {{prefix}}KalmanSmoother(
+        #     self.model, self.kfilter, smoother_output
+        # )
 
         # Simulated model objects
         dim2[0] = model.k_endog; dim2[1] = model.nobs;
@@ -135,12 +154,12 @@ cdef class {{prefix}}SimulationSmoother(object):
             model.state_cov
         )
         self.simulated_kfilter = {{prefix}}KalmanFilter(
-            self.simulated_model, kfilter.filter_method, kfilter.inversion_method,
-            kfilter.stability_method, kfilter.conserve_memory,
-            kfilter.tolerance, kfilter.loglikelihood_burn
+            self.simulated_model, filter_method, inversion_method,
+            stability_method, conserve_memory,
+            tolerance, loglikelihood_burn
         )
         self.simulated_smoother = {{prefix}}KalmanSmoother(
-            self.simulated_model, self.simulated_kfilter, smoother.smoother_output
+            self.simulated_model, self.simulated_kfilter, smoother_output
         )
 
         # Secondary simulated model objects
@@ -160,12 +179,12 @@ cdef class {{prefix}}SimulationSmoother(object):
                 model.state_cov
             )
             self.secondary_simulated_kfilter = {{prefix}}KalmanFilter(
-                self.secondary_simulated_model, kfilter.filter_method, kfilter.inversion_method,
-                kfilter.stability_method, kfilter.conserve_memory,
-                kfilter.tolerance, kfilter.loglikelihood_burn
+                self.secondary_simulated_model, filter_method, inversion_method,
+                stability_method, conserve_memory,
+                tolerance, loglikelihood_burn
             )
             self.secondary_simulated_smoother = {{prefix}}KalmanSmoother(
-                self.secondary_simulated_model, self.secondary_simulated_kfilter, smoother.smoother_output
+                self.secondary_simulated_model, self.secondary_simulated_kfilter, smoother_output
             )
 
 
@@ -243,12 +262,12 @@ cdef class {{prefix}}SimulationSmoother(object):
             int info
             int measurement_idx, state_idx, t
             int k_endog = self.model.k_endog
-            int k_states = self.kfilter.k_states
-            int k_posdef = self.kfilter.k_posdef
-            int k_posdef2 = self.kfilter.k_posdef**2
+            int k_states = self.model.k_states
+            int k_posdef = self.model.k_posdef
+            int k_posdef2 = self.model.k_posdef**2
             int nobs_endog = self.model.nobs * self.model.k_endog
-            int nobs1_kstates = (self.model.nobs+1) * self.kfilter.k_states
-            int nobs_posdef = self.model.nobs * self.kfilter.k_posdef
+            int nobs1_kstates = (self.model.nobs+1) * self.model.k_states
+            int nobs_posdef = self.model.nobs * self.model.k_posdef
         cdef:
             {{cython_type}} alpha = 1.0
             {{cython_type}} gamma = -1.0
@@ -393,7 +412,7 @@ cdef class {{prefix}}SimulationSmoother(object):
         cdef:
             int inc = 1
             int k_endog = self.model.k_endog
-            int k_states = self.kfilter.k_states
+            int k_states = self.model.k_states
             int design_t = 0
             int obs_intercept_t = 0
         cdef:
@@ -417,8 +436,8 @@ cdef class {{prefix}}SimulationSmoother(object):
     cdef {{cython_type}} generate_state(self, int t, {{cython_type}} * state, {{cython_type}} * input_state, {{cython_type}} * variates):
         cdef:
             int inc = 1
-            int k_states = self.kfilter.k_states
-            int k_posdef = self.kfilter.k_posdef
+            int k_states = self.model.k_states
+            int k_posdef = self.model.k_posdef
             int state_intercept_t = 0
             int transition_t = 0
             int selection_t = 0
