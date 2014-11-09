@@ -179,11 +179,6 @@ cdef int {{prefix}}smoothed_estimators_univariate({{prefix}}KalmanSmoother smoot
                       &alpha, smoother._tmpL, &smoother.k_states,
                               smoother._tmp0, &smoother.k_states,
                       &beta, smoother._scaled_smoothed_estimator_cov, &smoother.k_states)
-            # TODO wrong ?
-            # blas.{{prefix}}gemm("T", "N", &smoother.k_states, &smoother.k_states, &inc,
-            #           &alpha, &smoother._design[i], &smoother.k_endog,
-            #                   &smoother._tmp3[i], &smoother.kfilter.model.k_endog,
-            #           &alpha, smoother._scaled_smoothed_estimator_cov, &smoother.k_states)
             blas.{{prefix}}ger{{combined_suffix}}(&smoother.k_states, &smoother.k_states,
                 &alpha, &smoother._design[i], &smoother.k_endog,
                         &smoother._tmp3[i], &smoother.kfilter.model.k_endog,

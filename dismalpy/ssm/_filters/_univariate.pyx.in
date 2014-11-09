@@ -39,6 +39,9 @@ if prefix == 'c':
 if prefix == 's':
     combined_prefix = 'd'
     combined_cython_type = 'np.float64_t'
+combined_suffix = ''
+if combined_prefix == 'z':
+    combined_suffix = 'u'
 }}
 
 # ### Univariate Kalman filter
@@ -150,10 +153,16 @@ cdef int {{prefix}}forecast_univariate({{prefix}}KalmanFilter kfilter):
 
             # #### Filtered state covariance for time t
             # $P_{t,i+1} = P_{t,i} - P_{t,i} Z_{t,i}' F_{t,i}^{-1} Z_{t,i} P_{t,i}'$
-            blas.{{prefix}}gemm("N", "T", &kfilter.k_states, &kfilter.k_states, &inc,
-                                          &gamma, kfilter._tmp1, &kfilter.k_states,
-                                                  &kfilter._kalman_gain[i*kfilter.k_states], &kfilter.k_states,
-                                          &alpha, kfilter._filtered_state_cov, &kfilter.k_states)
+            # blas.{{prefix}}gemm("N", "T", &kfilter.k_states, &kfilter.k_states, &inc,
+            #                               &gamma, kfilter._tmp1, &kfilter.k_states,
+            #                                       &kfilter._kalman_gain[i*kfilter.k_states], &kfilter.k_states,
+            #                               &alpha, kfilter._filtered_state_cov, &kfilter.k_states)
+            blas.{{prefix}}ger{{combined_suffix}}(&kfilter.k_states, &kfilter.k_states,
+                &gamma, kfilter._tmp1, &inc,
+                        &kfilter._kalman_gain[i*kfilter.k_states], &inc,
+                kfilter._filtered_state_cov, &kfilter.k_states
+            )
+            
 
             # #### Loglikelihood
             kfilter._loglikelihood[0] = (
