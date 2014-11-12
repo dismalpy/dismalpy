@@ -429,13 +429,13 @@ class SARIMAX(Model):
         if (simple_differencing and
            (self._k_diff > 0 or self._k_seasonal_diff > 0)):
             # Save the originals
-            self.orig_endog = np.copy(endog)
-            self.orig_exog = np.copy(exog)
+            self.orig_endog = endog
+            self.orig_exog = exog
             # Perform simple differencing
-            endog = diff(endog, self._k_diff, self._k_seasonal_diff,
+            endog = diff(np.copy(endog), self._k_diff, self._k_seasonal_diff,
                          self.k_seasons)
             if exog is not None:
-                exog = diff(exog, self._k_diff, self._k_seasonal_diff,
+                exog = diff(np.copy(exog), self._k_diff, self._k_seasonal_diff,
                             self.k_seasons)
             self._k_diff = 0
             self._k_seasonal_diff = 0
