@@ -61,7 +61,7 @@ cdef class sKalmanFilter(object):
     cdef readonly int converged
     cdef readonly int period_converged
     cdef readonly int time_invariant
-    cdef public int filter_method
+    cdef readonly int filter_method
     cdef public int inversion_method
     cdef public int stability_method
     cdef readonly int conserve_memory
@@ -94,17 +94,17 @@ cdef class sKalmanFilter(object):
     cdef readonly np.float32_t determinant
 
     # ### Pointers to current-iteration arrays
-    cdef np.float32_t * _obs
-    cdef np.float32_t * _design
-    cdef np.float32_t * _obs_intercept
-    cdef np.float32_t * _obs_cov
-    cdef np.float32_t * _transition
-    cdef np.float32_t * _state_intercept
-    cdef np.float32_t * _selection
-    cdef np.float32_t * _state_cov
-    cdef np.float32_t * _selected_state_cov
-    cdef np.float32_t * _initial_state
-    cdef np.float32_t * _initial_state_cov
+    # cdef np.float32_t * _obs
+    # cdef np.float32_t * _design
+    # cdef np.float32_t * _obs_intercept
+    # cdef np.float32_t * _obs_cov
+    # cdef np.float32_t * _transition
+    # cdef np.float32_t * _state_intercept
+    # cdef np.float32_t * _selection
+    # cdef np.float32_t * _state_cov
+    # cdef np.float32_t * _selected_state_cov
+    # cdef np.float32_t * _initial_state
+    # cdef np.float32_t * _initial_state_cov
 
     cdef np.float32_t * _input_state
     cdef np.float32_t * _input_state_cov
@@ -138,32 +138,33 @@ cdef class sKalmanFilter(object):
 
     # ### Pointers to current-iteration Kalman filtering functions
     cdef int (*forecasting)(
-        sKalmanFilter
+        sKalmanFilter, sStatespace
     )
     cdef np.float32_t (*inversion)(
-        sKalmanFilter, np.float32_t
+        sKalmanFilter, sStatespace, np.float32_t
     ) except *
     cdef int (*updating)(
-        sKalmanFilter
+        sKalmanFilter, sStatespace
     )
     cdef np.float32_t (*calculate_loglikelihood)(
-        sKalmanFilter, np.float32_t
+        sKalmanFilter, sStatespace, np.float32_t
     )
     cdef int (*prediction)(
-        sKalmanFilter
+        sKalmanFilter, sStatespace
     )
 
     # ### Define some constants
-    cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_endogstates, ldwork
+    cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_posdef2, k_endogstates, k_statesposdef
+    cdef readonly int ldwork
     
+    cdef allocate_arrays(self)
+    cdef void set_dimensions(self)
+    cpdef set_filter_method(self, int filter_method, int force_reset=*)
     cpdef seek(self, unsigned int t, int reset_convergence=*)
 
     cdef void initialize_statespace_object_pointers(self) except *
     cdef void initialize_filter_object_pointers(self)
     cdef void initialize_function_pointers(self) except *
-    cdef void select_state_cov(self)
-    cdef void select_missing(self)
-    cdef void transform(self) except *
     cdef void post_convergence(self)
     cdef void numerical_stability(self)
     cdef void check_convergence(self)
@@ -180,7 +181,7 @@ cdef class dKalmanFilter(object):
     cdef readonly int converged
     cdef readonly int period_converged
     cdef readonly int time_invariant
-    cdef public int filter_method
+    cdef readonly int filter_method
     cdef public int inversion_method
     cdef public int stability_method
     cdef readonly int conserve_memory
@@ -213,17 +214,17 @@ cdef class dKalmanFilter(object):
     cdef readonly np.float64_t determinant
 
     # ### Pointers to current-iteration arrays
-    cdef np.float64_t * _obs
-    cdef np.float64_t * _design
-    cdef np.float64_t * _obs_intercept
-    cdef np.float64_t * _obs_cov
-    cdef np.float64_t * _transition
-    cdef np.float64_t * _state_intercept
-    cdef np.float64_t * _selection
-    cdef np.float64_t * _state_cov
-    cdef np.float64_t * _selected_state_cov
-    cdef np.float64_t * _initial_state
-    cdef np.float64_t * _initial_state_cov
+    # cdef np.float64_t * _obs
+    # cdef np.float64_t * _design
+    # cdef np.float64_t * _obs_intercept
+    # cdef np.float64_t * _obs_cov
+    # cdef np.float64_t * _transition
+    # cdef np.float64_t * _state_intercept
+    # cdef np.float64_t * _selection
+    # cdef np.float64_t * _state_cov
+    # cdef np.float64_t * _selected_state_cov
+    # cdef np.float64_t * _initial_state
+    # cdef np.float64_t * _initial_state_cov
 
     cdef np.float64_t * _input_state
     cdef np.float64_t * _input_state_cov
@@ -257,32 +258,33 @@ cdef class dKalmanFilter(object):
 
     # ### Pointers to current-iteration Kalman filtering functions
     cdef int (*forecasting)(
-        dKalmanFilter
+        dKalmanFilter, dStatespace
     )
     cdef np.float64_t (*inversion)(
-        dKalmanFilter, np.float64_t
+        dKalmanFilter, dStatespace, np.float64_t
     ) except *
     cdef int (*updating)(
-        dKalmanFilter
+        dKalmanFilter, dStatespace
     )
     cdef np.float64_t (*calculate_loglikelihood)(
-        dKalmanFilter, np.float64_t
+        dKalmanFilter, dStatespace, np.float64_t
     )
     cdef int (*prediction)(
-        dKalmanFilter
+        dKalmanFilter, dStatespace
     )
 
     # ### Define some constants
-    cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_endogstates, ldwork
+    cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_posdef2, k_endogstates, k_statesposdef
+    cdef readonly int ldwork
     
+    cdef allocate_arrays(self)
+    cdef void set_dimensions(self)
+    cpdef set_filter_method(self, int filter_method, int force_reset=*)
     cpdef seek(self, unsigned int t, int reset_convergence=*)
 
     cdef void initialize_statespace_object_pointers(self) except *
     cdef void initialize_filter_object_pointers(self)
     cdef void initialize_function_pointers(self) except *
-    cdef void select_state_cov(self)
-    cdef void select_missing(self)
-    cdef void transform(self) except *
     cdef void post_convergence(self)
     cdef void numerical_stability(self)
     cdef void check_convergence(self)
@@ -299,7 +301,7 @@ cdef class cKalmanFilter(object):
     cdef readonly int converged
     cdef readonly int period_converged
     cdef readonly int time_invariant
-    cdef public int filter_method
+    cdef readonly int filter_method
     cdef public int inversion_method
     cdef public int stability_method
     cdef readonly int conserve_memory
@@ -332,17 +334,17 @@ cdef class cKalmanFilter(object):
     cdef readonly np.complex64_t determinant
 
     # ### Pointers to current-iteration arrays
-    cdef np.complex64_t * _obs
-    cdef np.complex64_t * _design
-    cdef np.complex64_t * _obs_intercept
-    cdef np.complex64_t * _obs_cov
-    cdef np.complex64_t * _transition
-    cdef np.complex64_t * _state_intercept
-    cdef np.complex64_t * _selection
-    cdef np.complex64_t * _state_cov
-    cdef np.complex64_t * _selected_state_cov
-    cdef np.complex64_t * _initial_state
-    cdef np.complex64_t * _initial_state_cov
+    # cdef np.complex64_t * _obs
+    # cdef np.complex64_t * _design
+    # cdef np.complex64_t * _obs_intercept
+    # cdef np.complex64_t * _obs_cov
+    # cdef np.complex64_t * _transition
+    # cdef np.complex64_t * _state_intercept
+    # cdef np.complex64_t * _selection
+    # cdef np.complex64_t * _state_cov
+    # cdef np.complex64_t * _selected_state_cov
+    # cdef np.complex64_t * _initial_state
+    # cdef np.complex64_t * _initial_state_cov
 
     cdef np.complex64_t * _input_state
     cdef np.complex64_t * _input_state_cov
@@ -376,32 +378,33 @@ cdef class cKalmanFilter(object):
 
     # ### Pointers to current-iteration Kalman filtering functions
     cdef int (*forecasting)(
-        cKalmanFilter
+        cKalmanFilter, cStatespace
     )
     cdef np.complex64_t (*inversion)(
-        cKalmanFilter, np.complex64_t
+        cKalmanFilter, cStatespace, np.complex64_t
     ) except *
     cdef int (*updating)(
-        cKalmanFilter
+        cKalmanFilter, cStatespace
     )
     cdef np.complex64_t (*calculate_loglikelihood)(
-        cKalmanFilter, np.complex64_t
+        cKalmanFilter, cStatespace, np.complex64_t
     )
     cdef int (*prediction)(
-        cKalmanFilter
+        cKalmanFilter, cStatespace
     )
 
     # ### Define some constants
-    cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_endogstates, ldwork
+    cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_posdef2, k_endogstates, k_statesposdef
+    cdef readonly int ldwork
     
+    cdef allocate_arrays(self)
+    cdef void set_dimensions(self)
+    cpdef set_filter_method(self, int filter_method, int force_reset=*)
     cpdef seek(self, unsigned int t, int reset_convergence=*)
 
     cdef void initialize_statespace_object_pointers(self) except *
     cdef void initialize_filter_object_pointers(self)
     cdef void initialize_function_pointers(self) except *
-    cdef void select_state_cov(self)
-    cdef void select_missing(self)
-    cdef void transform(self) except *
     cdef void post_convergence(self)
     cdef void numerical_stability(self)
     cdef void check_convergence(self)
@@ -418,7 +421,7 @@ cdef class zKalmanFilter(object):
     cdef readonly int converged
     cdef readonly int period_converged
     cdef readonly int time_invariant
-    cdef public int filter_method
+    cdef readonly int filter_method
     cdef public int inversion_method
     cdef public int stability_method
     cdef readonly int conserve_memory
@@ -451,17 +454,17 @@ cdef class zKalmanFilter(object):
     cdef readonly np.complex128_t determinant
 
     # ### Pointers to current-iteration arrays
-    cdef np.complex128_t * _obs
-    cdef np.complex128_t * _design
-    cdef np.complex128_t * _obs_intercept
-    cdef np.complex128_t * _obs_cov
-    cdef np.complex128_t * _transition
-    cdef np.complex128_t * _state_intercept
-    cdef np.complex128_t * _selection
-    cdef np.complex128_t * _state_cov
-    cdef np.complex128_t * _selected_state_cov
-    cdef np.complex128_t * _initial_state
-    cdef np.complex128_t * _initial_state_cov
+    # cdef np.complex128_t * _obs
+    # cdef np.complex128_t * _design
+    # cdef np.complex128_t * _obs_intercept
+    # cdef np.complex128_t * _obs_cov
+    # cdef np.complex128_t * _transition
+    # cdef np.complex128_t * _state_intercept
+    # cdef np.complex128_t * _selection
+    # cdef np.complex128_t * _state_cov
+    # cdef np.complex128_t * _selected_state_cov
+    # cdef np.complex128_t * _initial_state
+    # cdef np.complex128_t * _initial_state_cov
 
     cdef np.complex128_t * _input_state
     cdef np.complex128_t * _input_state_cov
@@ -495,31 +498,33 @@ cdef class zKalmanFilter(object):
 
     # ### Pointers to current-iteration Kalman filtering functions
     cdef int (*forecasting)(
-        zKalmanFilter
+        zKalmanFilter, zStatespace
     )
     cdef np.complex128_t (*inversion)(
-        zKalmanFilter, np.complex128_t
+        zKalmanFilter, zStatespace, np.complex128_t
     ) except *
     cdef int (*updating)(
-        zKalmanFilter
+        zKalmanFilter, zStatespace
     )
     cdef np.complex128_t (*calculate_loglikelihood)(
-        zKalmanFilter, np.complex128_t
+        zKalmanFilter, zStatespace, np.complex128_t
     )
     cdef int (*prediction)(
-        zKalmanFilter
+        zKalmanFilter, zStatespace
     )
 
     # ### Define some constants
-    cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_endogstates, ldwork
+    cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_posdef2, k_endogstates, k_statesposdef
+    cdef readonly int ldwork
     
+    cdef allocate_arrays(self)
+    cdef void set_dimensions(self)
+    cpdef set_filter_method(self, int filter_method, int force_reset=*)
     cpdef seek(self, unsigned int t, int reset_convergence=*)
+
     cdef void initialize_statespace_object_pointers(self) except *
     cdef void initialize_filter_object_pointers(self)
     cdef void initialize_function_pointers(self) except *
-    cdef void select_state_cov(self)
-    cdef void select_missing(self)
-    cdef void transform(self) except *
     cdef void post_convergence(self)
     cdef void numerical_stability(self)
     cdef void check_convergence(self)

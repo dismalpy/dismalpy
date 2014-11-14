@@ -506,7 +506,7 @@ class StatespaceResults(FilterResults, tsbase.TimeSeriesModelResults):
     t_test
     wald_test
     """
-    def __init__(self, model, kalman_filter, *args, **kwargs):
+    def __init__(self, model, *args, **kwargs):
         self.data = model.data
 
         # Save the model output
@@ -526,8 +526,7 @@ class StatespaceResults(FilterResults, tsbase.TimeSeriesModelResults):
                                                scale=1., *args, **kwargs)
 
         # Initialize the statespace representation
-        super(StatespaceResults, self).__init__(model, kalman_filter, *args,
-                                                **kwargs)
+        super(StatespaceResults, self).__init__(model)
 
         # Setup the cache
         self._cache = resettable_cache()

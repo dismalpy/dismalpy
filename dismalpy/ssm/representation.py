@@ -655,7 +655,6 @@ class Representation(Model):
     def _initialize_filter(self, filter_method=None, inversion_method=None,
                            stability_method=None, conserve_memory=None,
                            tolerance=None, loglikelihood_burn=None,
-                           recreate=True, return_loglike=False,
                            *args, **kwargs):
         if filter_method is None:
             filter_method = self.filter_method
@@ -685,11 +684,6 @@ class Representation(Model):
             kalman_filter = self._kalman_filters[prefix]
 
             create_filter = (
-                not kalman_filter.k_endog == self.k_endog or
-                not kalman_filter.k_states == self.k_states or
-                not kalman_filter.k_posdef == self.k_posdef or
-                not kalman_filter.k_posdef == self.k_posdef or
-                not kalman_filter.filter_method == filter_method or
                 not kalman_filter.conserve_memory == conserve_memory or
                 not kalman_filter.loglikelihood_burn == loglikelihood_burn
             )
@@ -709,21 +703,23 @@ class Representation(Model):
             )
         # Otherwise, update the filter parameters
         else:
-            self._kalman_filters[prefix].filter_method = filter_method
+            self._kalman_filters[prefix].set_filter_method(filter_method, False)
             self._kalman_filters[prefix].inversion_method = inversion_method
             self._kalman_filters[prefix].stability_method = stability_method
             self._kalman_filters[prefix].tolerance = tolerance
             # conserve_memory and loglikelihood_burn changes always lead to
             # re-created filters
 
-        return prefix, dtype, create_filter
+        return prefix, dtype, create_filter, create_statespace
 
     def _initialize_smoother(self, smoother_output=None, *args, **kwargs):
         if smoother_output is None:
             smoother_output = self.smoother_output
 
         # Make sure we have the required Kalman filter
-        prefix, dtype, create_filter = self._initialize_filter(*args, **kwargs)
+        prefix, dtype, create_filter, create_statespace = (
+            self._initialize_filter(*args, **kwargs)
+        )
 
         # Determine if we need to (re-)create the smoother
         # (definitely need to recreate if we recreated the filter)
@@ -746,14 +742,13 @@ class Representation(Model):
             )
         # Otherwise, update the smoother parameters
         else:
-            self._kalman_smoothers[prefix].smoother_output = smoother_output
+            self._kalman_smoothers[prefix].set_smoother_output(smoother_output, False)
 
-        return prefix, dtype, create_smoother
+        return prefix, dtype, create_smoother, create_filter, create_statespace
 
     def filter(self, filter_method=None, inversion_method=None,
                stability_method=None, conserve_memory=None, tolerance=None,
-               loglikelihood_burn=None,
-               recreate=True, return_loglike=False, results_class=None,
+               loglikelihood_burn=None, results=None,
                *args, **kwargs):
         """
         Apply the Kalman filter to the statespace model.
@@ -777,35 +772,55 @@ class Representation(Model):
         loglikelihood_burn : int, optional
             The number of initial periods during which the loglikelihood is not
             recorded. Default is 0.
-        recreate : bool, optional
-            Whether or not to consider re-creating the underlying _statespace
-            or filter objects (e.g. due to changing parameters, etc.). Often
-            set to false during maximum likelihood estimation. Default is true.
-        return_loglike : bool, optional
-            Whether to only return the loglikelihood rather than a full
-            `FilterResults` object. Default is False.
+        results : class, object, or {'loglikelihood'}, optional
+            If a class which is a subclass of FilterResults, then that class is
+            instantiated and returned with the result of filtering. Classes
+            must subclass FilterResults.
+            If an object, then that object is updated with the new filtering
+            results.
+            If the string 'loglikelihood', then only the loglikelihood is
+            returned as an ndarray.
+            If None, then the default results object is updated with the
+            result of filtering.
         """
-
-        if results_class is None:
-            results_class = self.filter_results_class
+        # Set the class to be the default results class, if None provided
+        if results is None:
+            results = self.filter_results_class
 
         # Initialize the filter
-        prefix, dtype, create_filter = self._initialize_filter(
-            filter_method, inversion_method, stability_method, conserve_memory,
-            tolerance, loglikelihood_burn, recreate, return_loglike,
-            *args, **kwargs
+        prefix, dtype, create_filter, create_statespace = (
+            self._initialize_filter(
+                filter_method, inversion_method, stability_method,
+                conserve_memory, tolerance, loglikelihood_burn,
+                *args, **kwargs
+            )
         )
+        kfilter = self._kalman_filters[prefix]
+
+        # Instantiate a new results object, if required
+        if isinstance(results, type):
+            if not issubclass(results, FilterResults):
+                raise ValueError
+            results = results(self)
 
         # Initialize the state
         self._initialize_state(prefix=prefix)
 
         # Run the filter
-        self._kalman_filters[prefix]()
+        kfilter()
 
-        if return_loglike:
-            return np.array(self._kalman_filters[prefix].loglikelihood, copy=True)
+        # We may just want the loglikelihood
+        if results == 'loglikelihood':
+            results = np.array(self._kalman_filters[prefix].loglikelihood,
+                               copy=True)
+        # Otherwise update the results object
         else:
-            return results_class(self, self._kalman_filters[prefix])
+            # Update the model features if we had to recreate the statespace
+            if create_statespace:
+                results.update_model(self)
+            results.update_filter(kfilter)
+
+        return results
 
     def loglike(self, loglikelihood_burn=None, *args, **kwargs):
         """
@@ -827,62 +842,66 @@ class Representation(Model):
         kwargs['return_loglike'] = True
         return np.sum(self.filter(*args, **kwargs)[loglikelihood_burn:])
 
-    def smooth_state(self, refilter=False, *args, **kwargs):
+    def smooth(self, smoother_output=None, results=None,
+               *args, **kwargs):
         """
-        Perform state smoothing.
+        Apply the Kalman smoother to the statespace model.
 
         Parameters
         ----------
-        refilter : bool, optional
-            Whether or not to perform filtering prior to smoothing. Default is
-            False, unless filtering objects are not available.
-
+        smoother_output : int, optional
+            Determines which Kalman smoother output calculate. Default is all
+            (including state, disturbances, and all covariances).
+        results : class or object, optional
+            If a class, then that class is instantiated and returned with the
+            result of both filtering and smoothing.
+            If an object, then that object is updated with the smoothing data.
+            If None, then a FilterResults object is returned with both
+            filtering and smoothing results.
         Returns
         -------
-        smoothed_state : array
-        smoothed_state_cov : array
+        FilterResults object
         """
-        prefix = self.prefix
+        new_results = not isinstance(results, FilterResults)
 
-        if refilter or prefix not in self._kalman_filters:
-            kwargs['prefix'] = prefix
-            kwargs['return_loglike'] = True
-            self.filter(*args, **kwargs)
+        # Set the class to be the default results class, if None provided
+        if results is None:
+            results = self.filter_results_class
 
-        results = self._smooth(SMOOTHER_STATE, *args, **kwargs)
+        # Initialize the smoother
+        prefix, dtype, create_smoother, create_filter, create_statespace = (
+        self._initialize_smoother(
+            smoother_output, *args, **kwargs
+        ))
 
-        return results[3:5]
+        # Instantiate a new results object, if required
+        if isinstance(results, type):
+            if not issubclass(results, FilterResults):
+                raise ValueError('Invalid results class provided.')
+            results = results(self)
 
-    def smooth_disturbance(self, refilter=False, *args, **kwargs):
-        """
-        Perform measurement and state disturbance smoothing.
+        # Run the filter if necessary
+        kfilter = self._kalman_filters[prefix]
+        if not kfilter.t == self.nobs:
+            self._initialize_state()
+            kfilter()
 
-        Parameters
-        ----------
-        refilter : bool, optional
-            Whether or not to perform filtering prior to smoothing. Default is
-            False, unless filtering objects are not available.
+        # Run the smoother
+        smoother = self._kalman_smoothers[prefix]
+        smoother()
 
-        Returns
-        -------
-        smoothed_measurement_disturbance : array
-        smoothed_state_disturbance : array
-        smoothed_measurement_disturbance_cov : array
-        smoothed_state_disturbance_cov : array
-        """
-        prefix = self.prefix
+        # Update the results object
+        # Update the model features if we had to recreate the statespace
+        if create_statespace:
+            results.update_model(self)
+        if new_results or create_filter:
+            results.update_filter(kfilter)
+        results.update_smoother(smoother)
 
-        if refilter or prefix not in self._kalman_filters:
-            kwargs['prefix'] = prefix
-            kwargs['return_loglike'] = True
-            self.filter(*args, **kwargs)
+        return results
 
-        results = self._smooth(SMOOTHER_DISTURBANCE, *args, **kwargs)
-
-        return results[5:9]
-
-    def smooth(self, smoother_output=None, results_class=None,
-               refilter=False, *args, **kwargs):
+    def old_smooth(self, smoother_output=None, results_class=None,
+               *args, **kwargs):
         """
         Apply the Kalman smoother to the statespace model.
 
@@ -895,9 +914,6 @@ class Representation(Model):
             The class instantiated and returned as a result of the filtering;
             smoothing is called on the resultant object. Default is
             FilterResults.
-        refilter : bool, optional
-            Whether or not to perform filtering prior to smoothing. Default is
-            False, unless filtering objects are not available.
         Returns
         -------
         FilterResults object
@@ -905,19 +921,23 @@ class Representation(Model):
         if results_class is None:
             results_class = self.filter_results_class
 
+        # Filtering
+        # The smoother requires filtering
+        # refilter = False
+
         # Check if the filter method has changed (in which case we need to
         # refilter)
-        filter_method = kwargs.get('filter_method', self.filter_method)
-        kwargs.setdefault('prefix', self.prefix)
-        if kwargs['prefix'] in self._kalman_filters:
-            if not self._kalman_filters[kwargs['prefix']].filter_method == filter_method:
-                refilter = True
+        # filter_method = kwargs.get('filter_method', self.filter_method)
+        # kwargs.setdefault('prefix', self.prefix)
+        # if kwargs['prefix'] in self._kalman_filters:
+        #     if not self._kalman_filters[kwargs['prefix']].filter_method == filter_method:
+        #         refilter = True
 
-        prefix, dtype, create_filter = self._initialize_filter(*args, **kwargs)
+        # prefix, dtype, create_filter, create_statespace = self._initialize_filter(*args, **kwargs)
 
-        if refilter or create_filter:
-            kwargs['return_loglike'] = True
-            self.filter(*args, **kwargs)
+        # if refilter or create_filter:
+        #     kwargs['return_loglike'] = True
+        #     self.filter(*args, **kwargs)
 
         results = results_class(self, self._kalman_filter)
         results.smooth(smoother_output)
@@ -926,9 +946,14 @@ class Representation(Model):
 
     def _smooth(self, smoother_output=None, *args, **kwargs):
         # Initialize the smoother
-        prefix, dtype, create_smoother = self._initialize_smoother(
+        prefix, dtype, create_smoother, create_filter, create_statespace = (
+        self._initialize_smoother(
             smoother_output, *args, **kwargs
-        )
+        ))
+
+        # Run the filter if necessary
+        if self._kalman_filter.t == 0:
+            self.filter()
 
         # Run the smoother
         smoother = self._kalman_smoothers[prefix]
@@ -1117,7 +1142,46 @@ class FilterResults(object):
         The number of initial periods during which the loglikelihood is not
         recorded.
     """
-    def __init__(self, model, kalman_filter):
+    _model_attributes = [
+        'model', 'prefix', 'dtype', 'nobs', 'k_endog', 'k_states',
+        'k_posdef', 'time_invariant', 'endog', 'design', 'obs_intercept',
+        'obs_cov', 'transition', 'state_intercept', 'selection',
+        'state_cov', 'missing', 'nmissing', 'shapes', 'initialization',
+    ]
+
+    _filter_attributes = [
+        'initial_state', 'initial_state_cov', 'filter_method',
+        'inversion_method', 'stability_method', 'conserve_memory',
+        'tolerance', 'loglikelihood_burn', 'converged', 'period_converged',
+        'filtered_state', 'filtered_state_cov', 'predicted_state',
+        'predicted_state_cov', 'kalman_gain','tmp1', 'tmp2', 'tmp3',
+        'tmp4', 'forecasts', 'forecasts_error', 'forecasts_error_cov',
+        'loglikelihood', 'collapsed_forecasts',
+        'collapsed_forecasts_error', 'collapsed_forecasts_error_cov',
+    ]
+
+    _smoother_attributes = [
+        'smoother_output', 'scaled_smoothed_estimator',
+        'scaled_smoothed_estimator_cov', 'smoothing_error',
+        'smoothed_state', 'smoothed_state_cov',
+        'smoothed_measurement_disturbance', 'smoothed_state_disturbance',
+        'smoothed_measurement_disturbance_cov',
+        'smoothed_state_disturbance_cov'
+    ]
+
+    _attributes = _model_attributes + _filter_attributes + _smoother_attributes
+
+    def __init__(self, model):
+        self.update_model(model)
+
+        for name in self._filter_attributes + self._smoother_attributes:
+            setattr(self, name, None)
+
+        # Setup caches for uninitialized objects
+        self._kalman_gain = None
+        self._standardized_forecasts_error = None
+
+    def update_model(self, model):
         # Model
         self.model = model
 
@@ -1157,6 +1221,9 @@ class FilterResults(object):
 
         # Save the state space initialization
         self.initialization = model.initialization
+
+    def update_filter(self, kalman_filter):
+        # State initialization
         self.initial_state = np.array(kalman_filter.model.initial_state,
                                       copy=True)
         self.initial_state_cov = np.array(
@@ -1188,19 +1255,6 @@ class FilterResults(object):
         self.tmp3 = np.array(kalman_filter.tmp3, copy=True)
         self.tmp4 = np.array(kalman_filter.tmp4, copy=True)
 
-        # Setup empty arrays for possible smoothing output
-        # (they are not filled in until `smooth` is called)
-        self.smoother_output = None
-        self.scaled_smoothed_estimator = None
-        self.scaled_smoothed_estimator_cov = None
-        self.smoothing_error = None
-        self.smoothed_state = None
-        self.smoothed_state_cov = None
-        self.smoothed_measurement_disturbance = None
-        self.smoothed_state_disturbance = None
-        self.smoothed_measurement_disturbance_cov = None
-        self.smoothed_state_disturbance_cov = None
-
         # Note: use forecasts rather than forecast, so as not to interfer
         # with the `forecast` methods in subclasses
         self.forecasts = np.array(kalman_filter.forecast, copy=True)
@@ -1221,10 +1275,6 @@ class FilterResults(object):
                 self.forecasts_error_cov[:self.k_states,:self.k_states,:]
             )
 
-        # Setup caches for uninitialized objects
-        self._kalman_gain = None
-        self._standardized_forecasts_error = None
-
         # Fill in missing values in the forecast, forecast error, and
         # forecast error covariance matrix (this is required due to how the
         # Kalman filter implements observations that are completely missing)
@@ -1239,7 +1289,7 @@ class FilterResults(object):
                 # Skip anything that is less than completely missing
                 # except for in the collapsed case, we need to rebuild all of
                 # these from scratch
-                if not (self.filter_method & FILTER_COLLAPSED) and self.nmissing[t] < self.k_endog:
+                if (self.filter_method & FILTER_COLLAPSED) or self.nmissing[t] < self.k_endog:
                     continue
 
                 self.forecasts[:, t] = np.dot(
@@ -1254,6 +1304,54 @@ class FilterResults(object):
                            self.predicted_state_cov[:, :, t]),
                     self.design[:, :, design_t].T
                 ) + self.obs_cov[:, :, obs_cov_t]
+
+    def update_smoother(self, smoother):
+        # Copy the appropriate output
+        attributes = []
+
+        if smoother.smoother_output & (SMOOTHER_STATE | SMOOTHER_DISTURBANCE):
+            attributes.append('scaled_smoothed_estimator')
+        if smoother.smoother_output & (SMOOTHER_STATE_COV | SMOOTHER_DISTURBANCE_COV):
+            attributes.append('scaled_smoothed_estimator_cov')
+        if smoother.smoother_output & SMOOTHER_STATE:
+            attributes.append('smoothed_state')
+        if smoother.smoother_output & SMOOTHER_STATE_COV:
+            attributes.append('smoothed_state_cov')
+        if smoother.smoother_output & SMOOTHER_DISTURBANCE:
+            attributes += [
+                'smoothing_error',
+                'smoothed_measurement_disturbance',
+                'smoothed_state_disturbance'
+            ]
+        if smoother.smoother_output & SMOOTHER_DISTURBANCE_COV:
+            attributes += [
+                'smoothed_measurement_disturbance_cov',
+                'smoothed_state_disturbance_cov'
+            ]
+
+        for name in self._smoother_attributes:
+            if name in attributes:
+                setattr(
+                    self, name,
+                    np.array(getattr(smoother, name, None), copy=True)
+                )
+            else:
+                setattr(self, name, None)
+
+        # Smoother output (note that this was unset just above)
+        self.smoother_output = smoother.smoother_output
+
+        # Adjustments
+
+        # For r_t (and similarly for N_t), what was calculated was
+        # r_T, ..., r_{-1}, and stored such that
+        # scaled_smoothed_estimator[0] == r_{-1}. We only want r_0, ..., r_T
+        # so exclude the zeroth element so that the time index is consistent
+        # with the other returned output
+        if 'scaled_smoothed_estimator' in attributes:
+            self.scaled_smoothed_estimator = self.scaled_smoothed_estimator[:,1:]
+        if 'scaled_smoothed_estimator_cov' in attributes:
+            self.scaled_smoothed_estimator_cov = self.scaled_smoothed_estimator_cov[:,1:]
 
     @property
     def py_kalman_gain(self):
@@ -1291,58 +1389,6 @@ class FilterResults(object):
                                             check_finite=False))
 
         return self._standardized_forecasts_error
-
-    def smooth(self, smoother_output=None):
-        """
-        Apply the Kalman smoother to the statespace model.
-
-        Parameters
-        ----------
-        smoother_output : int, optional
-            Determines which Kalman smoother output calculate. Default is all
-            (including state, disturbances, and all covariances).
-        
-        Notes
-        -----
-        Using this method will run the Kalman smoother based on the current
-        state of the stored `Representation` object, but will not re-run the
-        Kalman filter. This is to avoid unnecessary re-calculations. However
-        the `FilterResults` object is not kept in-sync with the stored
-        `Representation` object (because the results are intended to be fixed,
-        whereas the same `Representation` may be re-used many times, for
-        example in parameter estimation). Typically smoothing will be performed
-        either directly after filtering (for example in Bayesian approaches) or
-        else will be performed only after settling on the final
-        parameterization (for example in MLE approaches), and in both of these
-        cases the `Representation` object will match the `FilterResults`
-        object.
-
-        However, if you are concerned that between the filtering operation
-        (that created the `FilterResults` object) and the smoothing operation
-        the `Representation` object may have been changed then you should
-        either first re-run the filter or else use the `Representation.smooth`
-        method (which always first re-runs the filter).
-        """
-        if smoother_output is None:
-            smoother_output = self.model.smoother_output
-
-        # Run the smoother
-        smoothed = self.model._smooth(smoother_output)
-
-        # For r_t (and similarly for N_t), what was calculated was
-        # r_T, ..., r_{-1}, and stored such that
-        # scaled_smoothed_estimator[0] == r_{-1}. We only want r_0, ..., r_T
-        # so exclude the zeroth element so that the time index is consistent
-        # with the other returned output
-        self.scaled_smoothed_estimator = smoothed[0][:,1:]
-        self.scaled_smoothed_estimator_cov = smoothed[1][:,:,1:]
-        self.smoothing_error = smoothed[2]
-        self.smoothed_state = smoothed[3]
-        self.smoothed_state_cov = smoothed[4]
-        self.smoothed_measurement_disturbance = smoothed[5]
-        self.smoothed_state_disturbance = smoothed[6]
-        self.smoothed_measurement_disturbance_cov = smoothed[7]
-        self.smoothed_state_disturbance_cov = smoothed[8]
 
     def predict(self, start=None, end=None, dynamic=None, full_results=False,
                 *args, **kwargs):
@@ -1572,7 +1618,9 @@ class FilterResults(object):
                 next(kfilter)
 
         # Return the predicted state and predicted state covariance matrices
-        return FilterResults(model, kfilter)
+        results = FilterResults(model)
+        results.update_filter(kfilter)
+        return results
 
 class SimulationSmoothResults(object):
     

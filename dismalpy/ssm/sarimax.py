@@ -1644,9 +1644,8 @@ class SARIMAXResults(StatespaceResults):
     dismalpy.ssm.representation.FilterResults : for additional attributes and methods
     dismalpy.ssm.model.StatespaceResults : for additional attributes and methods
     """
-    def __init__(self, model, kalman_filter, *args, **kwargs):
-        super(SARIMAXResults, self).__init__(model, kalman_filter, *args,
-                                             **kwargs)
+    def __init__(self, model, *args, **kwargs):
+        super(SARIMAXResults, self).__init__(model, *args, **kwargs)
 
         # Set additional model parameters
         self.k_seasons = self.model.k_seasons

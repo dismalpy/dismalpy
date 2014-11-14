@@ -157,13 +157,13 @@ class TestClark1989(ssm.Representation):
     def test_smoothed_states(self):
         assert_almost_equal(
             self.conventional_results.smoothed_state,
-            self.univariate_results.smoothed_state, 9
+            self.univariate_results.smoothed_state, 8
         )
 
     def test_smoothed_states_cov(self):
         assert_almost_equal(
             self.conventional_results.smoothed_state_cov,
-            self.univariate_results.smoothed_state_cov, 7
+            self.univariate_results.smoothed_state_cov, 6
         )
 
     @SkipTest

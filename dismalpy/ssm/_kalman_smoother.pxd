@@ -32,7 +32,8 @@ cdef class sKalmanSmoother(object):
     cdef readonly sKalmanFilter kfilter
 
     cdef readonly int t
-    cdef public int smoother_output
+    cdef readonly int smoother_output
+    cdef readonly int filter_method
 
     cdef readonly np.float32_t [::1,:] scaled_smoothed_estimator
     cdef readonly np.float32_t [::1,:,:] scaled_smoothed_estimator_cov
@@ -50,21 +51,21 @@ cdef class sKalmanSmoother(object):
     cdef readonly np.float32_t [::1,:] tmpL, tmp0, tmp00, tmp000
 
     # Statespace
-    cdef np.float32_t * _design
-    cdef np.float32_t * _obs_cov
-    cdef np.float32_t * _transition
-    cdef np.float32_t * _selection
-    cdef np.float32_t * _state_cov
+    # cdef np.float32_t * _design
+    # cdef np.float32_t * _obs_cov
+    # cdef np.float32_t * _transition
+    # cdef np.float32_t * _selection
+    # cdef np.float32_t * _state_cov
 
     # Kalman filter
-    cdef np.float32_t * _predicted_state
-    cdef np.float32_t * _predicted_state_cov
-    cdef np.float32_t * _kalman_gain
+    # cdef np.float32_t * _predicted_state
+    # cdef np.float32_t * _predicted_state_cov
+    # cdef np.float32_t * _kalman_gain
 
-    cdef np.float32_t * _tmp1
-    cdef np.float32_t * _tmp2
-    cdef np.float32_t * _tmp3
-    cdef np.float32_t * _tmp4
+    # cdef np.float32_t * _tmp1
+    # cdef np.float32_t * _tmp2
+    # cdef np.float32_t * _tmp3
+    # cdef np.float32_t * _tmp4
 
     # Kalman smoother
     cdef np.float32_t * _input_scaled_smoothed_estimator
@@ -88,23 +89,27 @@ cdef class sKalmanSmoother(object):
 
     # Functions
     cdef int (*smooth_estimators)(
-        sKalmanSmoother
+        sKalmanSmoother, sKalmanFilter, sStatespace
     )
     cdef int (*smooth_state)(
-        sKalmanSmoother
+        sKalmanSmoother, sKalmanFilter, sStatespace
     )
     cdef int (*smooth_disturbances)(
-        sKalmanSmoother
+        sKalmanSmoother, sKalmanFilter, sStatespace
     )
 
-    cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_posdef2, k_endogstates, k_statesposdef
+    # cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_posdef2, k_endogstates, k_statesposdef
 
+    cdef allocate_arrays(self)
+    cdef int check_filter_method_changed(self)
+    cdef int reset_filter_method(self, int force_reset=*)
+    cpdef set_smoother_output(self, int smoother_output, int force_reset=*)
+    cpdef reset(self, int force_reset=*)
     cpdef seek(self, unsigned int t)
     cdef void initialize_statespace_object_pointers(self) except *
     cdef void initialize_filter_object_pointers(self)
     cdef void initialize_smoother_object_pointers(self)
     cdef void initialize_function_pointers(self) except *
-    cdef void select_missing(self)
 
 # Double precision
 cdef class dKalmanSmoother(object):
@@ -114,7 +119,8 @@ cdef class dKalmanSmoother(object):
     cdef readonly dKalmanFilter kfilter
 
     cdef readonly int t
-    cdef public int smoother_output
+    cdef readonly int smoother_output
+    cdef readonly int filter_method
 
     cdef readonly np.float64_t [::1,:] scaled_smoothed_estimator
     cdef readonly np.float64_t [::1,:,:] scaled_smoothed_estimator_cov
@@ -132,21 +138,21 @@ cdef class dKalmanSmoother(object):
     cdef readonly np.float64_t [::1,:] tmpL, tmp0, tmp00, tmp000
 
     # Statespace
-    cdef np.float64_t * _design
-    cdef np.float64_t * _obs_cov
-    cdef np.float64_t * _transition
-    cdef np.float64_t * _selection
-    cdef np.float64_t * _state_cov
+    # cdef np.float64_t * _design
+    # cdef np.float64_t * _obs_cov
+    # cdef np.float64_t * _transition
+    # cdef np.float64_t * _selection
+    # cdef np.float64_t * _state_cov
 
     # Kalman filter
-    cdef np.float64_t * _predicted_state
-    cdef np.float64_t * _predicted_state_cov
-    cdef np.float64_t * _kalman_gain
+    # cdef np.float64_t * _predicted_state
+    # cdef np.float64_t * _predicted_state_cov
+    # cdef np.float64_t * _kalman_gain
 
-    cdef np.float64_t * _tmp1
-    cdef np.float64_t * _tmp2
-    cdef np.float64_t * _tmp3
-    cdef np.float64_t * _tmp4
+    # cdef np.float64_t * _tmp1
+    # cdef np.float64_t * _tmp2
+    # cdef np.float64_t * _tmp3
+    # cdef np.float64_t * _tmp4
 
     # Kalman smoother
     cdef np.float64_t * _input_scaled_smoothed_estimator
@@ -170,23 +176,27 @@ cdef class dKalmanSmoother(object):
 
     # Functions
     cdef int (*smooth_estimators)(
-        dKalmanSmoother
+        dKalmanSmoother, dKalmanFilter, dStatespace
     )
     cdef int (*smooth_state)(
-        dKalmanSmoother
+        dKalmanSmoother, dKalmanFilter, dStatespace
     )
     cdef int (*smooth_disturbances)(
-        dKalmanSmoother
+        dKalmanSmoother, dKalmanFilter, dStatespace
     )
 
-    cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_posdef2, k_endogstates, k_statesposdef
+    # cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_posdef2, k_endogstates, k_statesposdef
 
+    cdef allocate_arrays(self)
+    cdef int check_filter_method_changed(self)
+    cdef int reset_filter_method(self, int force_reset=*)
+    cpdef set_smoother_output(self, int smoother_output, int force_reset=*)
+    cpdef reset(self, int force_reset=*)
     cpdef seek(self, unsigned int t)
     cdef void initialize_statespace_object_pointers(self) except *
     cdef void initialize_filter_object_pointers(self)
     cdef void initialize_smoother_object_pointers(self)
     cdef void initialize_function_pointers(self) except *
-    cdef void select_missing(self)
 
 # Single precision complex
 cdef class cKalmanSmoother(object):
@@ -196,7 +206,8 @@ cdef class cKalmanSmoother(object):
     cdef readonly cKalmanFilter kfilter
 
     cdef readonly int t
-    cdef public int smoother_output
+    cdef readonly int smoother_output
+    cdef readonly int filter_method
 
     cdef readonly np.complex64_t [::1,:] scaled_smoothed_estimator
     cdef readonly np.complex64_t [::1,:,:] scaled_smoothed_estimator_cov
@@ -214,21 +225,21 @@ cdef class cKalmanSmoother(object):
     cdef readonly np.complex64_t [::1,:] tmpL, tmp0, tmp00, tmp000
 
     # Statespace
-    cdef np.complex64_t * _design
-    cdef np.complex64_t * _obs_cov
-    cdef np.complex64_t * _transition
-    cdef np.complex64_t * _selection
-    cdef np.complex64_t * _state_cov
+    # cdef np.complex64_t * _design
+    # cdef np.complex64_t * _obs_cov
+    # cdef np.complex64_t * _transition
+    # cdef np.complex64_t * _selection
+    # cdef np.complex64_t * _state_cov
 
     # Kalman filter
-    cdef np.complex64_t * _predicted_state
-    cdef np.complex64_t * _predicted_state_cov
-    cdef np.complex64_t * _kalman_gain
+    # cdef np.complex64_t * _predicted_state
+    # cdef np.complex64_t * _predicted_state_cov
+    # cdef np.complex64_t * _kalman_gain
 
-    cdef np.complex64_t * _tmp1
-    cdef np.complex64_t * _tmp2
-    cdef np.complex64_t * _tmp3
-    cdef np.complex64_t * _tmp4
+    # cdef np.complex64_t * _tmp1
+    # cdef np.complex64_t * _tmp2
+    # cdef np.complex64_t * _tmp3
+    # cdef np.complex64_t * _tmp4
 
     # Kalman smoother
     cdef np.complex64_t * _input_scaled_smoothed_estimator
@@ -252,23 +263,27 @@ cdef class cKalmanSmoother(object):
 
     # Functions
     cdef int (*smooth_estimators)(
-        cKalmanSmoother
+        cKalmanSmoother, cKalmanFilter, cStatespace
     )
     cdef int (*smooth_state)(
-        cKalmanSmoother
+        cKalmanSmoother, cKalmanFilter, cStatespace
     )
     cdef int (*smooth_disturbances)(
-        cKalmanSmoother
+        cKalmanSmoother, cKalmanFilter, cStatespace
     )
 
-    cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_posdef2, k_endogstates, k_statesposdef
+    # cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_posdef2, k_endogstates, k_statesposdef
 
+    cdef allocate_arrays(self)
+    cdef int check_filter_method_changed(self)
+    cdef int reset_filter_method(self, int force_reset=*)
+    cpdef set_smoother_output(self, int smoother_output, int force_reset=*)
+    cpdef reset(self, int force_reset=*)
     cpdef seek(self, unsigned int t)
     cdef void initialize_statespace_object_pointers(self) except *
     cdef void initialize_filter_object_pointers(self)
     cdef void initialize_smoother_object_pointers(self)
     cdef void initialize_function_pointers(self) except *
-    cdef void select_missing(self)
 
 # Double precision complex
 cdef class zKalmanSmoother(object):
@@ -278,7 +293,8 @@ cdef class zKalmanSmoother(object):
     cdef readonly zKalmanFilter kfilter
 
     cdef readonly int t
-    cdef public int smoother_output
+    cdef readonly int smoother_output
+    cdef readonly int filter_method
 
     cdef readonly np.complex128_t [::1,:] scaled_smoothed_estimator
     cdef readonly np.complex128_t [::1,:,:] scaled_smoothed_estimator_cov
@@ -296,21 +312,21 @@ cdef class zKalmanSmoother(object):
     cdef readonly np.complex128_t [::1,:] tmpL, tmp0, tmp00, tmp000
 
     # Statespace
-    cdef np.complex128_t * _design
-    cdef np.complex128_t * _obs_cov
-    cdef np.complex128_t * _transition
-    cdef np.complex128_t * _selection
-    cdef np.complex128_t * _state_cov
+    # cdef np.complex128_t * _design
+    # cdef np.complex128_t * _obs_cov
+    # cdef np.complex128_t * _transition
+    # cdef np.complex128_t * _selection
+    # cdef np.complex128_t * _state_cov
 
     # Kalman filter
-    cdef np.complex128_t * _predicted_state
-    cdef np.complex128_t * _predicted_state_cov
-    cdef np.complex128_t * _kalman_gain
+    # cdef np.complex128_t * _predicted_state
+    # cdef np.complex128_t * _predicted_state_cov
+    # cdef np.complex128_t * _kalman_gain
 
-    cdef np.complex128_t * _tmp1
-    cdef np.complex128_t * _tmp2
-    cdef np.complex128_t * _tmp3
-    cdef np.complex128_t * _tmp4
+    # cdef np.complex128_t * _tmp1
+    # cdef np.complex128_t * _tmp2
+    # cdef np.complex128_t * _tmp3
+    # cdef np.complex128_t * _tmp4
 
     # Kalman smoother
     cdef np.complex128_t * _input_scaled_smoothed_estimator
@@ -334,20 +350,24 @@ cdef class zKalmanSmoother(object):
 
     # Functions
     cdef int (*smooth_estimators)(
-        zKalmanSmoother
+        zKalmanSmoother, zKalmanFilter, zStatespace
     )
     cdef int (*smooth_state)(
-        zKalmanSmoother
+        zKalmanSmoother, zKalmanFilter, zStatespace
     )
     cdef int (*smooth_disturbances)(
-        zKalmanSmoother
+        zKalmanSmoother, zKalmanFilter, zStatespace
     )
 
-    cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_posdef2, k_endogstates, k_statesposdef
-
+    # cdef readonly int k_endog, k_states, k_posdef, k_endog2, k_states2, k_posdef2, k_endogstates, k_statesposdef
+    
+    cdef allocate_arrays(self)
+    cdef int check_filter_method_changed(self)
+    cdef int reset_filter_method(self, int force_reset=*)
+    cpdef set_smoother_output(self, int smoother_output, int force_reset=*)
+    cpdef reset(self, int force_reset=*)
     cpdef seek(self, unsigned int t)
     cdef void initialize_statespace_object_pointers(self) except *
     cdef void initialize_filter_object_pointers(self)
     cdef void initialize_smoother_object_pointers(self)
     cdef void initialize_function_pointers(self) except *
-    cdef void select_missing(self)
