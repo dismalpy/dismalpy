@@ -900,96 +900,6 @@ class Representation(Model):
 
         return results
 
-    def old_smooth(self, smoother_output=None, results_class=None,
-               *args, **kwargs):
-        """
-        Apply the Kalman smoother to the statespace model.
-
-        Parameters
-        ----------
-        smoother_output : int, optional
-            Determines which Kalman smoother output calculate. Default is all
-            (including state, disturbances, and all covariances).
-        results_class : class
-            The class instantiated and returned as a result of the filtering;
-            smoothing is called on the resultant object. Default is
-            FilterResults.
-        Returns
-        -------
-        FilterResults object
-        """
-        if results_class is None:
-            results_class = self.filter_results_class
-
-        # Filtering
-        # The smoother requires filtering
-        # refilter = False
-
-        # Check if the filter method has changed (in which case we need to
-        # refilter)
-        # filter_method = kwargs.get('filter_method', self.filter_method)
-        # kwargs.setdefault('prefix', self.prefix)
-        # if kwargs['prefix'] in self._kalman_filters:
-        #     if not self._kalman_filters[kwargs['prefix']].filter_method == filter_method:
-        #         refilter = True
-
-        # prefix, dtype, create_filter, create_statespace = self._initialize_filter(*args, **kwargs)
-
-        # if refilter or create_filter:
-        #     kwargs['return_loglike'] = True
-        #     self.filter(*args, **kwargs)
-
-        results = results_class(self, self._kalman_filter)
-        results.smooth(smoother_output)
-
-        return results
-
-    def _smooth(self, smoother_output=None, *args, **kwargs):
-        # Initialize the smoother
-        prefix, dtype, create_smoother, create_filter, create_statespace = (
-        self._initialize_smoother(
-            smoother_output, *args, **kwargs
-        ))
-
-        # Run the filter if necessary
-        if self._kalman_filter.t == 0:
-            self.filter()
-
-        # Run the smoother
-        smoother = self._kalman_smoothers[prefix]
-        smoother()
-
-        # Return smoothing output
-        results = (
-            np.array(smoother.scaled_smoothed_estimator, copy=True),
-            np.array(smoother.scaled_smoothed_estimator_cov, copy=True),
-            np.array(smoother.smoothing_error, copy=True),
-        )
-        if smoother.smoother_output & SMOOTHER_STATE:
-            results += (np.array(smoother.smoothed_state, copy=True),)
-        else:
-            results += (None,)
-        if smoother.smoother_output & SMOOTHER_STATE_COV:
-            results += (np.array(smoother.smoothed_state_cov, copy=True),)
-        else:
-            results += (None,)
-        if smoother.smoother_output & SMOOTHER_DISTURBANCE:
-            results += (
-                np.array(smoother.smoothed_measurement_disturbance, copy=True),
-                np.array(smoother.smoothed_state_disturbance, copy=True),
-            )
-        else:
-            results += (None, None)
-        if smoother.smoother_output & SMOOTHER_DISTURBANCE_COV:
-            results += (
-                np.array(smoother.smoothed_measurement_disturbance_cov, copy=True),
-                np.array(smoother.smoothed_state_disturbance_cov, copy=True),
-            )
-        else:
-            results += (None, None)
-
-        return results
-
     def simulation_smoother(self, simulation_output=None,
                             results_class=None, *args, **kwargs):
         """
@@ -1004,6 +914,15 @@ class Representation(Model):
         -------
         SimulationSmoothResults
         """
+
+        # Set the class to be the default results class, if None provided
+        if results_class is None:
+            results_class = self.simulation_smooth_results_class
+
+        # Instantiate a new results object
+        if not issubclass(results_class, SimulationSmoothResults):
+            raise ValueError('Invalid results class provided.')
+
         # Make sure we have the required Statespace representation
         prefix, dtype, create_statespace = self._initialize_representation(
             *args, **kwargs
@@ -1032,13 +951,10 @@ class Representation(Model):
             tolerance, loglikelihood_burn, smoother_output, simulation_output
         )
 
-        # Initialize the results class
-        if results_class is None:
-            results_class = self.simulation_smooth_results_class
+        # Create results object
         results = results_class(self, simulation_smoother, *args, **kwargs)
 
         return results
-        
 
 class FilterResults(object):
     """
