@@ -76,9 +76,9 @@ cdef class sStatespace(object):
     cdef int select_missing(self, unsigned int t)
     cdef void _select_missing_entire_obs(self, unsigned int t)
     cdef void _select_missing_partial_obs(self, unsigned int t)
-    cdef void transform(self, unsigned int t, unsigned int transform_diagonalize, unsigned int transform_generalized_collapse) except *
-    cdef void transform_diagonalize(self, unsigned int t) except *
-    cdef int transform_generalized_collapse(self, unsigned int t) except *
+    cdef void transform(self, unsigned int t, unsigned int previous_t, unsigned int transform_diagonalize, unsigned int transform_generalized_collapse) except *
+    cdef void transform_diagonalize(self, unsigned int t, unsigned int previous_t) except *
+    cdef int transform_generalized_collapse(self, unsigned int t, unsigned int previous_t) except *
 
 cdef class dStatespace(object):
     # Statespace dimensions
@@ -146,9 +146,9 @@ cdef class dStatespace(object):
     cdef int select_missing(self, unsigned int t)
     cdef void _select_missing_entire_obs(self, unsigned int t)
     cdef void _select_missing_partial_obs(self, unsigned int t)
-    cdef void transform(self, unsigned int t, unsigned int transform_diagonalize, unsigned int transform_generalized_collapse) except *
-    cdef void transform_diagonalize(self, unsigned int t) except *
-    cdef int transform_generalized_collapse(self, unsigned int t) except *
+    cdef void transform(self, unsigned int t, unsigned int previous_t, unsigned int transform_diagonalize, unsigned int transform_generalized_collapse) except *
+    cdef void transform_diagonalize(self, unsigned int t, unsigned int previous_t) except *
+    cdef int transform_generalized_collapse(self, unsigned int t, unsigned int previous_t) except *
 
 cdef class cStatespace(object):
     # Statespace dimensions
@@ -216,9 +216,9 @@ cdef class cStatespace(object):
     cdef int select_missing(self, unsigned int t)
     cdef void _select_missing_entire_obs(self, unsigned int t)
     cdef void _select_missing_partial_obs(self, unsigned int t)
-    cdef void transform(self, unsigned int t, unsigned int transform_diagonalize, unsigned int transform_generalized_collapse) except *
-    cdef void transform_diagonalize(self, unsigned int t) except *
-    cdef int transform_generalized_collapse(self, unsigned int t) except *
+    cdef void transform(self, unsigned int t, unsigned int previous_t, unsigned int transform_diagonalize, unsigned int transform_generalized_collapse) except *
+    cdef void transform_diagonalize(self, unsigned int t, unsigned int previous_t) except *
+    cdef int transform_generalized_collapse(self, unsigned int t, unsigned int previous_t) except *
 
 cdef class zStatespace(object):
     # Statespace dimensions
@@ -286,9 +286,9 @@ cdef class zStatespace(object):
     cdef int select_missing(self, unsigned int t)
     cdef void _select_missing_entire_obs(self, unsigned int t)
     cdef void _select_missing_partial_obs(self, unsigned int t)
-    cdef void transform(self, unsigned int t, unsigned int transform_diagonalize, unsigned int transform_generalized_collapse) except *
-    cdef void transform_diagonalize(self, unsigned int t) except *
-    cdef int transform_generalized_collapse(self, unsigned int t) except *
+    cdef void transform(self, unsigned int t, unsigned int previous_t, unsigned int transform_diagonalize, unsigned int transform_generalized_collapse) except *
+    cdef void transform_diagonalize(self, unsigned int t, unsigned int previous_t) except *
+    cdef int transform_generalized_collapse(self, unsigned int t, unsigned int previous_t) except *
 
 cdef int sselect_cov(int k, int k_posdef,
                            np.float32_t * tmp,
