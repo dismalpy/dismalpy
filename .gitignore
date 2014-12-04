@@ -103,6 +103,7 @@ Thumbs.db
 *__config__.py
 *version.py
 cythonize.dat
+dismalpy/reg/_var.c
 dismalpy/src/*.c
 dismalpy/ssm/_statespace.c
 dismalpy/ssm/_statespace.pyx
