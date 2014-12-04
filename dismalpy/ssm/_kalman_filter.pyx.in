@@ -669,7 +669,9 @@ cdef class {{prefix}}KalmanFilter(object):
         self.model.seek(self.t, transform_diagonalize, transform_generalized_collapse)
 
         # Handle missing data
-        if self.model._nmissing > 0:
+        if self.model._nmissing > 0 or (self.model.has_missing and self.filter_method & FILTER_UNIVARIATE):
+            # TODO there is likely a way to allow convergence and the univariate filter, but it
+            # doesn't work "out-of-the-box" right now
             self.converged = 0
 
     cdef void initialize_filter_object_pointers(self):
