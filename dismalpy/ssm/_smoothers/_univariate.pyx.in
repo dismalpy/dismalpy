@@ -1,3 +1,4 @@
+#cython: profile=True
 #cython: boundscheck=False
 #cython: wraparound=False
 #cython: cdivision=False
@@ -73,6 +74,12 @@ cdef int {{prefix}}smoothed_estimators_univariate({{prefix}}KalmanSmoother smoot
         {{cython_type}} beta = 0.0
         {{cython_type}} gamma = -1.0
         {{cython_type}} scalar
+        int k_states = model._k_states
+
+    # Adjust for a VAR transition (i.e. design = [#, 0], where the zeros
+    # correspond to all states except the first k_posdef states)
+    if model.subset_design:
+        k_states = model._k_posdef
 
     # Smoothing error  
     # (not used in the univariate approach)  
@@ -141,11 +148,22 @@ cdef int {{prefix}}smoothed_estimators_univariate({{prefix}}KalmanSmoother smoot
 
         # $L_{t,i} = (I_m - K_{t,i} Z_{t,i})$  
         # $(m \times m) = (m \times m) - (m \times 1) (1 \times m)$
-        blas.{{prefix}}gemm("N", "N", &model._k_states, &model._k_states, &inc,
-                  &gamma, &kfilter._kalman_gain[i*kfilter.k_states], &kfilter.k_states,
+        # blas.{{prefix}}gemm("N", "N", &model._k_states, &model._k_states, &inc,
+        #           &gamma, &kfilter._kalman_gain[i*kfilter.k_states], &kfilter.k_states,
+        #                   &model._design[i], &model._k_endog,
+        #           &beta, smoother._tmpL, &kfilter.k_states)
+        # Zero the temporary matrix
+        # blas.{{prefix}}scal(&kfilter.k_states2, &beta, smoother._tmpL, &inc)
+        smoother.tmpL[:,:k_states] = 0
+        # Create the K_{t,i} Z_{t,i} component
+        # (m x p) (m x 1) x (1 x p)
+        blas.{{prefix}}ger{{combined_suffix}}(&model._k_states, &k_states,
+                  &gamma, &kfilter._kalman_gain[i*kfilter.k_states], &inc,
                           &model._design[i], &model._k_endog,
-                  &beta, smoother._tmpL, &kfilter.k_states)
-        for j in range(kfilter.k_states):
+                          smoother._tmpL, &kfilter.k_states
+        )
+        # Add the identity matrix
+        for j in range(k_states):
             smoother._tmpL[j + j*kfilter.k_states] = smoother._tmpL[j + j*kfilter.k_states] + 1
 
         # Scaled smoothed estimator  
@@ -155,14 +173,16 @@ cdef int {{prefix}}smoothed_estimators_univariate({{prefix}}KalmanSmoother smoot
         # as scaled_smoothed_estimator[t-1] because we actually need to store
         # T+1 of them (r_{T-1} to r_{-1} -> r_T to r_0)
         if smoother.smoother_output & (SMOOTHER_STATE | SMOOTHER_DISTURBANCE):
-            blas.{{prefix}}gemv("T", &model._k_states, &model._k_states,
+            #blas.{{prefix}}scal(&kfilter.k_states, &beta, smoother._tmp0, &inc)
+
+            blas.{{prefix}}gemv("T", &model._k_states, &k_states,
                       &alpha, smoother._tmpL, &kfilter.k_states,
                               smoother._scaled_smoothed_estimator, &inc,
                       &beta, smoother._tmp0, &inc)
-            blas.{{prefix}}swap(&kfilter.k_states, smoother._tmp0, &inc,
-                                                    smoother._scaled_smoothed_estimator, &inc)
-            blas.{{prefix}}axpy(&kfilter.k_states, &kfilter._tmp2[i], &model._design[i], &model._k_endog,
-                                                                        smoother._scaled_smoothed_estimator, &inc)
+            blas.{{prefix}}swap(&k_states, smoother._tmp0, &inc,
+                                           smoother._scaled_smoothed_estimator, &inc)
+            blas.{{prefix}}axpy(&k_states, &kfilter._tmp2[i], &model._design[i], &model._k_endog,
+                                                              smoother._scaled_smoothed_estimator, &inc)
 
         if smoother.smoother_output & (SMOOTHER_STATE_COV | SMOOTHER_DISTURBANCE_COV):
             # Scaled smoothed estimator covariance matrix  
