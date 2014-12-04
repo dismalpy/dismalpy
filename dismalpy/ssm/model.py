@@ -652,6 +652,8 @@ class StatespaceResults(FilterResults, tsbase.TimeSeriesModelResults):
         index = np.arange(start, end+out_of_sample+1)
         if hasattr(self.data, 'predict_dates'):
             index = self.data.predict_dates
+            if(isinstance(index, pd.DatetimeIndex)):
+                index = index._mpl_repr()
 
         return forecasts, forecasts_error_cov, confidence_intervals, index
 
