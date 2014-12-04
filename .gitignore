@@ -124,6 +124,7 @@ dismalpy/ssm/_smoothers/_conventional.c
 dismalpy/ssm/_smoothers/_conventional.pyx
 dismalpy/ssm/_smoothers/_univariate.c
 dismalpy/ssm/_smoothers/_univariate.pyx
+dismalpy/stats/rvs/_normal.c
 examples
 
 # lbfgs output
