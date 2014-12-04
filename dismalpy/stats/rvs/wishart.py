@@ -9,8 +9,13 @@ from __future__ import division
 
 import numpy as np
 from rvs import RandomVariable
-from scipy.stats import wishart, invwishart
-from scipy.linalg import solve, lapack
+# Shim for old Scipy versions
+try:
+    raise ImportError
+    from scipy.stats import wishart, invwishart
+except ImportError:
+    from _wishart import wishart, invwishart
+from scipy.linalg import lapack
 
 class Wishart(RandomVariable):
 

@@ -9,6 +9,13 @@ from __future__ import division
 import numpy as np
 from scipy import stats
 
+# Shim for old Scipy versions
+try:
+    raise ImportError
+    from scipy.stats import wishart, invwishart
+except ImportError:
+    from _wishart import wishart, invwishart
+
 def _process_size(size):
     """
     Validate and standardize array shape
@@ -112,7 +119,7 @@ _scipy_distribution_map = {
     'invgamma': stats.invgamma,
     'invgauss': stats.invgauss,
     'invweibull': stats.invweibull,
-    'invwishart': stats.invwishart,
+    'invwishart': invwishart,
     'johnsonsb': stats.johnsonsb,
     'johnsonsu': stats.johnsonsu,
     'ksone': stats.ksone,
@@ -151,7 +158,7 @@ _scipy_distribution_map = {
     'wald': stats.wald,
     'weibull_min': stats.weibull_min,
     'weibull_max': stats.weibull_max,
-    'wishart': stats.wishart,
+    'wishart': wishart,
     'wrapcauchy': stats.wrapcauchy,
 
     # Multivariate
