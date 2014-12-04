@@ -837,9 +837,10 @@ class Representation(Model):
         loglike : float
             The joint loglikelihood.
         """
+        # TODO will give wrong result if MEMORY_NO_LIKELIHOOD used
         if loglikelihood_burn is None:
             loglikelihood_burn = self.loglikelihood_burn
-        kwargs['return_loglike'] = True
+        kwargs['results'] = 'loglikelihood'
         return np.sum(self.filter(*args, **kwargs)[loglikelihood_burn:])
 
     def smooth(self, smoother_output=None, results=None,
