@@ -1307,6 +1307,10 @@ class FilterResults(object):
 
         return self._standardized_forecasts_error
 
+    def smooth(self, smoother_output=None, *args, **kwargs):
+        self.model.smooth(smoother_output=smoother_output, results=self,
+                          *args, **kwargs)
+
     def predict(self, start=None, end=None, dynamic=None, full_results=False,
                 *args, **kwargs):
         """
