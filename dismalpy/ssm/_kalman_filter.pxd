@@ -170,6 +170,12 @@ cdef class sKalmanFilter(object):
     cdef void check_convergence(self)
     cdef void migrate_storage(self)
 
+    cdef void _forecasting(self)
+    cdef np.float32_t _inversion(self)
+    cdef void _updating(self)
+    cdef np.float32_t _calculate_loglikelihood(self)
+    cdef void _prediction(self)
+
 # Double precision
 cdef class dKalmanFilter(object):
     # Statespace object
@@ -289,6 +295,12 @@ cdef class dKalmanFilter(object):
     cdef void numerical_stability(self)
     cdef void check_convergence(self)
     cdef void migrate_storage(self)
+
+    cdef void _forecasting(self)
+    cdef np.float64_t _inversion(self)
+    cdef void _updating(self)
+    cdef np.float64_t _calculate_loglikelihood(self)
+    cdef void _prediction(self)
 
 # Single precision complex
 cdef class cKalmanFilter(object):
@@ -410,6 +422,12 @@ cdef class cKalmanFilter(object):
     cdef void check_convergence(self)
     cdef void migrate_storage(self)
 
+    cdef void _forecasting(self)
+    cdef np.complex64_t _inversion(self)
+    cdef void _updating(self)
+    cdef np.complex64_t _calculate_loglikelihood(self)
+    cdef void _prediction(self)
+
 # Double precision complex
 cdef class zKalmanFilter(object):
     # Statespace object
@@ -529,3 +547,9 @@ cdef class zKalmanFilter(object):
     cdef void numerical_stability(self)
     cdef void check_convergence(self)
     cdef void migrate_storage(self)
+
+    cdef void _forecasting(self)
+    cdef np.complex128_t _inversion(self)
+    cdef void _updating(self)
+    cdef np.complex128_t _calculate_loglikelihood(self)
+    cdef void _prediction(self)

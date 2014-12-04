@@ -1,3 +1,4 @@
+#cython: profile=True
 #cython: boundscheck=False
 #cython: wraparound=False
 #cython: cdivision=False
@@ -624,23 +625,28 @@ cdef class {{prefix}}KalmanFilter(object):
 
         # Form forecasts
         self.forecasting(self, self.model)
+        # self._forecasting()
 
         # Perform `forecast_error_cov` inversion (or decomposition)
         self.determinant = self.inversion(self, self.model, self.determinant)
+        # self.determinant = self._inversion()
 
         # Updating step
         self.updating(self, self.model)
+        # self._updating()
 
         # Retrieve the loglikelihood
         if not self.conserve_memory & MEMORY_NO_LIKELIHOOD or self.t >= self.loglikelihood_burn:
             self._loglikelihood[0] = (
                 self._loglikelihood[0] +
                 self.calculate_loglikelihood(self, self.model, self.determinant) +
+                # self._calculate_loglikelihood() +
                 self.model.collapse_loglikelihood
             )
 
         # Prediction step
         self.prediction(self, self.model)
+        # self._prediction()
 
         # Aids to numerical stability
         self.numerical_stability()
@@ -653,6 +659,21 @@ cdef class {{prefix}}KalmanFilter(object):
 
         # Advance the time
         self.t += 1
+
+    cdef void _forecasting(self):
+        {{prefix}}forecast_univariate(self, self.model)
+
+    cdef {{cython_type}} _inversion(self):
+        {{prefix}}inverse_noop_univariate(self, self.model, self.determinant)
+
+    cdef void _updating(self):
+        {{prefix}}updating_univariate(self, self.model)
+
+    cdef {{cython_type}} _calculate_loglikelihood(self):
+        return {{prefix}}loglikelihood_univariate(self, self.model, self.determinant)
+
+    cdef void _prediction(self):
+        {{prefix}}prediction_univariate(self, self.model)
 
     cdef void initialize_statespace_object_pointers(self) except *:
         cdef:
