@@ -16,6 +16,17 @@ ctypedef int sger_t(
     int *lda,             # The size of the first dimension of A (in memory)
 ) nogil
 
+ctypedef int ssyr_t(
+    # SSYR - perform the symmetric rank 1 operation   A := alpha*x*x' + A,
+    char *uplo,           # {'U','L'}, upper, lower
+    int *n,               # Order of A
+    np.float32_t *alpha,  # Scalar multiple
+    np.float32_t *x,      # Vector x
+    int *incx,            # The increment between elements of x (usually 1)
+    np.float32_t *a,      # Matrix A: mxn
+    int *lda,             # The size of the first dimension of A (in memory)
+) nogil
+
 ctypedef int sgemm_t(
     # Compute C := alpha*A*B + beta*C
     char *transa,         # {'T','C'}: o(A)=A'; {'N'}: o(A)=A
@@ -166,6 +177,17 @@ ctypedef int dger_t(
     int *lda,             # The size of the first dimension of A (in memory)
 ) nogil
 
+ctypedef int dsyr_t(
+    # DSYR - perform the symmetric rank 1 operation   A := alpha*x*x' + A,
+    char *uplo,           # {'U','L'}, upper, lower
+    int *n,               # Order of A
+    np.float64_t *alpha,  # Scalar multiple
+    np.float64_t *x,      # Vector x
+    int *incx,            # The increment between elements of x (usually 1)
+    np.float64_t *a,      # Matrix A: mxn
+    int *lda,             # The size of the first dimension of A (in memory)
+) nogil
+
 ctypedef int dgemm_t(
     # Compute C := alpha*A*B + beta*C
     char *transa,        # {'T','C'}: o(A)=A'; {'N'}: o(A)=A
@@ -305,15 +327,26 @@ ctypedef double ddot_t(
 
 ctypedef int cgeru_t(
     # CGERU - perform the rank 1 operation   A := alpha*x*y' + A,
-    int *m,               # Rows of A
-    int *n,               # Columns of A
+    int *m,                 # Rows of A
+    int *n,                 # Columns of A
     np.complex64_t *alpha,  # Scalar multiple
     np.complex64_t *x,      # Vector x
-    int *incx,            # The increment between elements of x (usually 1)
+    int *incx,              # The increment between elements of x (usually 1)
     np.complex64_t *y,      # Vector y
-    int *incy,            # The increment between elements of y (usually 1)
+    int *incy,              # The increment between elements of y (usually 1)
     np.complex64_t *a,      # Matrix A: mxn
-    int *lda,             # The size of the first dimension of A (in memory)
+    int *lda,               # The size of the first dimension of A (in memory)
+) nogil
+
+ctypedef int cher_t(
+    # CHER - perform the hermitian rank 1 operation   A := alpha*x*conjg( x' ) + A,
+    char *uplo,             # {'U','L'}, upper, lower
+    int *n,                 # Order of A
+    np.complex64_t *alpha,  # Scalar multiple
+    np.complex64_t *x,      # Vector x
+    int *incx,              # The increment between elements of x (usually 1)
+    np.complex64_t *a,      # Matrix A: mxn
+    int *lda,               # The size of the first dimension of A (in memory)
 ) nogil
 
 ctypedef int cgemm_t(
@@ -455,15 +488,26 @@ ctypedef np.complex64_t cdotu_t(
 
 ctypedef int zgeru_t(
     # ZGERU - perform the rank 1 operation   A := alpha*x*y' + A,
-    int *m,               # Rows of A
-    int *n,               # Columns of A
+    int *m,                  # Rows of A
+    int *n,                  # Columns of A
     np.complex128_t *alpha,  # Scalar multiple
     np.complex128_t *x,      # Vector x
-    int *incx,            # The increment between elements of x (usually 1)
+    int *incx,               # The increment between elements of x (usually 1)
     np.complex128_t *y,      # Vector y
-    int *incy,            # The increment between elements of y (usually 1)
+    int *incy,               # The increment between elements of y (usually 1)
     np.complex128_t *a,      # Matrix A: mxn
-    int *lda,             # The size of the first dimension of A (in memory)
+    int *lda,                # The size of the first dimension of A (in memory)
+) nogil
+
+ctypedef int zher_t(
+    # ZHER - perform the hermitian rank 1 operation   A := alpha*x*conjg( x' ) + A,
+    char *uplo,              # {'U','L'}, upper, lower
+    int *n,                  # Order of A
+    np.complex128_t *alpha,  # Scalar multiple
+    np.complex128_t *x,      # Vector x
+    int *incx,               # The increment between elements of x (usually 1)
+    np.complex128_t *a,      # Matrix A: mxn
+    int *lda,                # The size of the first dimension of A (in memory)
 ) nogil
 
 ctypedef int zgemm_t(
@@ -606,8 +650,11 @@ ctypedef np.complex128_t zdotu_t(
 cdef:
     sdot_t *sdot
     sger_t *sger
+    ssyr_t *ssyr
     sgemm_t *sgemm
     sgemv_t *sgemv
+    ssymm_t *ssymm
+    ssymv_t *ssymv
     strmv_t *strmv
     scopy_t *scopy
     sswap_t *sswap
@@ -615,8 +662,11 @@ cdef:
     sscal_t *sscal
     ddot_t *ddot
     dger_t *dger
+    dsyr_t *dsyr
     dgemm_t *dgemm
     dgemv_t *dgemv
+    dsymm_t *dsymm
+    dsymv_t *dsymv
     dtrmv_t *dtrmv
     dcopy_t *dcopy
     dswap_t *dswap
@@ -624,8 +674,11 @@ cdef:
     dscal_t *dscal
     cdotu_t *cdot
     cgeru_t *cgeru
+    cher_t *cher
     cgemm_t *cgemm
     cgemv_t *cgemv
+    csymm_t *csymm
+    csymv_t *csymv
     ctrmv_t *ctrmv
     ccopy_t *ccopy
     cswap_t *cswap
@@ -633,8 +686,11 @@ cdef:
     cscal_t *cscal
     zdotu_t *zdot
     zgeru_t *zgeru
+    zher_t *zher
     zgemm_t *zgemm
     zgemv_t *zgemv
+    zsymm_t *zsymm
+    zsymv_t *zsymv
     ztrmv_t *ztrmv
     zcopy_t *zcopy
     zswap_t *zswap
