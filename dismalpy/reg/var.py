@@ -6,7 +6,7 @@ License: Simplified-BSD
 """
 
 import numpy as np
-from _var import _var_quantities
+from _var import _var_quantities, _var_quantities_kron
 
 class VAR(object):
     def __init__(self, nobs=None, k_endog=None, endog=None, order=1,
@@ -39,7 +39,7 @@ class VAR(object):
         self._ZHy = np.zeros((self.k_var,), order='F')              # k x 0
         self._precision = None
 
-        # Create calculation flags
+        # Create flags
         self._recalculate = True
 
     @property
@@ -94,7 +94,7 @@ class VAR(object):
                 raise RuntimeError('Quantities cannot be calculated unless'
                                    ' precision matrix is set.')
 
-            _var_quantities(
+            _var_quantities_kron(
                 self._ZH, self._ZHZ, self._ZHy,
                 self._endog[:, self.order:], self._lagged, self._precision,
                 self.k_endog, self.k_ar, self.k_var
