@@ -1,4 +1,27 @@
+import os
 import numpy as np
+import tables as tb
+
+class Iteration(tb.IsDescription):
+    iteration = tb.Int32Col()
+    loadings = tb.Float64Col(shape=(104,6))
+    obs_cov = tb.Float64Col(shape=(109))
+    phi = tb.Float64Col(shape=(468))
+    state_cov = tb.Float64Col(shape=(6,6))
+    states = tb.Float64Col(shape=(78,353))
+
+
+def get_storage(file='favar_bbe.h5', replace=False):
+    if replace or not os.path.isfile(file):
+        filters = tb.Filters(complevel=9, complib='blosc', fletcher32=True)
+        h5 = tb.open_file("favar_bbe.h5", mode="w", title="FAVAR BBE Gibbs Iterations", filters=filters)
+        group = h5.create_group(h5.root, 'iterations', 'Gibbs Sampling iterations')
+        table = h5.create_table(h5.root.iterations, 'data', Iteration, 'Iteration data')
+        table.cols.iteration.create_csindex()
+    else:
+        h5 = tb.open_file("favar_bbe.h5", mode="a", title="FAVAR BBE Gibbs Iterations")
+        table = h5.root.iterations.data
+    return h5, table
 
 # 1. Conditional on the parameters and data, generate the states
 # Run the Kalman Filter
