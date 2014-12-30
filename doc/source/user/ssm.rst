@@ -31,19 +31,21 @@ The remaining variables (:math:`Z_t, d_t, H_t, T_t, c_t, R_t, Q_t`) in the
 equations are matrices describing the process. Their variable names and
 dimensions are as follows
 
-Z : `design`          :math:`(k\_endog \times k\_states \times nobs)`
-
-d : `obs_intercept`   :math:`(k\_endog \times nobs)`
-
-H : `obs_cov`         :math:`(k\_endog \times k\_endog \times nobs)`
-
-T : `transition`      :math:`(k\_states \times k\_states \times nobs)`
-
-c : `state_intercept` :math:`(k\_states \times nobs)`
-
-R : `selection`       :math:`(k\_states \times k\_posdef \times nobs)`
-
-Q : `state_cov`       :math:`(k\_posdef \times k\_posdef \times nobs)`
++---+-------------------+--------------------------------------------------+
+| Z | `design`          | :math:`(k\_endog \times k\_states \times nobs)`  |
++---+-------------------+--------------------------------------------------+
+| d | `obs_intercept`   | :math:`(k\_endog \times nobs)`                   |
++---+-------------------+--------------------------------------------------+
+| H | `obs_cov`         | :math:`(k\_endog \times k\_endog \times nobs)`   |
++---+-------------------+--------------------------------------------------+
+| T | `transition`      | :math:`(k\_states \times k\_states \times nobs)` |
++---+-------------------+--------------------------------------------------+
+| c | `state_intercept` | :math:`(k\_states \times nobs)`                  |
++---+-------------------+--------------------------------------------------+
+| R | `selection`       | :math:`(k\_states \times k\_posdef \times nobs)` |
++---+-------------------+--------------------------------------------------+
+| Q | `state_cov`       | :math:`(k\_posdef \times k\_posdef \times nobs)` |
++---+-------------------+--------------------------------------------------+
 
 In the case that one of the matrices is time-invariant (so that, for
 example, :math:`Z_t = Z_{t+1} ~ \forall ~ t`), its last dimension may
