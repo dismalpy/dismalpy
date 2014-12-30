@@ -1,0 +1,4 @@
+.. _ssm:
+
+Dynamic Factors
+===============

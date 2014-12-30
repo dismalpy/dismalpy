@@ -1,0 +1,4 @@
+.. _ssm:
+
+Regression Effects
+==================

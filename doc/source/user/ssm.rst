@@ -51,6 +51,18 @@ In the case that one of the matrices is time-invariant (so that, for
 example, :math:`Z_t = Z_{t+1} ~ \forall ~ t`), its last dimension may
 be of size :math:`1` rather than size `nobs`.
 
+Topics
+------
+
+.. toctree::
+   :maxdepth: 2
+
+   ssm/models
+   ssm/parameters
+   ssm/filtering
+   ssm/smoothing
+   ssm/simulation_smoothing
+
 Examples
 --------
 
