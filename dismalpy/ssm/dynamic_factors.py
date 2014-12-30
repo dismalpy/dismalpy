@@ -9,6 +9,7 @@ from __future__ import division, absolute_import, print_function
 from warnings import warn
 
 import numpy as np
+from .representation import FILTER_UNIVARIATE, FILTER_COLLAPSED
 from .model import Model
 from .tools import (
     concat
@@ -193,6 +194,12 @@ class FAVAR(Model):
 
         # Initialize as stationary
         self.initialize_stationary()
+
+        # Set to use the univariate filter with observation collapsing
+        self.filter_method = FILTER_COLLAPSED | FILTER_UNIVARIATE
+        self._initialize_representation()
+        self._statespace.subset_design = True
+        self._statespace.companion_transition = True
     
     def _get_model_names(self, latex=False):
         return np.arange(self.k_params)
