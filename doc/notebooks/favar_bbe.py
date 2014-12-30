@@ -1,6 +1,11 @@
 import os
 import numpy as np
+import pandas as pd
 import tables as tb
+from dismalpy import ssm
+from dismalpy.ssm import dynamic_factors as df
+from dismalpy.stats.rvs import gamma, normal, wishart
+from dismalpy.reg import var
 
 class Iteration(tb.IsDescription):
     iteration = tb.Int32Col()
@@ -236,3 +241,136 @@ def sample_phi(state_prec, states, model, var, normal):
             raise Exception('Stationary phi parameters could not be drawn.')
 
     return out
+
+# Define the Gibbs-Sampling iterations
+def sample(model, G1, G, replace=False):
+    # Create the samplers
+    sampler_state = model.simulation_smoother(simulation_output=ssm.SIMULATION_STATE)
+    sampler_state._simulation_smoother.simulated_model.subset_design = True
+    sampler_state._simulation_smoother.simulated_model.companion_transition = True
+    
+    sampler_obs_prec = gamma.Gamma(prior_obs_prec_shape / 2., 2. / prior_obs_prec_rate, preload=G1+G)
+    sampler_loadings = normal.Normal(loc=prior_loading_mean, scale=prior_loading_var, preload=G1+G)
+    sampler_state_prec = wishart.Wishart(prior_state_prec_df, prior_state_prec_scale, preload=G1+G)
+    sampler_phi = normal.Normal(loc=prior_state_mean, scale=prior_state_var, preload=G1+G)
+    sampler_phi._use_posterior = True
+    
+    # Create a VAR
+    var_phi = var.VAR(nobs=model.nobs, k_endog=model.k_posdef, order=model.order)
+    
+    # Storage
+    h5, table = get_storage(replace=replace)
+    
+    try:
+        # Initial values
+        if len(table.col('iteration')) == 0:
+            latest = 0
+            start_params = model.start_params
+            loadings = np.reshape(
+                start_params[model._params_loadings],
+                (model.k_info - model.k_factors, model.k_posdef)
+            )
+            obs_cov = start_params[model._params_obs_cov]
+            obs_prec = 1. / obs_cov[0]
+            phi = start_params[model._params_transition]
+            state_cov = np.reshape(
+                start_params[model._params_state_cov],
+                (model.k_posdef, model.k_posdef)
+            )
+            state_prec = np.linalg.inv(state_cov)
+        else:
+            latest = table.colindexes['iteration'][-1]
+            iteration, loadings, obs_cov, phi, state_cov, states = table[latest]
+            obs_prec = 1. / obs_cov
+            state_prec = np.linalg.inv(state_cov)
+
+        # Run the iterations
+        iteration = table.row
+        for i in range(G1+G):
+            # Unobserved states
+            states = sample_states(loadings, obs_cov, phi, state_cov, model, sampler_state)
+
+            # Observation equation (OLS)
+            obs_prec = sample_obs_prec(loadings, states, model, sampler_obs_prec)
+            obs_cov = 1. / obs_prec
+            loadings = sample_loadings(obs_prec, states, model, sampler_loadings)
+
+            # Transition equation (VAR)
+            state_prec = sample_state_prec(phi, states, model, sampler_state_prec)
+            state_cov = np.linalg.inv(state_prec)
+            phi = sample_phi(state_prec, states, model, var_phi, sampler_phi)
+
+            # Store the data
+            iteration['iteration'] = latest + i
+            iteration['states'] = states
+            iteration['obs_cov'] = obs_cov
+            iteration['loadings'] = loadings
+            iteration['state_cov'] = state_cov
+            iteration['phi'] = phi
+            iteration.append()
+
+            if i % 100 == 0:
+                table.flush()
+                print i
+    finally:
+        h5.close()
+
+
+if __name__ == '__main__':
+    pass
+
+    # columns = pd.read_csv('data/favar_bgm_columns.csv')
+    # columns.index = columns.column
+    # del columns['column']
+    # columns.sort(inplace=True)
+    # dates = pd.date_range('1976-02','2005-06', freq='MS')
+
+    # # Get the data
+    # raw = pd.read_csv('data/data76.csv', header=None)
+    # raw.columns = columns.id.tolist()
+    # raw.index = dates
+
+    # # Only take the BBE dataset
+    # raw = raw.iloc[:,:110]
+
+    # # Standardize the variables
+    # dta = (raw - raw.mean()) / raw.std()
+
+    # # Separate into observed economic variables and background variables
+    # observed = dta['FYFF']
+    # informational = dta.drop('FYFF', axis=1)
+
+    # # Construct the model
+    # mod = df.FAVAR(observed, informational, k_factors=5, order=13)
+
+    # # Set to use the univariate filter with observation collapsing
+    # mod.filter_method = ssm.FILTER_COLLAPSED | ssm.FILTER_UNIVARIATE
+    # mod._initialize_representation()
+    # mod._statespace.subset_design = True
+    # mod._statespace.companion_transition = True
+    # mod.endog.shape
+
+    # # Observation variances prior: Gamma hyperparameters
+    # prior_obs_prec_shape = 1e-4 # 2*alpha
+    # prior_obs_prec_rate = 3    # 2*beta
+    # prior_obs_prec_exp = ((prior_obs_prec_shape/2.) / (prior_obs_prec_rate/2.))
+    # print 'Prior expected value of obs. variances is %.5f' % (1./prior_obs_prec_exp)
+
+    # # Observation loadings prior: Normal hyperparameters
+    # prior_loading_mean = np.zeros(mod.k_posdef)
+    # prior_loading_var = np.eye(mod.k_posdef)
+
+    # # State precision prior
+    # prior_state_prec_df = mod.k_posdef
+    # prior_state_prec_scale = np.eye(mod.k_posdef)
+
+    # # State prior
+    # prior_state_mean = np.zeros(mod.k_var)
+    # prior_state_var = np.eye(mod.k_var)*0.01
+
+    # # Iterations
+    # G1 = 2000
+    # G = 20000
+    # tic = time.time()
+    # sample(mod, G1, G, True)
+    # print time.time() - tic
