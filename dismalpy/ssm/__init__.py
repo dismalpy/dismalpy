@@ -1,8 +1,9 @@
 from numpy.testing import Tester
 test = Tester().test
 
-from .representation import (
-    Representation, FilterResults,
+from .representation import Representation
+from .kalman_filter import (
+    KalmanFilter, FilterResults,
 
     FILTER_CONVENTIONAL,
     FILTER_EXACT_INITIAL,
@@ -12,16 +13,6 @@ from .representation import (
     FILTER_COLLAPSED,
     FILTER_EXTENDED,
     FILTER_UNSCENTED,
-
-    SMOOTHER_STATE,
-    SMOOTHER_STATE_COV,
-    SMOOTHER_DISTURBANCE,
-    SMOOTHER_DISTURBANCE_COV,
-    SMOOTHER_ALL,
-
-    SIMULATION_STATE,
-    SIMULATION_DISTURBANCE,
-    SIMULATION_ALL,
 
     INVERT_UNIVARIATE,
     SOLVE_LU,
@@ -41,8 +32,25 @@ from .representation import (
     MEMORY_NO_SMOOTHING,
     MEMORY_CONSERVE
 )
+from .kalman_smoother import (
+    KalmanSmoother, SmootherResults,
 
-from .model import Model, StatespaceResults
+    SMOOTHER_STATE,
+    SMOOTHER_STATE_COV,
+    SMOOTHER_DISTURBANCE,
+    SMOOTHER_DISTURBANCE_COV,
+    SMOOTHER_ALL
+)
+from .simulation_smoother import (
+    SimulationSmoother, SimulationSmoothResults,
+
+    SIMULATION_STATE,
+    SIMULATION_DISTURBANCE,
+    SIMULATION_ALL
+)
+
+from .model import Model
+from .mlemodel import MLEModel, MLEResults
 from .sarimax import SARIMAX
 from .tools import (
     find_best_blas_type, prefix_dtype_map,

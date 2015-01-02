@@ -26,7 +26,7 @@ from nose.exc import SkipTest
 current_path = os.path.dirname(os.path.abspath(__file__))
 
 
-class TestClark1989(ssm.Representation):
+class TestClark1989(ssm.Model):
     """
     Clark's (1989) bivariate unobserved components model of real GDP (as
     presented in Kim and Nelson, 1999)

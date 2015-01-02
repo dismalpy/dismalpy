@@ -9,7 +9,7 @@ from __future__ import division, absolute_import, print_function
 from warnings import warn
 
 import numpy as np
-from .model import Model, StatespaceResults
+from .mlemodel import MLEModel, MLEResults
 from .tools import (
     companion_matrix, diff, is_invertible, constrain_stationary_univariate,
     unconstrain_stationary_univariate
@@ -19,7 +19,7 @@ from statsmodels.tsa.tsatools import lagmat
 from statsmodels.tools.decorators import cache_readonly
 
 
-class SARIMAX(Model):
+class SARIMAX(MLEModel):
     r"""
     Seasonal AutoRegressive Integrated Moving Average with eXogenous regressors
     model
@@ -451,7 +451,7 @@ class SARIMAX(Model):
         kwargs.setdefault('loglikelihood_burn', k_diffuse_states)
 
         # Set the default results class to be SARIMAXResults
-        kwargs.setdefault('filter_results_class', SARIMAXResults)
+        kwargs.setdefault('results_class', SARIMAXResults)
 
         # Initialize the statespace
         super(SARIMAX, self).__init__(
@@ -535,17 +535,17 @@ class SARIMAX(Model):
     def initialize_known(self, initial_state, initial_state_cov):
         self._manual_initialization = True
         super(SARIMAX, self).initialize_known(initial_state, initial_state_cov)
-    initialize_known.__doc__ = Model.initialize_known.__doc__
+    initialize_known.__doc__ = MLEModel.initialize_known.__doc__
 
     def initialize_approximate_diffuse(self, variance=None):
         self._manual_initialization = True
         super(SARIMAX, self).initialize_approximate_diffuse(variance)
-    initialize_approximate_diffuse.__doc__ = Model.initialize_approximate_diffuse.__doc__
+    initialize_approximate_diffuse.__doc__ = MLEModel.initialize_approximate_diffuse.__doc__
 
     def initialize_stationary(self):
         self._manual_initialization = True
         super(SARIMAX, self).initialize_stationary()
-    initialize_stationary.__doc__ = Model.initialize_stationary.__doc__
+    initialize_stationary.__doc__ = MLEModel.initialize_stationary.__doc__
 
     def initialize_state(self, variance=None):
         """
@@ -1517,16 +1517,14 @@ class SARIMAX(Model):
         return params
 
 
-class SARIMAXResults(StatespaceResults):
+class SARIMAXResults(MLEResults):
     """
     Class to hold results from fitting an SARIMAX model.
 
     Parameters
     ----------
-    model : Model instance
+    model : MLEModel instance
         The fitted model instance
-    kalman_filter : Kalman filter instance
-        The underlying Kalman filter for the fitted model instance
 
     Attributes
     ----------
@@ -1642,7 +1640,7 @@ class SARIMAXResults(StatespaceResults):
     See Also
     --------
     dismalpy.ssm.representation.FilterResults : for additional attributes and methods
-    dismalpy.ssm.model.StatespaceResults : for additional attributes and methods
+    dismalpy.ssm.model.MLEResults : for additional attributes and methods
     """
     def __init__(self, model, *args, **kwargs):
         super(SARIMAXResults, self).__init__(model, *args, **kwargs)
@@ -1913,4 +1911,4 @@ class SARIMAXResults(StatespaceResults):
         return super(SARIMAXResults, self).summary(
             alpha=alpha, start=start, *args, **kwargs
         )
-    summary.__doc__ = StatespaceResults.summary.__doc__
+    summary.__doc__ = MLEResults.summary.__doc__
