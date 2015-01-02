@@ -21,7 +21,7 @@ from nose.exc import SkipTest
 current_path = os.path.dirname(os.path.abspath(__file__))
 
 
-class Trivariate(ssm.Representation):
+class Trivariate(ssm.Model):
     """
     Tests collapsing three-dimensional observation data to two-dimensional
     """
