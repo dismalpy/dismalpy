@@ -230,7 +230,9 @@ class KalmanFilter(Representation):
         loglike : float
             The joint loglikelihood.
         """
-        # TODO will give wrong result if TODONO_LIKELIHOOD used
+        if self.filter_method & MEMORY_NO_LIKELIHOOD:
+            raise RuntimeError('Cannot compute loglikelihood if'
+                               ' MEMORY_NO_LIKELIHOOD option is selected.')
         if loglikelihood_burn is None:
             loglikelihood_burn = self.loglikelihood_burn
         kwargs['results'] = 'loglikelihood'
