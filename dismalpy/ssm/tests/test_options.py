@@ -9,6 +9,7 @@ License: Simplified-BSD
 """
 from __future__ import division, absolute_import, print_function
 
+import numpy as np
 from dismalpy.ssm.kalman_filter import (
     FILTER_CONVENTIONAL,
     FILTER_EXACT_INITIAL,
@@ -57,7 +58,7 @@ class Options(Model):
     def __init__(self, *args, **kwargs):
 
         # Dummy data
-        endog = range(10)
+        endog = np.arange(10)
         k_states = 1
 
         super(Options, self).__init__(endog, k_states, *args, **kwargs)
