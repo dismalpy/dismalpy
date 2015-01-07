@@ -7,6 +7,7 @@ License: Simplified-BSD
 from __future__ import division, absolute_import, print_function
 
 import numpy as np
+from .representation import OptionWrapper
 from .kalman_filter import KalmanFilter, FilterResults
 from .tools import prefix_kalman_smoother_map
 
@@ -25,6 +26,20 @@ class KalmanSmoother(KalmanFilter):
     and smoother.
     """
 
+    smoother_outputs = [
+        'smoother_state', 'smoother_state_cov', 'smoother_disturbance',
+        'smoother_disturbance_cov', 'smoother_all',
+    ]
+
+    smoother_state = OptionWrapper('smoother_output', SMOOTHER_STATE)
+    smoother_state_cov = OptionWrapper('smoother_output', SMOOTHER_STATE_COV)
+    smoother_disturbance = OptionWrapper('smoother_output', SMOOTHER_DISTURBANCE)
+    smoother_disturbance_cov = OptionWrapper('smoother_output', SMOOTHER_DISTURBANCE_COV)
+    smoother_all = OptionWrapper('smoother_output', SMOOTHER_ALL)
+
+    # Default smoother options
+    smoother_output = SMOOTHER_ALL
+
     def __init__(self, *args, **kwargs):
         super(KalmanSmoother, self).__init__(*args, **kwargs)
 
@@ -34,9 +49,7 @@ class KalmanSmoother(KalmanFilter):
         # Setup the underlying Kalman smoother storage
         self._kalman_smoothers = {}
 
-        self.smoother_output = kwargs.get(
-            'smoother_output', SMOOTHER_ALL
-        )
+        self.set_smoother_output(**kwargs)
 
     @property
     def _kalman_smoother(self):
@@ -78,6 +91,13 @@ class KalmanSmoother(KalmanFilter):
             self._kalman_smoothers[prefix].set_smoother_output(smoother_output, False)
 
         return prefix, dtype, create_smoother, create_filter, create_statespace
+
+    def set_smoother_output(self, smoother_output=None, **kwargs):
+        if smoother_output is not None:
+            self.smoother_output = smoother_output
+        for name in KalmanSmoother.smoother_outputs:
+            if name in kwargs:
+                setattr(self, name, kwargs[name])
 
     def smooth(self, smoother_output=None, results=None,
                *args, **kwargs):

@@ -21,11 +21,35 @@ class SimulationSmoother(KalmanSmoother):
     State space representation of a time series process, with Kalman filter
     and smoother, and with simulation smoother.
     """
+
+    simulation_outputs = [
+        'simulation_state', 'simulation_disturbance', 'simulation_all'
+    ]
     
     def __init__(self, *args, **kwargs):
         super(SimulationSmoother, self).__init__(*args, **kwargs)
 
         self.simulation_smooth_results_class = kwargs.get('simulation_smooth_results_class', SimulationSmoothResults)
+
+    def get_simulation_output(self, simulation_output=None, **kwargs):
+        # If we don't explicitly have simulation_output, try to get it from
+        # kwargs
+        if simulation_output is None:
+            simulation_output = 0
+
+            if 'simulation_state' in kwargs and kwargs['simulation_state']:
+                simulation_output |= SIMULATION_STATE
+            if 'simulation_disturbance' in kwargs and kwargs['simulation_disturbance']:
+                simulation_output |= SIMULATION_DISTURBANCE
+            if 'simulation_all' in kwargs and kwargs['simulation_all']:
+                simulation_output |= SIMULATION_ALL
+
+            # If no information was in kwargs, set simulation output to be the
+            # same as smoother output
+            if simulation_output == 0:
+                simulation_output = self.smoother_output
+
+        return simulation_output
 
     def simulation_smoother(self, simulation_output=None,
                             results_class=None, *args, **kwargs):
@@ -56,8 +80,7 @@ class SimulationSmoother(KalmanSmoother):
         )
 
         # Simulation smoother parameters
-        if simulation_output is None:
-            simulation_output = kwargs.get('smoother_output', self.smoother_output)
+        simulation_output = self.get_simulation_output(simulation_output, **kwargs)
 
         # Kalman smoother parameters
         smoother_output = kwargs.get('smoother_output', simulation_output)
