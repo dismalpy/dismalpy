@@ -15,7 +15,7 @@ import os
 
 from dismalpy import ssm
 import dismalpy.ssm.tests.results_kalman as results_kalman_filter
-from numpy.testing import assert_allclose, assert_allclose
+from numpy.testing import assert_almost_equal, assert_allclose
 from nose.exc import SkipTest
 
 current_path = os.path.dirname(os.path.abspath(__file__))
@@ -56,21 +56,18 @@ class Trivariate(ssm.Model):
         # Initialization
         self.initialize_approximate_diffuse()
 
-    @SkipTest
     def test_forecasts(self):
         assert_allclose(
             self.results_a.forecasts[0,:],
-            self.results_b.forecasts[0,:]
+            self.results_b.forecasts[0,:],
         )
 
-    @SkipTest
     def test_forecasts_error(self):
         assert_allclose(
             self.results_a.forecasts_error[0,:],
             self.results_b.forecasts_error[0,:]
         )
 
-    @SkipTest
     def test_forecasts_error_cov(self):
         assert_allclose(
             self.results_a.forecasts_error_cov[0,0,:],
