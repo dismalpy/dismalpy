@@ -147,7 +147,6 @@ class TestStatesAR3(sarimax.SARIMAX):
         )
 
     def test_simulation_smoothed_state(self):
-        # TODO this sometimes fails, possibly somtimes segfaults
         # regression test
         assert_almost_equal(
             self.sim.simulated_state.T,
