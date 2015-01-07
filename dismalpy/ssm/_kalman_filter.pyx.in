@@ -846,7 +846,7 @@ cdef class {{prefix}}KalmanFilter(object):
     cdef void check_convergence(self):
         # Constants
         cdef:
-            int inc = 1
+            int inc = 1, missing_flag = 0
             {{cython_type}} alpha = 1.0
             {{cython_type}} beta = 0.0
             {{cython_type}} gamma = -1.0
@@ -865,8 +865,11 @@ cdef class {{prefix}}KalmanFilter(object):
         if self.conserve_memory & MEMORY_NO_GAIN > 0:
             gain_t = 1
 
-        #  and self.model.nmissing[self.t] == 0
-        if self.time_invariant and not self.converged:
+        # Figure out if there is a missing value
+        if self.model.nmissing[self.t] > 0 or (not self.t == 0 and self.model.nmissing[self.t-1] > 0):
+            missing_flag = 1
+
+        if self.time_invariant and not self.converged and not missing_flag:
             # #### Check for steady-state convergence
             # 
             # `tmp0` array used here, dimension $(m \times m)$  
@@ -899,11 +902,6 @@ cdef class {{prefix}}KalmanFilter(object):
                 self.converged_determinant = self.determinant
                 # $K_t$
                 blas.{{prefix}}copy(&self.k_endogstates, &self.kalman_gain[0, 0, gain_t], &inc, self._converged_kalman_gain, &inc)
-        elif self.period_converged > 0:
-            # This is here so that the filter's state is reset to converged = 1
-            # even if it was set to converged = 0 for the current iteration
-            # due to missing values
-            self.converged = 1
 
     cdef void migrate_storage(self):
         cdef:
