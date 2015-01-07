@@ -9,7 +9,7 @@ from __future__ import division, absolute_import, print_function
 from warnings import warn
 
 import numpy as np
-from .representation import Representation, FrozenRepresentation
+from .representation import OptionWrapper, Representation, FrozenRepresentation
 from .tools import (
     prefix_kalman_filter_map, validate_vector_shape, validate_matrix_shape
 )
@@ -48,7 +48,75 @@ MEMORY_CONSERVE = (
 class KalmanFilter(Representation):
     r"""
     State space representation of a time series process, with Kalman filter
+
+    Notes
+    -----
+    The `filter_method` and `inversion_method` options intentionally allow
+    the possibility that multiple methods will be indicated. In the case that
+    multiple methods are selected, the underlying Kalman filter will attempt to
+    select the optional method given the input data.
+
+    For example, it may be that INVERT_UNIVARIATE and SOLVE_CHOLESKY are
+    indicated (this is in fact the default case). In this case, if the
+    endogenous vector is 1-dimensional (`k_endog` = 1), then INVERT_UNIVARIATE
+    is used and inversion reduces to simple division, and if it has a larger
+    dimension, the Cholesky decomposition along with linear solving (rather
+    than explicit matrix inversion) is used. If only SOLVE_CHOLESKY had been
+    set, then the Cholesky decomposition method would *always* be used, even in
+    the case of 1-dimensional data.
     """
+
+    filter_methods = [
+        'filter_conventional', 'filter_exact_initial', 'filter_augmented',
+        'filter_square_root', 'filter_univariate', 'filter_collapsed',
+        'filter_extended', 'filter_unscented'
+    ]
+
+    filter_conventional = OptionWrapper('filter_method', FILTER_CONVENTIONAL)
+    filter_exact_initial = OptionWrapper('filter_method', FILTER_EXACT_INITIAL)
+    filter_augmented = OptionWrapper('filter_method', FILTER_AUGMENTED)
+    filter_square_root = OptionWrapper('filter_method', FILTER_SQUARE_ROOT)
+    filter_univariate = OptionWrapper('filter_method', FILTER_UNIVARIATE)
+    filter_collapsed = OptionWrapper('filter_method', FILTER_COLLAPSED)
+    filter_extended = OptionWrapper('filter_method', FILTER_EXTENDED)
+    filter_unscented = OptionWrapper('filter_method', FILTER_UNSCENTED)
+
+    inversion_methods = [
+        'invert_univariate', 'solve_lu', 'invert_lu', 'solve_cholesky',
+        'invert_cholesky', 'invert_numpy',
+    ]
+
+    invert_univariate = OptionWrapper('inversion_method', INVERT_UNIVARIATE)
+    solve_lu = OptionWrapper('inversion_method', SOLVE_LU)
+    invert_lu = OptionWrapper('inversion_method', INVERT_LU)
+    solve_cholesky = OptionWrapper('inversion_method', SOLVE_CHOLESKY)
+    invert_cholesky = OptionWrapper('inversion_method', INVERT_CHOLESKY)
+    invert_numpy = OptionWrapper('inversion_method', INVERT_NUMPY)
+
+    stability_methods = ['stability_force_symmetry']
+
+    stability_force_symmetry = OptionWrapper('stability_method', STABILITY_FORCE_SYMMETRY)
+
+    memory_options = [
+        'memory_store_all', 'memory_no_forecast', 'memory_no_predicted',
+        'memory_no_filtered', 'memory_no_likelihood', 'memory_no_gain',
+        'memory_no_smoothing', 'memory_conserve'
+    ]
+
+    memory_store_all = OptionWrapper('conserve_memory', MEMORY_STORE_ALL)
+    memory_no_forecast = OptionWrapper('conserve_memory', MEMORY_NO_FORECAST)
+    memory_no_predicted = OptionWrapper('conserve_memory', MEMORY_NO_PREDICTED)
+    memory_no_filtered = OptionWrapper('conserve_memory', MEMORY_NO_FILTERED)
+    memory_no_likelihood = OptionWrapper('conserve_memory', MEMORY_NO_LIKELIHOOD)
+    memory_no_gain = OptionWrapper('conserve_memory', MEMORY_NO_GAIN)
+    memory_no_smoothing = OptionWrapper('conserve_memory', MEMORY_NO_SMOOTHING)
+    memory_conserve = OptionWrapper('conserve_memory', MEMORY_CONSERVE)
+
+    # Default filter options
+    filter_method = FILTER_CONVENTIONAL
+    inversion_method = INVERT_UNIVARIATE | SOLVE_CHOLESKY
+    stability_method = STABILITY_FORCE_SYMMETRY
+    conserve_memory = MEMORY_STORE_ALL
 
     def __init__(self, *args, **kwargs):
         super(KalmanFilter, self).__init__(*args, **kwargs)
@@ -60,16 +128,11 @@ class KalmanFilter(Representation):
         self.loglikelihood_burn = kwargs.get('loglikelihood_burn', 0)
         self.results_class = kwargs.get('results_class', FilterResults)
 
-        self.filter_method = kwargs.get(
-            'filter_method', FILTER_CONVENTIONAL
-        )
-        self.inversion_method = kwargs.get(
-            'inversion_method', INVERT_UNIVARIATE | SOLVE_CHOLESKY
-        )
-        self.stability_method = kwargs.get(
-            'stability_method', STABILITY_FORCE_SYMMETRY
-        )
-        self.conserve_memory = kwargs.get('conserve_memory', 0)
+        self.set_filter_method(**kwargs)
+        self.set_inversion_method(**kwargs)
+        self.set_stability_method(**kwargs)
+        self.set_conserve_memory(**kwargs)
+
         self.tolerance = kwargs.get('tolerance', 1e-19)
 
     @property
@@ -138,6 +201,34 @@ class KalmanFilter(Representation):
             # re-created filters
 
         return prefix, dtype, create_filter, create_statespace
+
+    def set_filter_method(self, filter_method=None, **kwargs):
+        if filter_method is not None:
+            self.filter_method = filter_method
+        for name in KalmanFilter.filter_methods:
+            if name in kwargs:
+                setattr(self, name, kwargs[name])
+
+    def set_inversion_method(self, inversion_method=None, **kwargs):
+        if inversion_method is not None:
+            self.inversion_method = inversion_method
+        for name in KalmanFilter.inversion_methods:
+            if name in kwargs:
+                setattr(self, name, kwargs[name])
+
+    def set_stability_method(self, stability_method=None, **kwargs):
+        if stability_method is not None:
+            self.stability_method = stability_method
+        for name in KalmanFilter.stability_methods:
+            if name in kwargs:
+                setattr(self, name, kwargs[name])
+
+    def set_conserve_memory(self, conserve_memory=None, **kwargs):
+        if conserve_memory is not None:
+            self.conserve_memory = conserve_memory
+        for name in KalmanFilter.memory_options:
+            if name in kwargs:
+                setattr(self, name, kwargs[name])
 
     def filter(self, filter_method=None, inversion_method=None,
                stability_method=None, conserve_memory=None, tolerance=None,
@@ -230,7 +321,9 @@ class KalmanFilter(Representation):
         loglike : float
             The joint loglikelihood.
         """
-        # TODO will give wrong result if TODONO_LIKELIHOOD used
+        if self.filter_method & MEMORY_NO_LIKELIHOOD:
+            raise RuntimeError('Cannot compute loglikelihood if'
+                               ' MEMORY_NO_LIKELIHOOD option is selected.')
         if loglikelihood_burn is None:
             loglikelihood_burn = self.loglikelihood_burn
         kwargs['results'] = 'loglikelihood'
@@ -404,11 +497,26 @@ class FilterResults(FrozenRepresentation):
         self.forecasts_error_cov = np.array(kalman_filter.forecast_error_cov, copy=True)
         self.loglikelihood = np.array(kalman_filter.loglikelihood, copy=True)
 
+        # If there was missing data, save the original values from the Kalman
+        # filter output, since below will set the values corresponding to
+        # the missing observations to nans.
+        self.missing_forecasts = None
+        self.missing_forecasts_error = None
+        self.missing_forecasts_error_cov = None
+        if np.sum(self.nmissing) > 0:
+            # Copy the provided arrays (which are as the Kalman filter dataset)
+            # into new variables
+            self.missing_forecasts = np.copy(self.forecasts)
+            self.missing_forecasts_error = np.copy(self.forecasts_error)
+            self.missing_forecasts_error_cov = np.copy(self.forecasts_error_cov)
+
         # Save the collapsed values
         self.collapsed_forecasts = None
         self.collapsed_forecasts_error = None
         self.collapsed_forecasts_error_cov = None
         if self.filter_method & FILTER_COLLAPSED:
+            # Copy the provided arrays (which are from the collapsed dataset)
+            # into new variables
             self.collapsed_forecasts = self.forecasts[:self.k_states,:]
             self.collapsed_forecasts_error = (
                 self.forecasts_error[:self.k_states,:]
@@ -416,10 +524,16 @@ class FilterResults(FrozenRepresentation):
             self.collapsed_forecasts_error_cov = (
                 self.forecasts_error_cov[:self.k_states,:self.k_states,:]
             )
+            # Recreate the original arrays (which should be from the original
+            # dataset) in the appropriate dimension
+            self.forecasts = np.zeros((self.k_endog, self.nobs))
+            self.forecasts_error = np.zeros((self.k_endog, self.nobs))
+            self.forecasts_error_cov = np.zeros((self.k_endog, self.k_endog, self.nobs))
 
         # Fill in missing values in the forecast, forecast error, and
         # forecast error covariance matrix (this is required due to how the
-        # Kalman filter implements observations that are completely missing)
+        # Kalman filter implements observations that are either partly or
+        # completely missing)
         # Construct the predictions, forecasts
         if not (self.conserve_memory & MEMORY_NO_FORECAST or
                 self.conserve_memory & MEMORY_NO_PREDICTED):
@@ -428,25 +542,51 @@ class FilterResults(FrozenRepresentation):
                 obs_cov_t = 0 if self.obs_cov.shape[2] == 1 else t
                 obs_intercept_t = 0 if self.obs_intercept.shape[1] == 1 else t
 
-                # Skip anything that is less than completely missing
-                # except for in the collapsed case, we need to rebuild all of
-                # these from scratch
-                # TODO
-                if (self.filter_method & FILTER_COLLAPSED) or self.nmissing[t] < self.k_endog:
-                    continue
-
-                self.forecasts[:, t] = np.dot(
-                    self.design[:, :, design_t], self.predicted_state[:, t]
-                ) + self.obs_intercept[:, obs_intercept_t]
+                # For completely missing observations, the Kalman filter will
+                # produce forecasts, but forecast errors and the forecast
+                # error covariance matrix will be zeros - make them nan to
+                # improve clarity of results.
                 if self.nmissing[t] == self.k_endog:
+                    # We can recover forecasts
+                    self.forecasts[:, t] = np.dot(
+                        self.design[:, :, design_t], self.predicted_state[:, t]
+                    ) + self.obs_intercept[:, obs_intercept_t]
                     self.forecasts_error[:, t] = np.nan
-                else:
+                    self.forecasts_error_cov[:, :, t] = np.nan
+                # For partially missing observations, the Kalman filter
+                # will produce all elements (forecasts, forecast errors,
+                # forecast error covariance matrices) as usual, but their
+                # dimension will only be equal to the number of non-missing
+                # elements, and their location in memory will be in the first
+                # blocks (e.g. for the forecasts_error, the first
+                # k_endog - nmissing[t] columns will be filled in), regardless
+                # of which endogenous variables they refer to (i.e. the non-
+                # missing endogenous variables for that observation).
+                # Furthermore, the forecast error covariance matrix is only
+                # valid for those elements. What is done is to set all elements
+                # to nan for these observations so that they are flagged as
+                # missing. The variables missing_forecasts, etc. then provide
+                # the forecasts, etc. provided by the Kalman filter, from which
+                # the data can be retrieved if desired.
+                elif self.nmissing[t] > 0:
+                    self.forecasts[:, t] = np.nan
+                    self.forecasts_error[:, t] = np.nan
+                    self.forecasts_error_cov[:, :, t] = np.nan
+                # In the collapsed case, everything just needs to be rebuilt
+                # for the original observed data, since the Kalman filter
+                # produced these values for the collapsed data.
+                elif self.filter_method & FILTER_COLLAPSED:
+                    self.forecasts[:, t] = np.dot(
+                        self.design[:, :, design_t], self.predicted_state[:, t]
+                    ) + self.obs_intercept[:, obs_intercept_t]
+
                     self.forecasts_error[:, t] = self.endog[:, t] - self.forecasts[:, t]
-                self.forecasts_error_cov[:, :, t] = np.dot(
-                    np.dot(self.design[:, :, design_t],
-                           self.predicted_state_cov[:, :, t]),
-                    self.design[:, :, design_t].T
-                ) + self.obs_cov[:, :, obs_cov_t]
+
+                    self.forecasts_error_cov[:, :, t] = np.dot(
+                        np.dot(self.design[:, :, design_t],
+                               self.predicted_state_cov[:, :, t]),
+                        self.design[:, :, design_t].T
+                    ) + self.obs_cov[:, :, obs_cov_t]
 
     @property
     def standardized_forecasts_error(self):

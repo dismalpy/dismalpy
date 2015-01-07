@@ -49,17 +49,20 @@ if prefix == 's':
 
 cdef int {{prefix}}forecast_missing_conventional({{prefix}}KalmanFilter kfilter, {{prefix}}Statespace model):
     cdef int i, j
-    cdef int inc = 1
+    cdef int inc = 1, design_t = 0
+    cdef {{cython_type}} alpha = 1
 
     # #### Forecast for time t  
-    # `forecast` $= 0 a_t + d_t$
-    blas.{{prefix}}copy(&model._k_endog, model._obs_intercept, &inc, kfilter._forecast, &inc)
+    # `forecast` $= Z_t a_t + d_t$
+    # Just set to zeros, see below (this means if forecasts are required for
+    # this part, they must be done in the wrappe)
 
     # #### Forecast error for time t  
     # It is undefined here, since obs is nan
     # Note: use kfilter dimensions since we just want to set the whole array
     # to zero
     for i in range(kfilter.k_endog):
+        kfilter._forecast[i] = 0
         kfilter._forecast_error[i] = 0
 
     # #### Forecast error covariance matrix for time t  

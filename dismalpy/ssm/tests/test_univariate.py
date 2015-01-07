@@ -90,7 +90,7 @@ class TestClark1989(ssm.Model):
         self.initialize_known(initial_state, initial_state_cov)
 
         # Conventional filtering, smoothing, and simulation smoothing
-        self.filter_method = ssm.FILTER_CONVENTIONAL
+        self.filter_conventional = True
         self.conventional_results = self.smooth()
         n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
         self.conventional_sim = self.simulation_smoother(
@@ -99,11 +99,25 @@ class TestClark1989(ssm.Model):
         )
 
         # Univariate filtering, smoothing, and simulation smoothing
-        self.filter_method = ssm.FILTER_UNIVARIATE
+        self.filter_univariate = True
         self.univariate_results = self.smooth()
         self.univariate_sim = self.simulation_smoother(
             disturbance_variates=np.zeros(n_disturbance_variates),
             initial_state_variates=np.zeros(self.k_states)
+        )
+
+    def test_using_univariate(self):
+        # Regression test to make sure the univariate_results actually
+        # used the univariate Kalman filtering approach (i.e. that the flag
+        # being set actually caused the filter to not use the conventional
+        # filter)
+        assert_almost_equal(
+            self.conventional_results.forecasts_error_cov[1,1,0],
+            143.03724478030821, 9
+        )
+        assert_almost_equal(
+            self.univariate_results.forecasts_error_cov[1,1,0],
+            120.66208525029386, 9
         )
 
     def test_forecasts(self):
