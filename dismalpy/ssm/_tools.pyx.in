@@ -151,30 +151,37 @@ cdef int _{{prefix}}solve_discrete_lyapunov({{cython_type}} * a, {{cython_type}}
     dim[0] = lwork; dim[1] = lwork;
     work = np.PyArray_ZEROS(2, dim, {{typenum}}, FORTRAN)
 
-    # Get apI = a + I (stored im apI)
+    # - Solve for b.conj().transpose() --------
+
+    # Get apI = a + I (stored in apI)
+    # = (a + eye)
+    # For: c = 2*np.dot(np.dot(inv(a + eye), q), aHI_inv)
     blas.{{prefix}}copy(&n2, a, &inc, &apI[0,0], &inc)
-    # (for loop below subtracts the identity)
-    
-    # Replace a with its conjugate (if we have a complex matrix)
-    {{if combined_prefix == 'z'}}
-    for i in range(n2):
-        a[i] = a[i] - a[i].imag * 2.0j
-    {{endif}}
+    # (for loop below adds the identity)
 
     # Get conj(a) + I (stored in capI)
+    # a^H + I -> capI
+    # For: aHI_inv = inv(aH + eye)
     blas.{{prefix}}copy(&n2, a, &inc, &capI[0,0], &inc)
     # (for loop below adds the identity)
 
     # Get conj(a) - I (stored in a)
+    # a^H - I -> a
+    # For: b = np.dot(aH - eye, aHI_inv)
     # (for loop below subtracts the identity)
-    
+
     # Add / subtract identity matrix
     for i in range(n):
-        capI[i,i] = capI[i,i] + 1
-        a[i + i*n] = a[i + i*n] - 1
-        apI[i,i] = apI[i,i] + 1 # apI -> a + I
+        apI[i,i] = apI[i,i] + 1 # apI -> a + eye
+        capI[i,i] = capI[i,i] + 1 # aH + eye
+        a[i + i*n] = a[i + i*n] - 1 # a - eye
 
     # Solve [conj(a) + I] b' = [conj(a) - I] (result stored in a)
+    # For: b = np.dot(aH - eye, aHI_inv)
+    # Where: aHI_inv = inv(aH + eye)
+    # where b = (a^H - eye) (a^H + eye)^{-1}
+    # or b^H = (a + eye)^{-1} (a - eye)
+    # or (a + eye) b^H = (a - eye)
     lapack.{{prefix}}getrf(&n, &n, &capI[0,0], &n, &ipiv[0,0], &info)
 
     if not info == 0:
@@ -186,39 +193,54 @@ cdef int _{{prefix}}solve_discrete_lyapunov({{cython_type}} * a, {{cython_type}}
     if not info == 0:
         raise np.linalg.LinAlgError('LU solver error.')
 
-    # Take the complex conjugate (if we have a complex matrix)
-    {{if combined_prefix == 'z'}}
-    for i in range(n2):
-        a[i] = a[i] - a[i].imag * 2.0j
-    {{endif}}
+    # Now we have b^H; we could take the conjugate transpose to get b, except
+    # that the input to the continuous Lyapunov equation is exactly
+    # b^H, so we already have the quantity we need
+
+    # - Solve for (-c) --------
+
+    # where c = 2*np.dot(np.dot(inv(a + eye), q), aHI_inv)
+    # = 2*(a + eye)^{-1} q (a^H + eye)^{-1}
+    # and with q Hermitian
+    # consider x = (a + eye)^{-1} q (a^H + eye)^{-1}
+    # this can be done in two linear solving steps:
+    # 1. consider y = q (a^H + eye)^{-1}
+    #    or y (a^H + eye) = q
+    #    or (a^H + eye)^H y^H = q^H
+    #    or (a + eye) y^H = q
+    # 2. Then consider x = (a + eye)^{-1} y
+    #    or (a + eye) x = y
 
     # Solve [conj(a) + I] tmp' = q (result stored in q)
+    # For: y = q (a^H + eye)^{-1} => (a + eye) y^H = q
     lapack.{{prefix}}getrs("N", &n, &n, &capI[0,0], &n, &ipiv[0,0],
                                         q, &n, &info)
 
     if not info == 0:
         raise np.linalg.LinAlgError('LU solver error.')
 
-    # Replace the result (stored in q) with its transpose
+    # Replace the result (stored in q) with its (conjugate) transpose
     for j in range(1, n):
         for i in range(j):
             scale = q[i + j*n]
             q[i + j*n] = q[j + i*n]
             q[j + i*n] = scale
 
-    # Solve [a - I] tmp = q
-    lapack.{{prefix}}getrf(&n, &n, &apI[0,0], &n, &ipiv[0,0], &info)
+    {{if combined_prefix == 'z'}}
+    for i in range(n2):
+        q[i] = q[i] - q[i].imag * 2.0j
+    {{endif}}
 
-    if not info == 0:
-        raise np.linalg.LinAlgError('LU decomposition error.')
-
-    lapack.{{prefix}}getrs("N", &n, &n, &apI[0,0], &n, &ipiv[0,0],
+    lapack.{{prefix}}getrs("N", &n, &n, &capI[0,0], &n, &ipiv[0,0],
                                         q, &n, &info)
 
     if not info == 0:
         raise np.linalg.LinAlgError('LU solver error.')
 
+    # q -> -2.0 * q
     blas.{{prefix}}scal(&n2, &delta, q, &inc)
+
+    # - Solve continuous time Lyapunov --------
 
     # Now solve the continuous time Lyapunov equation (AX + XA^H = Q), on the
     # transformed inputs ...
@@ -229,6 +251,11 @@ cdef int _{{prefix}}solve_discrete_lyapunov({{cython_type}} * a, {{cython_type}}
     # Compute the real Schur decomposition of a (unordered)
     # TODO compute the optimal lwork rather than always using 3*n
     {{if combined_prefix == 'd'}}
+    # a is now the Schur form of A; (r)
+    # u is now the unitary Schur transformation matrix for A; (u)
+    # also we have:
+    # a; (s)
+    # u; (v)
     lapack.{{prefix}}gees("V", "N", select, &n,
                           a, &n,
                           &sdim,
@@ -282,5 +309,11 @@ cdef int _{{prefix}}solve_discrete_lyapunov({{cython_type}} * a, {{cython_type}}
                         &alpha, &u[0,0], &n,
                                 &capI[0,0], &n,
                         &beta, q, &n)
+
+    # TODO why is this necessary?
+    {{if combined_prefix == 'z'}}
+    for i in range(n2):
+        q[i] = q[i] - q[i].imag * 2.0j
+    {{endif}}
 
 {{endfor}}
