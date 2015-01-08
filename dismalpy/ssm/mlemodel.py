@@ -17,6 +17,7 @@ from .simulation_smoother import SimulationSmoother, SimulationSmoothResults
 import statsmodels.tsa.base.tsa_model as tsbase
 from statsmodels.tools.numdiff import approx_hess_cs, approx_fprime_cs
 from statsmodels.tools.decorators import cache_readonly, resettable_cache
+from statsmodels.tools.eval_measures import aic, bic, hqic
 
 class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter, Representation, tsbase.TimeSeriesModel):
     """
@@ -579,11 +580,13 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
 
     @cache_readonly
     def aic(self):
-        return -2*self.llf + 2*self.params.shape[0]
+        # return -2*self.llf + 2*self.params.shape[0]
+        return aic(self.llf, self.nobs, self.params.shape[0])
 
     @cache_readonly
     def bic(self):
-        return -2*self.llf + self.params.shape[0]*np.log(self.nobs)
+        # return -2*self.llf + self.params.shape[0]*np.log(self.nobs)
+        return bic(self.llf, self.nobs, self.params.shape[0])
 
     @cache_readonly
     def bse(self):
@@ -613,7 +616,8 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
 
     @cache_readonly
     def hqic(self):
-        return -2*self.llf + 2*np.log(np.log(self.nobs))*self.params.shape[0]
+        # return -2*self.llf + 2*np.log(np.log(self.nobs))*self.params.shape[0]
+        return hqic(self.llf, self.nobs, self.params.shape[0])
 
     @cache_readonly
     def llf(self):
