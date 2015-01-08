@@ -299,9 +299,9 @@ class KalmanFilter(Representation):
                                copy=True)
         # Otherwise update the results object
         else:
-            # Update the model features if we had to recreate the statespace
-            if create_statespace:
-                results.update_representation(self)
+            # Update the model features; unless we had to recreate the
+            # statespace, only update the filter options
+            results.update_representation(self, only_options=not create_statespace)
             results.update_filter(kfilter)
 
         return results
@@ -448,6 +448,11 @@ class FilterResults(FrozenRepresentation):
         'collapsed_forecasts_error', 'collapsed_forecasts_error_cov',
     ]
 
+    _filter_options = (
+        KalmanFilter.filter_methods + KalmanFilter.stability_methods +
+        KalmanFilter.inversion_methods + KalmanFilter.memory_options
+    )
+
     _attributes = FrozenRepresentation._model_attributes + _filter_attributes
 
     def __init__(self, model):
@@ -456,6 +461,14 @@ class FilterResults(FrozenRepresentation):
         # Setup caches for uninitialized objects
         self._kalman_gain = None
         self._standardized_forecasts_error = None
+
+    def update_representation(self, model, only_options=False):
+        if not only_options:
+            super(FilterResults, self).update_representation(model)
+
+        # Save the options as boolean variables
+        for name in self._filter_options:
+            setattr(self, name, getattr(model, name, None))
 
     def update_filter(self, kalman_filter):
         # State initialization
@@ -514,7 +527,7 @@ class FilterResults(FrozenRepresentation):
         self.collapsed_forecasts = None
         self.collapsed_forecasts_error = None
         self.collapsed_forecasts_error_cov = None
-        if self.filter_method & FILTER_COLLAPSED:
+        if self.filter_collapsed:
             # Copy the provided arrays (which are from the collapsed dataset)
             # into new variables
             self.collapsed_forecasts = self.forecasts[:self.k_states,:]
@@ -535,8 +548,7 @@ class FilterResults(FrozenRepresentation):
         # Kalman filter implements observations that are either partly or
         # completely missing)
         # Construct the predictions, forecasts
-        if not (self.conserve_memory & MEMORY_NO_FORECAST or
-                self.conserve_memory & MEMORY_NO_PREDICTED):
+        if not (self.memory_no_forecast or self.memory_no_predicted):
             for t in range(self.nobs):
                 design_t = 0 if self.design.shape[2] == 1 else t
                 obs_cov_t = 0 if self.obs_cov.shape[2] == 1 else t
@@ -575,7 +587,7 @@ class FilterResults(FrozenRepresentation):
                 # In the collapsed case, everything just needs to be rebuilt
                 # for the original observed data, since the Kalman filter
                 # produced these values for the collapsed data.
-                elif self.filter_method & FILTER_COLLAPSED:
+                elif self.filter_collapsed:
                     self.forecasts[:, t] = np.dot(
                         self.design[:, :, design_t], self.predicted_state[:, t]
                     ) + self.obs_intercept[:, obs_intercept_t]
@@ -642,8 +654,7 @@ class FilterResults(FrozenRepresentation):
         data for the number of periods desired to obtain the predicted states.
         """
         # Cannot predict if we do not have appropriate arrays
-        if (self.conserve_memory & MEMORY_NO_FORECAST or
-           self.conserve_memory & MEMORY_NO_PREDICTED):
+        if self.memory_no_forecast or self.memory_no_predicted:
             raise ValueError('Predict is not possible if memory conservation'
                              ' has been used to avoid storing forecasts or'
                              ' predicted values.')

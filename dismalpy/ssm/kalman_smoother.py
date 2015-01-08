@@ -148,9 +148,9 @@ class KalmanSmoother(KalmanFilter):
         smoother()
 
         # Update the results object
-        # Update the model features if we had to recreate the statespace
-        if create_statespace:
-            results.update_representation(self)
+        # Update the model features; unless we had to recreate the
+        # statespace, only update the filter options
+        results.update_representation(self, only_options=not create_statespace)
         if new_results or create_filter:
             results.update_filter(kfilter)
         results.update_smoother(smoother)
@@ -299,43 +299,54 @@ class SmootherResults(FilterResults):
         'smoothed_state_disturbance_cov'
     ]
 
+    _smoother_options = KalmanSmoother.smoother_outputs
+
     _attributes = FilterResults._model_attributes + _smoother_attributes
+
+    def update_representation(self, model, only_options=False):
+        super(SmootherResults, self).update_representation(model, only_options)
+
+        # Save the options as boolean variables
+        for name in self._smoother_options:
+            setattr(self, name, getattr(model, name, None))
 
     def update_smoother(self, smoother):
         # Copy the appropriate output
         attributes = []
 
-        if smoother.smoother_output & (SMOOTHER_STATE | SMOOTHER_DISTURBANCE):
+        # Since update_representation will already have been called, we can
+        # use the boolean options smoother_* and know they match the smoother
+        # itself
+        if self.smoother_state or self.smoother_disturbance:
             attributes.append('scaled_smoothed_estimator')
-        if smoother.smoother_output & (SMOOTHER_STATE_COV | SMOOTHER_DISTURBANCE_COV):
+        if self.smoother_state_cov or self.smoother_disturbance_cov:
             attributes.append('scaled_smoothed_estimator_cov')
-        if smoother.smoother_output & SMOOTHER_STATE:
+        if self.smoother_state:
             attributes.append('smoothed_state')
-        if smoother.smoother_output & SMOOTHER_STATE_COV:
+        if self.smoother_state_cov:
             attributes.append('smoothed_state_cov')
-        if smoother.smoother_output & SMOOTHER_DISTURBANCE:
+        if self.smoother_disturbance:
             attributes += [
                 'smoothing_error',
                 'smoothed_measurement_disturbance',
                 'smoothed_state_disturbance'
             ]
-        if smoother.smoother_output & SMOOTHER_DISTURBANCE_COV:
+        if self.smoother_disturbance_cov:
             attributes += [
                 'smoothed_measurement_disturbance_cov',
                 'smoothed_state_disturbance_cov'
             ]
 
         for name in self._smoother_attributes:
-            if name in attributes:
+            if name == 'smoother_output':
+                pass
+            elif name in attributes:
                 setattr(
                     self, name,
                     np.array(getattr(smoother, name, None), copy=True)
                 )
             else:
                 setattr(self, name, None)
-
-        # Smoother output (note that this was unset just above)
-        self.smoother_output = smoother.smoother_output
 
         # Adjustments
 

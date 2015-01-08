@@ -111,6 +111,9 @@ class TestClark1989(ssm.Model):
         # used the univariate Kalman filtering approach (i.e. that the flag
         # being set actually caused the filter to not use the conventional
         # filter)
+        assert not self.conventional_results.filter_univariate
+        assert self.univariate_results.filter_univariate
+
         assert_almost_equal(
             self.conventional_results.forecasts_error_cov[1,1,0],
             143.03724478030821, 9

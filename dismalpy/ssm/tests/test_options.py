@@ -65,6 +65,8 @@ class Options(Model):
 
 class TestOptions(Options):
     def test_filter_methods(self):
+        # TODO test FilterResults for accurante boolean versions of options
+
         # Clear the filter method
         self.filter_method = 0
 
@@ -191,6 +193,8 @@ class TestOptions(Options):
         assert_equal(self.conserve_memory, 0)
 
     def test_smoother_outputs(self):
+        # TODO test SmootherResults for accurante boolean versions of options
+
         # Clear the smoother output
         self.smoother_output = 0
 
@@ -229,5 +233,8 @@ class TestOptions(Options):
         assert_equal(self.smoother_output, 0)
 
     def test_simulation_outputs(self):
+        # TODO test changing simulation options in SimulationSmoothResults
+        # instance
+
         assert_equal(self.get_simulation_output(SIMULATION_STATE), SIMULATION_STATE)
-        assert_equal(self.get_simulation_output(simulation_state=True, simulation_disturbance=True), SIMULATION_ALL)
+        assert_equal(self.get_simulation_output(simulate_state=True, simulate_disturbance=True), SIMULATION_ALL)

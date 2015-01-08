@@ -61,6 +61,9 @@ class Trivariate(ssm.Model):
         # filtering approach (i.e. that the flag being set actually caused the
         # filter to not use the conventional filter)
 
+        assert not self.results_a.filter_collapsed
+        assert self.results_b.filter_collapsed
+
         assert self.results_a.collapsed_forecasts is None
         assert self.results_b.collapsed_forecasts is not None
 

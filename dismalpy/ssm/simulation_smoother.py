@@ -23,7 +23,7 @@ class SimulationSmoother(KalmanSmoother):
     """
 
     simulation_outputs = [
-        'simulation_state', 'simulation_disturbance', 'simulation_all'
+        'simulate_state', 'simulate_disturbance', 'simulate_all'
     ]
     
     def __init__(self, *args, **kwargs):
@@ -37,11 +37,11 @@ class SimulationSmoother(KalmanSmoother):
         if simulation_output is None:
             simulation_output = 0
 
-            if 'simulation_state' in kwargs and kwargs['simulation_state']:
+            if 'simulate_state' in kwargs and kwargs['simulate_state']:
                 simulation_output |= SIMULATION_STATE
-            if 'simulation_disturbance' in kwargs and kwargs['simulation_disturbance']:
+            if 'simulate_disturbance' in kwargs and kwargs['simulate_disturbance']:
                 simulation_output |= SIMULATION_DISTURBANCE
-            if 'simulation_all' in kwargs and kwargs['simulation_all']:
+            if 'simulate_all' in kwargs and kwargs['simulate_all']:
                 simulation_output |= SIMULATION_ALL
 
             # If no information was in kwargs, set simulation output to be the
@@ -128,6 +128,36 @@ class SimulationSmoothResults(object):
     @simulation_output.setter
     def simulation_output(self, value):
         self._simulation_smoother.simulation_output = value
+
+    @property
+    def simulate_state(self):
+        return self.simulation_output & SIMULATION_STATE
+    @simulate_state.setter
+    def simulate_state(self, value):
+        if bool(value):
+            self.simulation_output = self.simulation_output | SIMULATION_STATE
+        else:
+            self.simulation_output = self.simulation_output & ~SIMULATION_STATE
+
+    @property
+    def simulate_disturbance(self):
+        return self.simulation_output & SIMULATION_DISTURBANCE
+    @simulate_disturbance.setter
+    def simulate_disturbance(self, value):
+        if bool(value):
+            self.simulation_output = self.simulation_output | SIMULATION_DISTURBANCE
+        else:
+            self.simulation_output = self.simulation_output & ~SIMULATION_DISTURBANCE
+
+    @property
+    def simulate_all(self):
+        return self.simulation_output & SIMULATION_ALL
+    @simulate_all.setter
+    def simulate_all(self, value):
+        if bool(value):
+            self.simulation_output = self.simulation_output | SIMULATION_ALL
+        else:
+            self.simulation_output = self.simulation_output & ~SIMULATION_ALL
 
     @property
     def generated_obs(self):
