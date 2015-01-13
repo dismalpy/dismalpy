@@ -259,8 +259,7 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter, Representation,
         else:
             return loglike
 
-    def score(self, params, initial_state=None, initial_state_cov=None,
-              *args, **kwargs):
+    def score(self, params, *args, **kwargs):
         """
         Compute the score function at params.
 
@@ -286,6 +285,8 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter, Representation,
         if nargs < 3:
             kwargs.setdefault('set_params', False)
 
+        initial_state = kwargs.get('initial_state', None)
+        initial_state_cov = kwargs.get('initial_state_cov', None)
         if initial_state is not None and initial_state_cov is not None:
             # If initialization is stationary, we don't want to recalculate the
             # initial_state_cov for each new set of parameters here
@@ -307,8 +308,7 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter, Representation,
 
         return score
 
-    def hessian(self, params, initial_state=None, initial_state_cov=None,
-                *args, **kwargs):
+    def hessian(self, params, *args, **kwargs):
         """
         Hessian matrix of the likelihood function, evaluated at the given
         parameters.
@@ -335,6 +335,8 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter, Representation,
         if nargs < 3:
             kwargs.setdefault('set_params', False)
 
+        initial_state = kwargs.get('initial_state', None)
+        initial_state_cov = kwargs.get('initial_state_cov', None)
         if initial_state is not None and initial_state_cov is not None:
             # If initialization is stationary, we don't want to recalculate the
             # initial_state_cov for each new set of parameters here
