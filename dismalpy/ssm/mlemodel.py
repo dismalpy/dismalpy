@@ -596,12 +596,26 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
 
     @cache_readonly
     def cov_params(self):
+        hessian = self.model.hessian(
+            self._params, set_params=False, transformed=True,
+            initial_state=self.initial_state,
+            initial_state_cov=self.initial_state_cov
+        )
+
+        # Reset the matrices to the saved parameters (since they were
+        # overwritten in the hessian call)
+        self.model.update(self.model.params)
+
+        return -np.linalg.inv(hessian*self.nobs)
+
+    @cache_readonly
+    def cov_params_delta(self):
         # Uses Delta method (method of propagation of errors)
 
         unconstrained = self.model.untransform_params(self._params)
         jacobian = self.model.transform_jacobian(unconstrained)
         hessian = self.model.hessian(
-            unconstrained, set_params=False,
+            self._params, set_params=False,
             initial_state=self.initial_state,
             initial_state_cov=self.initial_state_cov
         )
