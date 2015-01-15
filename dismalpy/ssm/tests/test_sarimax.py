@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import os
 
+import warnings
 from dismalpy.ssm import sarimax, tools
 from dismalpy.ssm.tests import results_sarimax
 from statsmodels.tools import add_constant
@@ -1096,7 +1097,11 @@ def test_simple_time_varying():
     endog = np.arange(100)*1.0
     exog = 2*endog
     mod = sarimax.SARIMAX(endog, exog=exog, order=(0,0,0), time_varying_regression=True, mle_regression=False)
-    res = mod.fit(disp=-1)
+
+    # Ignore the warning that MLE doesn't converge
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        res = mod.fit(disp=-1)
 
     # Test that the estimated variances of the errors are essentially zero
     assert_almost_equal(res.params, [0,0], 9)
