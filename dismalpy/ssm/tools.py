@@ -172,7 +172,7 @@ def concat(series, axis=0, allow_mix=False):
         Whether or not to allow a mix of pandas and non-pandas objects. Default
         is False. If true, the returned object is an ndarray, and additional
         pandas metadata (e.g. column names, indices, etc) is lost.
-    
+
     Returns
     -------
     concatenated : array or pd.DataFrame
@@ -190,6 +190,7 @@ def concat(series, axis=0, allow_mix=False):
                          ' non-Pandas objects with `allow_mix=False`.')
 
     return concatenated
+
 
 def is_invertible(polynomial, threshold=1.):
     """

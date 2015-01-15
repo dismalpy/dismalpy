@@ -45,6 +45,7 @@ MEMORY_CONSERVE = (
     MEMORY_NO_LIKELIHOOD | MEMORY_NO_GAIN | MEMORY_NO_SMOOTHING
 )
 
+
 class KalmanFilter(Representation):
     r"""
     State space representation of a time series process, with Kalman filter
@@ -329,6 +330,7 @@ class KalmanFilter(Representation):
         kwargs['results'] = 'loglikelihood'
         return np.sum(self.filter(*args, **kwargs)[loglikelihood_burn:])
 
+
 class FilterResults(FrozenRepresentation):
     """
     Results from applying the Kalman filter to a state space model.
@@ -442,7 +444,7 @@ class FilterResults(FrozenRepresentation):
         'filter_method', 'inversion_method', 'stability_method',
         'conserve_memory', 'tolerance', 'loglikelihood_burn', 'converged',
         'period_converged', 'filtered_state', 'filtered_state_cov',
-        'predicted_state', 'predicted_state_cov', 'kalman_gain','tmp1', 'tmp2',
+        'predicted_state', 'predicted_state_cov', 'kalman_gain', 'tmp1', 'tmp2',
         'tmp3', 'tmp4', 'forecasts', 'forecasts_error', 'forecasts_error_cov',
         'loglikelihood', 'collapsed_forecasts',
         'collapsed_forecasts_error', 'collapsed_forecasts_error_cov',
@@ -530,12 +532,12 @@ class FilterResults(FrozenRepresentation):
         if self.filter_collapsed:
             # Copy the provided arrays (which are from the collapsed dataset)
             # into new variables
-            self.collapsed_forecasts = self.forecasts[:self.k_states,:]
+            self.collapsed_forecasts = self.forecasts[:self.k_states, :]
             self.collapsed_forecasts_error = (
-                self.forecasts_error[:self.k_states,:]
+                self.forecasts_error[:self.k_states, :]
             )
             self.collapsed_forecasts_error_cov = (
-                self.forecasts_error_cov[:self.k_states,:self.k_states,:]
+                self.forecasts_error_cov[:self.k_states, :self.k_states, :]
             )
             # Recreate the original arrays (which should be from the original
             # dataset) in the appropriate dimension
@@ -609,7 +611,7 @@ class FilterResults(FrozenRepresentation):
 
             for t in range(self.forecasts_error_cov.shape[2]):
                 upper, _ = linalg.cho_factor(self.forecasts_error_cov[:, :, t],
-                                         check_finite=False)
+                                             check_finite=False)
                 self._standardized_forecasts_error[:, t] = (
                     linalg.solve_triangular(upper, self.forecasts_error[:, t],
                                             check_finite=False))

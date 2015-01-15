@@ -14,6 +14,7 @@ from .kalman_smoother import KalmanFilter
 from .kalman_smoother import KalmanSmoother, SmootherResults
 from .simulation_smoother import SimulationSmoother, SimulationSmoothResults
 
+
 class Model(model.Model, SimulationSmoother, KalmanSmoother, KalmanFilter, Representation):
     """
     State space model

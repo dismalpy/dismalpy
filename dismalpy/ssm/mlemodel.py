@@ -19,6 +19,7 @@ from statsmodels.tools.numdiff import approx_hess_cs, approx_fprime_cs
 from statsmodels.tools.decorators import cache_readonly, resettable_cache
 from statsmodels.tools.eval_measures import aic, bic, hqic
 
+
 class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter, Representation, tsbase.TimeSeriesModel):
     """
     State space model
@@ -70,7 +71,7 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter, Representation,
         # Base class may allow 1-dim data, whereas we need 2-dim
         if endog.ndim == 1:
             endog.shape = (endog.shape[0], 1)  # this will be C-contiguous
-        
+
         # Base classes data may be either C-ordered or F-ordered - we want it
         # to be C-ordered since it will also be in shape (nobs, k_endog), and
         # then we can just transpose it.
@@ -173,10 +174,10 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter, Representation,
         # maximize the average loglikelihood, by default.
         fargs = (kwargs.get('average_loglike', True), False, False)
         mlefit = super(MLEModel, self).fit(start_params, method=method,
-                                        fargs=fargs,
-                                        maxiter=maxiter,
-                                        full_output=full_output, disp=disp,
-                                        callback=callback, **kwargs)
+                                           fargs=fargs,
+                                           maxiter=maxiter,
+                                           full_output=full_output, disp=disp,
+                                           callback=callback, **kwargs)
 
         # Optionally tune the maximum likelihood estimates using complex step
         # gradient
@@ -185,10 +186,11 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter, Representation,
             del kwargs['epsilon']
             fargs = (kwargs.get('average_loglike', True), False, False)
             mlefit = super(MLEModel, self).fit(mlefit.params, method=method,
-                                            fargs=fargs,
-                                            maxiter=maxiter,
-                                            full_output=full_output, disp=disp,
-                                            callback=callback, **kwargs)
+                                               fargs=fargs,
+                                               maxiter=maxiter,
+                                               full_output=full_output,
+                                               disp=disp, callback=callback,
+                                               **kwargs)
 
         # Constrain the final parameters and update the model to be sure we're
         # using them (in case, for example, the last time update was called
@@ -425,7 +427,7 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter, Representation,
         constrained : array_like
             Array of constrained parameters which may be used in likelihood
             evalation.
-        
+
         Notes
         -----
         This is a noop in the base class, subclasses should override where
@@ -716,7 +718,7 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
                 dynamic = dynamic_start - start
             except KeyError:
                 raise ValueError("Dynamic must be in dates. Got %s | %s" %
-                        (str(dynamic), str(dtdynamic)))
+                                 (str(dynamic), str(dtdynamic)))
 
         # Perform the prediction
         res = super(MLEResults, self).predict(
@@ -805,7 +807,7 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
             d = dates[start]
             sample = ['%02d-%02d-%02d' % (d.month, d.day, d.year)]
             d = dates[-1]
-            sample += ['- ' + '%02d-%02d-%02d' % (d.month, d.day, d.year)]                
+            sample += ['- ' + '%02d-%02d-%02d' % (d.month, d.day, d.year)]
         else:
             sample = [str(start), ' - ' + str(self.model.nobs)]
 
