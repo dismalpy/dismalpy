@@ -615,7 +615,7 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
         unconstrained = self.model.untransform_params(self._params)
         jacobian = self.model.transform_jacobian(unconstrained)
         hessian = self.model.hessian(
-            self._params, set_params=False,
+            unconstrained, set_params=False,
             initial_state=self.initial_state,
             initial_state_cov=self.initial_state_cov
         )
