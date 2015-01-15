@@ -191,7 +191,7 @@ def concat(series, axis=0, allow_mix=False):
 
     return concatenated
 
-def is_invertible(polynomial):
+def is_invertible(polynomial, threshold=1.):
     """
     Determine if a polynomial is invertible.
 
@@ -203,6 +203,8 @@ def is_invertible(polynomial):
         Coefficients of a polynomial, in order of increasing degree.
         For example, `polynomial=[1, -0.5]` corresponds to the polynomial
         :math:`1 - 0.5x` which has root :math:`2`.
+    threshold : number
+        Allowed threshold for `is_invertible` to return True. Default is 1.
 
     Notes
     -----
@@ -256,7 +258,7 @@ def is_invertible(polynomial):
     # Second method:
     # np.all(np.abs(np.roots(np.r_[1, params][::-1])) > 1)
     # Final method:
-    return np.all(np.abs(np.linalg.eigvals(companion_matrix(polynomial))) < 1)
+    return np.all(np.abs(np.linalg.eigvals(companion_matrix(polynomial))) < threshold)
 
 
 def constrain_stationary_univariate(unconstrained):
