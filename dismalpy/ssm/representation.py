@@ -321,22 +321,22 @@ class Representation(object):
         self.initial_variance = kwargs.get('initial_variance', 1e6)
 
     def __len__(self):
-        return self.nobs
+        return self.nobs  # pragma: no cover
 
     def __contains__(self, key):
-        return key in self.shapes.keys()
+        return key in self.shapes.keys()  # pragma: no cover
 
     # def __repr__(self):
     #     pass
 
     def __str__(self):
-        pass
+        pass  # pragma: no cover
 
     def __unicode__(self):
-        pass
+        pass  # pragma: no cover
 
     def __hash__(self):
-        pass
+        pass  # pragma: no cover
 
     def __getitem__(self, key):
         _type = type(key)
