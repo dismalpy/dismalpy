@@ -15,7 +15,8 @@ from .kalman_smoother import KalmanSmoother, SmootherResults
 from .simulation_smoother import SimulationSmoother, SimulationSmoothResults
 
 
-class Model(model.Model, SimulationSmoother, KalmanSmoother, KalmanFilter, Representation):
+class Model(model.Model, SimulationSmoother, KalmanSmoother, KalmanFilter,
+            Representation):
     """
     State space model
 
@@ -34,7 +35,8 @@ class Model(model.Model, SimulationSmoother, KalmanSmoother, KalmanFilter, Repre
 
         # Initialize the Representation
         kwargs['nobs'] = self.nobs
-        SimulationSmoother.__init__(self, self.k_endog, k_states, *args, **kwargs)
+        SimulationSmoother.__init__(self, self.k_endog, k_states,
+                                    *args, **kwargs)
 
     def bind(self, endog):
         # Bind the data using the generic Model

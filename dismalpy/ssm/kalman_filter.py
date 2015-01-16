@@ -96,7 +96,9 @@ class KalmanFilter(Representation):
 
     stability_methods = ['stability_force_symmetry']
 
-    stability_force_symmetry = OptionWrapper('stability_method', STABILITY_FORCE_SYMMETRY)
+    stability_force_symmetry = (
+        OptionWrapper('stability_method', STABILITY_FORCE_SYMMETRY)
+    )
 
     memory_options = [
         'memory_store_all', 'memory_no_forecast', 'memory_no_predicted',
@@ -108,7 +110,9 @@ class KalmanFilter(Representation):
     memory_no_forecast = OptionWrapper('conserve_memory', MEMORY_NO_FORECAST)
     memory_no_predicted = OptionWrapper('conserve_memory', MEMORY_NO_PREDICTED)
     memory_no_filtered = OptionWrapper('conserve_memory', MEMORY_NO_FILTERED)
-    memory_no_likelihood = OptionWrapper('conserve_memory', MEMORY_NO_LIKELIHOOD)
+    memory_no_likelihood = (
+        OptionWrapper('conserve_memory', MEMORY_NO_LIKELIHOOD)
+    )
     memory_no_gain = OptionWrapper('conserve_memory', MEMORY_NO_GAIN)
     memory_no_smoothing = OptionWrapper('conserve_memory', MEMORY_NO_SMOOTHING)
     memory_conserve = OptionWrapper('conserve_memory', MEMORY_CONSERVE)
@@ -194,10 +198,11 @@ class KalmanFilter(Representation):
             )
         # Otherwise, update the filter parameters
         else:
-            self._kalman_filters[prefix].set_filter_method(filter_method, False)
-            self._kalman_filters[prefix].inversion_method = inversion_method
-            self._kalman_filters[prefix].stability_method = stability_method
-            self._kalman_filters[prefix].tolerance = tolerance
+            kalman_filter = self._kalman_filters[prefix]
+            kalman_filter.set_filter_method(filter_method, False)
+            kalman_filter.inversion_method = inversion_method
+            kalman_filter.stability_method = stability_method
+            kalman_filter.tolerance = tolerance
             # conserve_memory and loglikelihood_burn changes always lead to
             # re-created filters
 
@@ -296,13 +301,16 @@ class KalmanFilter(Representation):
 
         # We may just want the loglikelihood
         if results == 'loglikelihood':
-            results = np.array(self._kalman_filters[prefix].loglikelihood,
-                               copy=True)
+            results = np.array(
+                self._kalman_filters[prefix].loglikelihood, copy=True
+            )
         # Otherwise update the results object
         else:
             # Update the model features; unless we had to recreate the
             # statespace, only update the filter options
-            results.update_representation(self, only_options=not create_statespace)
+            results.update_representation(
+                self, only_options=not create_statespace
+            )
             results.update_filter(kfilter)
 
         return results
@@ -444,9 +452,9 @@ class FilterResults(FrozenRepresentation):
         'filter_method', 'inversion_method', 'stability_method',
         'conserve_memory', 'tolerance', 'loglikelihood_burn', 'converged',
         'period_converged', 'filtered_state', 'filtered_state_cov',
-        'predicted_state', 'predicted_state_cov', 'kalman_gain', 'tmp1', 'tmp2',
-        'tmp3', 'tmp4', 'forecasts', 'forecasts_error', 'forecasts_error_cov',
-        'loglikelihood', 'collapsed_forecasts',
+        'predicted_state', 'predicted_state_cov', 'kalman_gain', 'tmp1',
+        'tmp2', 'tmp3', 'tmp4', 'forecasts', 'forecasts_error',
+        'forecasts_error_cov', 'loglikelihood', 'collapsed_forecasts',
         'collapsed_forecasts_error', 'collapsed_forecasts_error_cov',
     ]
 
@@ -474,8 +482,9 @@ class FilterResults(FrozenRepresentation):
 
     def update_filter(self, kalman_filter):
         # State initialization
-        self.initial_state = np.array(kalman_filter.model.initial_state,
-                                      copy=True)
+        self.initial_state = np.array(
+            kalman_filter.model.initial_state, copy=True
+        )
         self.initial_state_cov = np.array(
             kalman_filter.model.initial_state_cov, copy=True
         )
@@ -493,8 +502,12 @@ class FilterResults(FrozenRepresentation):
         self.period_converged = kalman_filter.period_converged
 
         self.filtered_state = np.array(kalman_filter.filtered_state, copy=True)
-        self.filtered_state_cov = np.array(kalman_filter.filtered_state_cov, copy=True)
-        self.predicted_state = np.array(kalman_filter.predicted_state, copy=True)
+        self.filtered_state_cov = np.array(
+            kalman_filter.filtered_state_cov, copy=True
+        )
+        self.predicted_state = np.array(
+            kalman_filter.predicted_state, copy=True
+        )
         self.predicted_state_cov = np.array(
             kalman_filter.predicted_state_cov, copy=True
         )
@@ -508,8 +521,12 @@ class FilterResults(FrozenRepresentation):
         # Note: use forecasts rather than forecast, so as not to interfer
         # with the `forecast` methods in subclasses
         self.forecasts = np.array(kalman_filter.forecast, copy=True)
-        self.forecasts_error = np.array(kalman_filter.forecast_error, copy=True)
-        self.forecasts_error_cov = np.array(kalman_filter.forecast_error_cov, copy=True)
+        self.forecasts_error = np.array(
+            kalman_filter.forecast_error, copy=True
+        )
+        self.forecasts_error_cov = np.array(
+            kalman_filter.forecast_error_cov, copy=True
+        )
         self.loglikelihood = np.array(kalman_filter.loglikelihood, copy=True)
 
         # If there was missing data, save the original values from the Kalman
@@ -523,7 +540,9 @@ class FilterResults(FrozenRepresentation):
             # into new variables
             self.missing_forecasts = np.copy(self.forecasts)
             self.missing_forecasts_error = np.copy(self.forecasts_error)
-            self.missing_forecasts_error_cov = np.copy(self.forecasts_error_cov)
+            self.missing_forecasts_error_cov = (
+                np.copy(self.forecasts_error_cov)
+            )
 
         # Save the collapsed values
         self.collapsed_forecasts = None
@@ -543,7 +562,9 @@ class FilterResults(FrozenRepresentation):
             # dataset) in the appropriate dimension
             self.forecasts = np.zeros((self.k_endog, self.nobs))
             self.forecasts_error = np.zeros((self.k_endog, self.nobs))
-            self.forecasts_error_cov = np.zeros((self.k_endog, self.k_endog, self.nobs))
+            self.forecasts_error_cov = (
+                np.zeros((self.k_endog, self.k_endog, self.nobs))
+            )
 
         # Fill in missing values in the forecast, forecast error, and
         # forecast error covariance matrix (this is required due to how the
@@ -594,7 +615,9 @@ class FilterResults(FrozenRepresentation):
                         self.design[:, :, design_t], self.predicted_state[:, t]
                     ) + self.obs_intercept[:, obs_intercept_t]
 
-                    self.forecasts_error[:, t] = self.endog[:, t] - self.forecasts[:, t]
+                    self.forecasts_error[:, t] = (
+                        self.endog[:, t] - self.forecasts[:, t]
+                    )
 
                     self.forecasts_error_cov[:, :, t] = np.dot(
                         np.dot(self.design[:, :, design_t],
@@ -719,8 +742,9 @@ class FilterResults(FrozenRepresentation):
                 dynamic = None
 
             # Get the total size of the desired dynamic forecasting component
-            # Note: the first `dynamic` periods of prediction are actually *not*
-            # dynamic, because dynamic prediction begins at observation `dynamic`.
+            # Note: the first `dynamic` periods of prediction are actually
+            # *not* dynamic, because dynamic prediction begins at observation
+            # `dynamic`.
             if dynamic is not None:
                 ndynamic = max(0, min(end, self.nobs) - dynamic)
 
@@ -830,7 +854,7 @@ class FilterResults(FrozenRepresentation):
             if t < nstatic:
                 next(kfilter)
             # Perform dynamic prediction
-            elif t < nstatic+ndynamic:
+            elif t < nstatic + ndynamic:
                 design_t = 0 if model.design.shape[2] == 1 else t
                 obs_intercept_t = 0 if model.obs_intercept.shape[1] == 1 else t
 

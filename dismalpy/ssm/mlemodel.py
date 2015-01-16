@@ -20,7 +20,8 @@ from statsmodels.tools.decorators import cache_readonly, resettable_cache
 from statsmodels.tools.eval_measures import aic, bic, hqic
 
 
-class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter, Representation, tsbase.TimeSeriesModel):
+class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
+               Representation, tsbase.TimeSeriesModel):
     """
     State space model
 
@@ -54,7 +55,7 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter, Representation,
 
     See Also
     --------
-    dismalpy.ssm.representation.Representation : for additional attributes and methods
+    dismalpy.ssm.representation.Representation
     """
     def __init__(self, endog, k_states, exog=None, dates=None, freq=None,
                  *args, **kwargs):
@@ -299,7 +300,8 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter, Representation,
 
             self.initialize_known(initial_state, initial_state_cov)
 
-        score = approx_fprime_cs(params, self.loglike, epsilon=1e-9, args=args, kwargs=kwargs)
+        score = approx_fprime_cs(params, self.loglike, epsilon=1e-9, args=args,
+                                 kwargs=kwargs)
 
         if initial_state is not None and initial_state_cov is not None:
             # Reset the initialization
@@ -349,7 +351,8 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter, Representation,
 
             self.initialize_known(initial_state, initial_state_cov)
 
-        hessian = approx_hess_cs(params, self.loglike, epsilon=1e-9, args=args, kwargs=kwargs)
+        hessian = approx_hess_cs(params, self.loglike, epsilon=1e-9, args=args,
+                                 kwargs=kwargs)
 
         if initial_state is not None and initial_state_cov is not None:
             # Reset the initialization
@@ -519,7 +522,8 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
     bic : float
         Bayes Information Criterion
     bse : array
-        The standard errors of the parameters. Computed using the numerical Hessian.
+        The standard errors of the parameters. Computed using the numerical
+        Hessian.
     cov_params : array
         The variance / covariance matrix. Computed using the numerical Hessian.
     hqic : array
@@ -772,8 +776,8 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
             Array of indices for forecasts; either integers or dates, depending
             on the type of `endog`.
         """
-        return self.predict(start=self.nobs, end=self.nobs+steps-1, alpha=alpha,
-                            *args, **kwargs)
+        return self.predict(start=self.nobs, end=self.nobs+steps-1,
+                            alpha=alpha, *args, **kwargs)
 
     def summary(self, alpha=.05, start=None, *args, **kwargs):
         """
