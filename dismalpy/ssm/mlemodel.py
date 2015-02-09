@@ -178,7 +178,8 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
                                            fargs=fargs,
                                            maxiter=maxiter,
                                            full_output=full_output, disp=disp,
-                                           callback=callback, **kwargs)
+                                           callback=callback,
+                                           skip_hessian=True, **kwargs)
 
         # Optionally tune the maximum likelihood estimates using complex step
         # gradient
@@ -191,7 +192,7 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
                                                maxiter=maxiter,
                                                full_output=full_output,
                                                disp=disp, callback=callback,
-                                               **kwargs)
+                                               skip_hessian=True, **kwargs)
 
         # Constrain the final parameters and update the model to be sure we're
         # using them (in case, for example, the last time update was called
