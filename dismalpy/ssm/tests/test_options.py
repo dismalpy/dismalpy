@@ -54,187 +54,197 @@ from dismalpy.ssm.model import Model
 from numpy.testing import assert_equal
 
 
-class Options(Model):
+class Options(object):
     def __init__(self, *args, **kwargs):
 
         # Dummy data
         endog = np.arange(10)
         k_states = 1
 
-        super(Options, self).__init__(endog, k_states, *args, **kwargs)
+        self.model = Model(endog, k_states, *args, **kwargs)
 
 class TestOptions(Options):
     def test_filter_methods(self):
-        # TODO test FilterResults for accurante boolean versions of options
+        model = self.model
+
+        # TODO test FilterResults for accurate boolean versions of options
 
         # Clear the filter method
-        self.filter_method = 0
+        model.filter_method = 0
 
         # Try setting via boolean
-        self.filter_conventional = True
-        assert_equal(self.filter_method, FILTER_CONVENTIONAL)
-        self.filter_collapsed = True
-        assert_equal(self.filter_method, FILTER_CONVENTIONAL | FILTER_COLLAPSED)
-        self.filter_conventional = False
-        assert_equal(self.filter_method, FILTER_COLLAPSED)
+        model.filter_conventional = True
+        assert_equal(model.filter_method, FILTER_CONVENTIONAL)
+        model.filter_collapsed = True
+        assert_equal(model.filter_method, FILTER_CONVENTIONAL | FILTER_COLLAPSED)
+        model.filter_conventional = False
+        assert_equal(model.filter_method, FILTER_COLLAPSED)
 
         # Try setting directly via method
-        self.set_filter_method(FILTER_AUGMENTED)
-        assert_equal(self.filter_method, FILTER_AUGMENTED)
+        model.set_filter_method(FILTER_AUGMENTED)
+        assert_equal(model.filter_method, FILTER_AUGMENTED)
 
         # Try setting via boolean via method
-        self.set_filter_method(filter_conventional=True, filter_augmented=False)
-        assert_equal(self.filter_method, FILTER_CONVENTIONAL)
+        model.set_filter_method(filter_conventional=True, filter_augmented=False)
+        assert_equal(model.filter_method, FILTER_CONVENTIONAL)
 
         # Try setting and unsetting all
-        self.filter_method = 0
-        for name in self.filter_methods:
-            setattr(self, name, True)
+        model.filter_method = 0
+        for name in model.filter_methods:
+            setattr(model, name, True)
         assert_equal(
-            self.filter_method,
+            model.filter_method,
             FILTER_CONVENTIONAL | FILTER_EXACT_INITIAL | FILTER_AUGMENTED |
             FILTER_SQUARE_ROOT | FILTER_UNIVARIATE | FILTER_COLLAPSED |
             FILTER_EXTENDED | FILTER_UNSCENTED
         )
-        for name in self.filter_methods:
-            setattr(self, name, False)
-        assert_equal(self.filter_method, 0)
+        for name in model.filter_methods:
+            setattr(model, name, False)
+        assert_equal(model.filter_method, 0)
 
     def test_inversion_methods(self):
+        model = self.model
+
         # Clear the inversion method
-        self.inversion_method = 0
+        model.inversion_method = 0
 
         # Try setting via boolean
-        self.invert_univariate = True
-        assert_equal(self.inversion_method, INVERT_UNIVARIATE)
-        self.invert_cholesky = True
-        assert_equal(self.inversion_method, INVERT_UNIVARIATE | INVERT_CHOLESKY)
-        self.invert_univariate = False
-        assert_equal(self.inversion_method, INVERT_CHOLESKY)
+        model.invert_univariate = True
+        assert_equal(model.inversion_method, INVERT_UNIVARIATE)
+        model.invert_cholesky = True
+        assert_equal(model.inversion_method, INVERT_UNIVARIATE | INVERT_CHOLESKY)
+        model.invert_univariate = False
+        assert_equal(model.inversion_method, INVERT_CHOLESKY)
 
         # Try setting directly via method
-        self.set_inversion_method(INVERT_LU)
-        assert_equal(self.inversion_method, INVERT_LU)
+        model.set_inversion_method(INVERT_LU)
+        assert_equal(model.inversion_method, INVERT_LU)
 
         # Try setting via boolean via method
-        self.set_inversion_method(invert_cholesky=True, invert_univariate=True, invert_lu=False)
-        assert_equal(self.inversion_method, INVERT_UNIVARIATE | INVERT_CHOLESKY)
+        model.set_inversion_method(invert_cholesky=True, invert_univariate=True, invert_lu=False)
+        assert_equal(model.inversion_method, INVERT_UNIVARIATE | INVERT_CHOLESKY)
 
         # Try setting and unsetting all
-        self.inversion_method = 0
-        for name in self.inversion_methods:
-            setattr(self, name, True)
+        model.inversion_method = 0
+        for name in model.inversion_methods:
+            setattr(model, name, True)
         assert_equal(
-            self.inversion_method,
+            model.inversion_method,
             INVERT_UNIVARIATE | SOLVE_LU | INVERT_LU | SOLVE_CHOLESKY |
             INVERT_CHOLESKY | INVERT_NUMPY
         )
-        for name in self.inversion_methods:
-            setattr(self, name, False)
-        assert_equal(self.inversion_method, 0)
+        for name in model.inversion_methods:
+            setattr(model, name, False)
+        assert_equal(model.inversion_method, 0)
 
     def test_stability_methods(self):
+        model = self.model
+
         # Clear the stability method
-        self.stability_method = 0
+        model.stability_method = 0
 
         # Try setting via boolean
-        self.stability_force_symmetry = True
-        assert_equal(self.stability_method, STABILITY_FORCE_SYMMETRY)
-        self.stability_force_symmetry = False
-        assert_equal(self.stability_method, 0)
+        model.stability_force_symmetry = True
+        assert_equal(model.stability_method, STABILITY_FORCE_SYMMETRY)
+        model.stability_force_symmetry = False
+        assert_equal(model.stability_method, 0)
 
         # Try setting directly via method
-        self.stability_method = 0
-        self.set_stability_method(STABILITY_FORCE_SYMMETRY)
-        assert_equal(self.stability_method, STABILITY_FORCE_SYMMETRY)
+        model.stability_method = 0
+        model.set_stability_method(STABILITY_FORCE_SYMMETRY)
+        assert_equal(model.stability_method, STABILITY_FORCE_SYMMETRY)
 
         # Try setting via boolean via method
-        self.stability_method = 0
-        self.set_stability_method(stability_method=True)
-        assert_equal(self.stability_method, STABILITY_FORCE_SYMMETRY)
+        model.stability_method = 0
+        model.set_stability_method(stability_method=True)
+        assert_equal(model.stability_method, STABILITY_FORCE_SYMMETRY)
 
 
     def test_conserve_memory(self):
+        model = self.model
+
         # Clear the filter method
-        self.conserve_memory = MEMORY_STORE_ALL
+        model.conserve_memory = MEMORY_STORE_ALL
 
         # Try setting via boolean
-        self.memory_no_forecast = True
-        assert_equal(self.conserve_memory, MEMORY_NO_FORECAST)
-        self.memory_no_filtered = True
-        assert_equal(self.conserve_memory, MEMORY_NO_FORECAST | MEMORY_NO_FILTERED)
-        self.memory_no_forecast = False
-        assert_equal(self.conserve_memory, MEMORY_NO_FILTERED)
+        model.memory_no_forecast = True
+        assert_equal(model.conserve_memory, MEMORY_NO_FORECAST)
+        model.memory_no_filtered = True
+        assert_equal(model.conserve_memory, MEMORY_NO_FORECAST | MEMORY_NO_FILTERED)
+        model.memory_no_forecast = False
+        assert_equal(model.conserve_memory, MEMORY_NO_FILTERED)
 
         # Try setting directly via method
-        self.set_conserve_memory(MEMORY_NO_PREDICTED)
-        assert_equal(self.conserve_memory, MEMORY_NO_PREDICTED)
+        model.set_conserve_memory(MEMORY_NO_PREDICTED)
+        assert_equal(model.conserve_memory, MEMORY_NO_PREDICTED)
 
         # Try setting via boolean via method
-        self.set_conserve_memory(memory_no_filtered=True, memory_no_predicted=False)
-        assert_equal(self.conserve_memory, MEMORY_NO_FILTERED)
+        model.set_conserve_memory(memory_no_filtered=True, memory_no_predicted=False)
+        assert_equal(model.conserve_memory, MEMORY_NO_FILTERED)
 
         # Try setting and unsetting all
-        self.conserve_memory = 0
-        for name in self.memory_options:
+        model.conserve_memory = 0
+        for name in model.memory_options:
             if name == 'memory_conserve':
                 continue
-            setattr(self, name, True)
+            setattr(model, name, True)
         assert_equal(
-            self.conserve_memory,
+            model.conserve_memory,
             MEMORY_NO_FORECAST | MEMORY_NO_PREDICTED | MEMORY_NO_FILTERED |
             MEMORY_NO_LIKELIHOOD | MEMORY_NO_GAIN | MEMORY_NO_SMOOTHING
         )
-        assert_equal(self.conserve_memory, MEMORY_CONSERVE)
-        for name in self.memory_options:
+        assert_equal(model.conserve_memory, MEMORY_CONSERVE)
+        for name in model.memory_options:
             if name == 'memory_conserve':
                 continue
-            setattr(self, name, False)
-        assert_equal(self.conserve_memory, 0)
+            setattr(model, name, False)
+        assert_equal(model.conserve_memory, 0)
 
     def test_smoother_outputs(self):
+        model = self.model
+
         # TODO test SmootherResults for accurante boolean versions of options
 
         # Clear the smoother output
-        self.smoother_output = 0
+        model.smoother_output = 0
 
         # Try setting via boolean
-        self.smoother_state = True
-        assert_equal(self.smoother_output, SMOOTHER_STATE)
-        self.smoother_disturbance = True
-        assert_equal(self.smoother_output, SMOOTHER_STATE | SMOOTHER_DISTURBANCE)
-        self.smoother_state = False
-        assert_equal(self.smoother_output, SMOOTHER_DISTURBANCE)
+        model.smoother_state = True
+        assert_equal(model.smoother_output, SMOOTHER_STATE)
+        model.smoother_disturbance = True
+        assert_equal(model.smoother_output, SMOOTHER_STATE | SMOOTHER_DISTURBANCE)
+        model.smoother_state = False
+        assert_equal(model.smoother_output, SMOOTHER_DISTURBANCE)
 
         # Try setting directly via method
-        self.set_smoother_output(SMOOTHER_DISTURBANCE_COV)
-        assert_equal(self.smoother_output, SMOOTHER_DISTURBANCE_COV)
+        model.set_smoother_output(SMOOTHER_DISTURBANCE_COV)
+        assert_equal(model.smoother_output, SMOOTHER_DISTURBANCE_COV)
 
         # Try setting via boolean via method
-        self.set_smoother_output(smoother_disturbance=True, smoother_disturbance_cov=False)
-        assert_equal(self.smoother_output, SMOOTHER_DISTURBANCE)
+        model.set_smoother_output(smoother_disturbance=True, smoother_disturbance_cov=False)
+        assert_equal(model.smoother_output, SMOOTHER_DISTURBANCE)
 
         # Try setting and unsetting all
-        self.smoother_output = 0
-        for name in self.smoother_outputs:
+        model.smoother_output = 0
+        for name in model.smoother_outputs:
             if name == 'smoother_all':
                 continue
-            setattr(self, name, True)
+            setattr(model, name, True)
         assert_equal(
-            self.smoother_output,
+            model.smoother_output,
             SMOOTHER_STATE | SMOOTHER_STATE_COV | SMOOTHER_DISTURBANCE |
             SMOOTHER_DISTURBANCE_COV
         )
-        assert_equal(self.smoother_output, SMOOTHER_ALL)
-        for name in self.smoother_outputs:
+        assert_equal(model.smoother_output, SMOOTHER_ALL)
+        for name in model.smoother_outputs:
             if name == 'smoother_all':
                 continue
-            setattr(self, name, False)
-        assert_equal(self.smoother_output, 0)
+            setattr(model, name, False)
+        assert_equal(model.smoother_output, 0)
 
     def test_simulation_outputs(self):
         # TODO test changing simulation options in SimulationSmoothResults
         # instance
 
-        assert_equal(self.get_simulation_output(SIMULATION_STATE), SIMULATION_STATE)
-        assert_equal(self.get_simulation_output(simulate_state=True, simulate_disturbance=True), SIMULATION_ALL)
+        assert_equal(self.model.get_simulation_output(SIMULATION_STATE), SIMULATION_STATE)
+        assert_equal(self.model.get_simulation_output(simulate_state=True, simulate_disturbance=True), SIMULATION_ALL)

@@ -21,7 +21,7 @@ from nose.exc import SkipTest
 current_path = os.path.dirname(os.path.abspath(__file__))
 
 
-class Trivariate(ssm.Model):
+class Trivariate(object):
     """
     Tests collapsing three-dimensional observation data to two-dimensional
     """
@@ -39,22 +39,22 @@ class Trivariate(ssm.Model):
         data['X'] = np.exp(data['GDP']) * data['UNEMP']
 
         k_states = 2
-        super(Trivariate, self).__init__(data, k_states=k_states, **kwargs)
+        self.model = ssm.Model(data, k_states=k_states, **kwargs)
 
         # Statespace representation
-        self.selection = np.eye(self.k_states)
+        self.model.selection = np.eye(self.model.k_states)
 
         # Update matrices with test parameters
-        self['design'] = np.array([[0.5, 0.2],
-                                   [0,   0.8],
-                                   [1,  -0.5]])
-        self['transition'] = np.array([[0.4, 0.5],
-                                       [1,   0]])
-        self['obs_cov'] = np.diag([0.2, 1.1, 0.5])
-        self['state_cov'] = np.diag([2., 1])
+        self.model['design'] = np.array([[0.5, 0.2],
+                                         [0,   0.8],
+                                         [1,  -0.5]])
+        self.model['transition'] = np.array([[0.4, 0.5],
+                                             [1,   0]])
+        self.model['obs_cov'] = np.diag([0.2, 1.1, 0.5])
+        self.model['state_cov'] = np.diag([2., 1])
 
         # Initialization
-        self.initialize_approximate_diffuse()
+        self.model.initialize_approximate_diffuse()
 
     def test_using_collapsed(self):
         # Test to make sure the results_b actually used a collapsed Kalman
@@ -183,23 +183,25 @@ class TestTrivariateConventional(Trivariate):
 
     def __init__(self, dtype=float, **kwargs):
         super(TestTrivariateConventional, self).__init__(dtype, **kwargs)
-        n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
+        n_disturbance_variates = (
+            (self.model.k_endog + self.model.k_posdef) * self.model.nobs
+        )
 
         # Collapsed filtering, smoothing, and simulation smoothing
-        self.filter_conventional = True
-        self.filter_collapsed = True
-        self.results_b = self.smooth()
-        self.sim_b = self.simulation_smoother(
+        self.model.filter_conventional = True
+        self.model.filter_collapsed = True
+        self.results_b = self.model.smooth()
+        self.sim_b = self.model.simulation_smoother(
             disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
+            initial_state_variates=np.zeros(self.model.k_states)
         )
 
         # Conventional filtering, smoothing, and simulation smoothing
-        self.filter_collapsed = False
-        self.results_a = self.smooth()
-        self.sim_a = self.simulation_smoother(
+        self.model.filter_collapsed = False
+        self.results_a = self.model.smooth()
+        self.sim_a = self.model.simulation_smoother(
             disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
+            initial_state_variates=np.zeros(self.model.k_states)
         )
 
 
@@ -207,26 +209,28 @@ class TestTrivariateConventionalPartialMissing(Trivariate):
 
     def __init__(self, dtype=float, **kwargs):
         super(TestTrivariateConventionalPartialMissing, self).__init__(dtype, **kwargs)
-        n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
+        n_disturbance_variates = (
+            (self.model.k_endog + self.model.k_posdef) * self.model.nobs
+        )
 
         # Set partially missing data
-        self.endog[:2, 10:180] = np.nan
+        self.model.endog[:2, 10:180] = np.nan
 
         # Collapsed filtering, smoothing, and simulation smoothing
-        self.filter_conventional = True
-        self.filter_collapsed = True
-        self.results_b = self.smooth()
-        self.sim_b = self.simulation_smoother(
+        self.model.filter_conventional = True
+        self.model.filter_collapsed = True
+        self.results_b = self.model.smooth()
+        self.sim_b = self.model.simulation_smoother(
             disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
+            initial_state_variates=np.zeros(self.model.k_states)
         )
 
         # Conventional filtering, smoothing, and simulation smoothing
-        self.filter_collapsed = False
-        self.results_a = self.smooth()
-        self.sim_a = self.simulation_smoother(
+        self.model.filter_collapsed = False
+        self.results_a = self.model.smooth()
+        self.sim_a = self.model.simulation_smoother(
             disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
+            initial_state_variates=np.zeros(self.model.k_states)
         )
 
         
@@ -235,26 +239,28 @@ class TestTrivariateConventionalAllMissing(Trivariate):
 
     def __init__(self, dtype=float, **kwargs):
         super(TestTrivariateConventionalAllMissing, self).__init__(dtype, **kwargs)
-        n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
+        n_disturbance_variates = (
+            (self.model.k_endog + self.model.k_posdef) * self.model.nobs
+        )
 
         # Set partially missing data
-        self.endog[:, 10:180] = np.nan
+        self.model.endog[:, 10:180] = np.nan
 
         # Collapsed filtering, smoothing, and simulation smoothing
-        self.filter_conventional = True
-        self.filter_collapsed = True
-        self.results_b = self.smooth()
-        self.sim_b = self.simulation_smoother(
+        self.model.filter_conventional = True
+        self.model.filter_collapsed = True
+        self.results_b = self.model.smooth()
+        self.sim_b = self.model.simulation_smoother(
             disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
+            initial_state_variates=np.zeros(self.model.k_states)
         )
 
         # Conventional filtering, smoothing, and simulation smoothing
-        self.filter_collapsed = False
-        self.results_a = self.smooth()
-        self.sim_a = self.simulation_smoother(
+        self.model.filter_collapsed = False
+        self.results_a = self.model.smooth()
+        self.sim_a = self.model.simulation_smoother(
             disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
+            initial_state_variates=np.zeros(self.model.k_states)
         )
 
 
@@ -262,73 +268,79 @@ class TestTrivariateUnivariate(Trivariate):
 
     def __init__(self, dtype=float, **kwargs):
         super(TestTrivariateUnivariate, self).__init__(dtype, **kwargs)
-        n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
+        n_disturbance_variates = (
+            (self.model.k_endog + self.model.k_posdef) * self.model.nobs
+        )
 
         # Collapsed filtering, smoothing, and simulation smoothing
-        self.filter_univariate = True
-        self.filter_collapsed = True
-        self.results_b = self.smooth()
-        self.sim_b = self.simulation_smoother(
+        self.model.filter_univariate = True
+        self.model.filter_collapsed = True
+        self.results_b = self.model.smooth()
+        self.sim_b = self.model.simulation_smoother(
             disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
+            initial_state_variates=np.zeros(self.model.k_states)
         )
 
         # Univariate filtering, smoothing, and simulation smoothing
-        self.filter_collapsed = False
-        self.results_a = self.smooth()
-        self.sim_a = self.simulation_smoother(
+        self.model.filter_collapsed = False
+        self.results_a = self.model.smooth()
+        self.sim_a = self.model.simulation_smoother(
             disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
+            initial_state_variates=np.zeros(self.model.k_states)
         )
 
 class TestTrivariateUnivariatePartialMissing(Trivariate):
 
     def __init__(self, dtype=float, **kwargs):
         super(TestTrivariateUnivariatePartialMissing, self).__init__(dtype, **kwargs)
-        n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
+        n_disturbance_variates = (
+            (self.model.k_endog + self.model.k_posdef) * self.model.nobs
+        )
 
         # Set partially missing data
-        self.endog[:2, 10:180] = np.nan
+        self.model.endog[:2, 10:180] = np.nan
 
         # Collapsed filtering, smoothing, and simulation smoothing
-        self.filter_univariate = True
-        self.filter_collapsed = True
-        self.results_b = self.smooth()
-        self.sim_b = self.simulation_smoother(
+        self.model.filter_univariate = True
+        self.model.filter_collapsed = True
+        self.results_b = self.model.smooth()
+        self.sim_b = self.model.simulation_smoother(
             disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
+            initial_state_variates=np.zeros(self.model.k_states)
         )
 
         # Univariate filtering, smoothing, and simulation smoothing
-        self.filter_collapsed = False
-        self.results_a = self.smooth()
-        self.sim_a = self.simulation_smoother(
+        self.model.filter_collapsed = False
+        self.results_a = self.model.smooth()
+        self.sim_a = self.model.simulation_smoother(
             disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
+            initial_state_variates=np.zeros(self.model.k_states)
         )
 
 class TestTrivariateUnivariateAllMissing(Trivariate):
 
     def __init__(self, dtype=float, **kwargs):
         super(TestTrivariateUnivariateAllMissing, self).__init__(dtype, **kwargs)
-        n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
+        n_disturbance_variates = (
+            (self.model.k_endog + self.model.k_posdef) * self.model.nobs
+        )
 
         # Set partially missing data
-        self.endog[:, 10:180] = np.nan
+        self.model.endog[:, 10:180] = np.nan
 
         # Univariate filtering, smoothing, and simulation smoothing
-        self.filter_univariate = True
-        self.filter_collapsed = True
-        self.results_b = self.smooth()
-        self.sim_b = self.simulation_smoother(
+        self.model.filter_univariate = True
+        self.model.filter_collapsed = True
+        self.results_b = self.model.smooth()
+        self.sim_b = self.model.simulation_smoother(
             disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
+            initial_state_variates=np.zeros(self.model.k_states)
         )
 
         # Conventional filtering, smoothing, and simulation smoothing
-        self.filter_collapsed = False
-        self.results_a = self.smooth()
-        self.sim_a = self.simulation_smoother(
+        self.model.filter_collapsed = False
+        self.results_a = self.model.smooth()
+        self.sim_a = self.model.simulation_smoother(
             disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
+            initial_state_variates=np.zeros(self.model.k_states)
         )

@@ -26,7 +26,7 @@ from nose.exc import SkipTest
 current_path = os.path.dirname(os.path.abspath(__file__))
 
 
-class TestStatesAR3(sarimax.SARIMAX):
+class TestStatesAR3(object):
     def __init__(self, *args, **kwargs):
         # Dataset / Stata comparison
         path = current_path + os.sep + 'results/results_wpi1_ar3_stata.csv'
@@ -44,31 +44,33 @@ class TestStatesAR3(sarimax.SARIMAX):
         path = current_path + os.sep+'results/results_wpi1_ar3_regression.csv'
         self.regression = pd.read_csv(path)
 
-        super(TestStatesAR3, self).__init__(
+        self.model = sarimax.SARIMAX(
             self.stata['wpi'], order=(3, 1, 0), simple_differencing=True,
             hamilton_representation=True, *args, **kwargs
         )
 
         # Parameters from from Stata's sspace MLE estimation
-        self.update(np.r_[.5270715, .0952613, .2580355, .5307459])
-        self.results = self.smooth()
+        self.model.update(np.r_[.5270715, .0952613, .2580355, .5307459])
+        self.results = self.model.smooth()
 
         # Calculate the determinant of the covariance matrices (for easy
         # comparison to other languages without having to store 2-dim arrays)
-        self.results.det_predicted_state_cov = np.zeros((1, self.nobs))
-        self.results.det_smoothed_state_cov = np.zeros((1, self.nobs))
-        for i in range(self.nobs):
+        self.results.det_predicted_state_cov = np.zeros((1, self.model.nobs))
+        self.results.det_smoothed_state_cov = np.zeros((1, self.model.nobs))
+        for i in range(self.model.nobs):
             self.results.det_predicted_state_cov[0,i] = np.linalg.det(
                 self.results.predicted_state_cov[:,:,i])
             self.results.det_smoothed_state_cov[0,i] = np.linalg.det(
                 self.results.smoothed_state_cov[:,:,i])
 
         # Perform simulation smoothing
-        n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
-        self.sim = self.simulation_smoother()
+        n_disturbance_variates = (
+            (self.model.k_endog + self.model.k_posdef) * self.model.nobs
+        )
+        self.sim = self.model.simulation_smoother()
         self.sim.simulate(
             disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
+            initial_state_variates=np.zeros(self.model.k_states)
         )
 
 
@@ -167,7 +169,7 @@ class TestStatesAR3(sarimax.SARIMAX):
             self.regression[['state_disturbance']], 4
         )
 
-class TestStatesMissingAR3(sarimax.SARIMAX):
+class TestStatesMissingAR3(object):
     def __init__(self, *args, **kwargs):
         # Dataset
         path = current_path + os.sep + 'results/results_wpi1_ar3_stata.csv'
@@ -189,31 +191,33 @@ class TestStatesMissingAR3(sarimax.SARIMAX):
         self.stata['dwpi'] = self.stata['wpi'].diff()
         self.stata.ix[10:21, 'dwpi'] = np.nan
 
-        super(TestStatesMissingAR3, self).__init__(
+        self.model = sarimax.SARIMAX(
             self.stata.ix[1:,'dwpi'], order=(3, 0, 0),
             hamilton_representation=True, *args, **kwargs
         )
 
         # Parameters from from Stata's sspace MLE estimation
-        self.update(np.r_[.5270715, .0952613, .2580355, .5307459])
-        self.results = self.smooth()
+        self.model.update(np.r_[.5270715, .0952613, .2580355, .5307459])
+        self.results = self.model.smooth()
 
         # Calculate the determinant of the covariance matrices (for easy
         # comparison to other languages without having to store 2-dim arrays)
-        self.results.det_predicted_state_cov = np.zeros((1, self.nobs))
-        self.results.det_smoothed_state_cov = np.zeros((1, self.nobs))
-        for i in range(self.nobs):
+        self.results.det_predicted_state_cov = np.zeros((1, self.model.nobs))
+        self.results.det_smoothed_state_cov = np.zeros((1, self.model.nobs))
+        for i in range(self.model.nobs):
             self.results.det_predicted_state_cov[0,i] = np.linalg.det(
                 self.results.predicted_state_cov[:,:,i])
             self.results.det_smoothed_state_cov[0,i] = np.linalg.det(
                 self.results.smoothed_state_cov[:,:,i])
 
         # Perform simulation smoothing
-        n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
-        self.sim = self.simulation_smoother()
+        n_disturbance_variates = (
+            (self.model.k_endog + self.model.k_posdef) * self.model.nobs
+        )
+        self.sim = self.model.simulation_smoother()
         self.sim.simulate(
             disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
+            initial_state_variates=np.zeros(self.model.k_states)
         )
 
     def test_predicted_states(self):

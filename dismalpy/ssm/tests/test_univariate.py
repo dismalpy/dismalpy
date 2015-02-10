@@ -26,7 +26,7 @@ from nose.exc import SkipTest
 current_path = os.path.dirname(os.path.abspath(__file__))
 
 
-class TestClark1989(ssm.Model):
+class TestClark1989(object):
     """
     Clark's (1989) bivariate unobserved components model of real GDP (as
     presented in Kim and Nelson, 1999)
@@ -52,28 +52,28 @@ class TestClark1989(ssm.Model):
         data['UNEMP'] = (data['UNEMP']/100)
 
         k_states = 6
-        super(TestClark1989, self).__init__(data, k_states=k_states, **kwargs)
+        self.model = ssm.Model(data, k_states=k_states, **kwargs)
 
         # Statespace representation
-        self.design[:, :, 0] = [[1, 1, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1]]
-        self.transition[
+        self.model.design[:, :, 0] = [[1, 1, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1]]
+        self.model.transition[
             ([0, 0, 1, 1, 2, 3, 4, 5],
              [0, 4, 1, 2, 1, 2, 4, 5],
              [0, 0, 0, 0, 0, 0, 0, 0])
         ] = [1, 1, 0, 0, 1, 1, 1, 1]
-        self.selection = np.eye(self.k_states)
+        self.model.selection = np.eye(self.model.k_states)
 
         # Update matrices with given parameters
         (sigma_v, sigma_e, sigma_w, sigma_vl, sigma_ec,
          phi_1, phi_2, alpha_1, alpha_2, alpha_3) = np.array(
             self.true['parameters'],
         )
-        self.design[([1, 1, 1], [1, 2, 3], [0, 0, 0])] = [
+        self.model.design[([1, 1, 1], [1, 2, 3], [0, 0, 0])] = [
             alpha_1, alpha_2, alpha_3
         ]
-        self.transition[([1, 1], [1, 2], [0, 0])] = [phi_1, phi_2]
-        self.obs_cov[1, 1, 0] = sigma_ec**2
-        self.state_cov[
+        self.model.transition[([1, 1], [1, 2], [0, 0])] = [phi_1, phi_2]
+        self.model.obs_cov[1, 1, 0] = sigma_ec**2
+        self.model.state_cov[
             np.diag_indices(k_states)+(np.zeros(k_states, dtype=int),)] = [
             sigma_v**2, sigma_e**2, 0, 0, sigma_w**2, sigma_vl**2
         ]
@@ -84,26 +84,28 @@ class TestClark1989(ssm.Model):
 
         # Initialization: self.modification
         initial_state_cov = np.dot(
-            np.dot(self.transition[:, :, 0], initial_state_cov),
-            self.transition[:, :, 0].T
+            np.dot(self.model.transition[:, :, 0], initial_state_cov),
+            self.model.transition[:, :, 0].T
         )
-        self.initialize_known(initial_state, initial_state_cov)
+        self.model.initialize_known(initial_state, initial_state_cov)
 
         # Conventional filtering, smoothing, and simulation smoothing
-        self.filter_conventional = True
-        self.conventional_results = self.smooth()
-        n_disturbance_variates = (self.k_endog + self.k_posdef) * self.nobs
-        self.conventional_sim = self.simulation_smoother(
+        self.model.filter_conventional = True
+        self.conventional_results = self.model.smooth()
+        n_disturbance_variates = (
+            (self.model.k_endog + self.model.k_posdef) * self.model.nobs
+        )
+        self.conventional_sim = self.model.simulation_smoother(
             disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
+            initial_state_variates=np.zeros(self.model.k_states)
         )
 
         # Univariate filtering, smoothing, and simulation smoothing
-        self.filter_univariate = True
-        self.univariate_results = self.smooth()
-        self.univariate_sim = self.simulation_smoother(
+        self.model.filter_univariate = True
+        self.univariate_results = self.model.smooth()
+        self.univariate_sim = self.model.simulation_smoother(
             disturbance_variates=np.zeros(n_disturbance_variates),
-            initial_state_variates=np.zeros(self.k_states)
+            initial_state_variates=np.zeros(self.model.k_states)
         )
 
     def test_using_univariate(self):
