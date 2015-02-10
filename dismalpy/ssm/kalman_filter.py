@@ -50,6 +50,34 @@ class KalmanFilter(Representation):
     r"""
     State space representation of a time series process, with Kalman filter
 
+    Parameters
+    ----------
+    k_endog : array_like or integer
+        The observed time-series process :math:`y` if array like or the
+        number of variables in the process if an integer.
+    k_states : int
+        The dimension of the unobserved state process.
+    k_posdef : int, optional
+        The dimension of a guaranteed positive definite covariance matrix
+        describing the shocks in the measurement equation. Must be less than
+        or equal to `k_states`. Default is `k_states`.
+    loglikelihood_burn : int, optional
+        The number of initial periods during which the loglikelihood is not
+        recorded. Default is 0.
+    tolerance : float, optional
+        The tolerance at which the Kalman filter determines convergence to
+        steady-state. Default is 1e-19.
+    results_class : class, optional
+        Default results class to use to save filtering output. Default is
+        `FilterResults`. If specified, class must extend from `FilterResults`.
+
+    **kwargs
+        Keyword arguments may be used to provide values for the filter,
+        inversion, and stability methods. See `set_filter_method`,
+        `set_inversion_method`, and `set_stability_method`.
+        Keyword arguments may be used to provide default values for state space
+        matrices. See `Representation` for more details.
+
     Notes
     -----
     The `filter_method` and `inversion_method` options intentionally allow
@@ -123,22 +151,28 @@ class KalmanFilter(Representation):
     stability_method = STABILITY_FORCE_SYMMETRY
     conserve_memory = MEMORY_STORE_ALL
 
-    def __init__(self, *args, **kwargs):
-        super(KalmanFilter, self).__init__(*args, **kwargs)
+    def __init__(self, k_endog, k_states, k_posdef=None,
+                 loglikelihood_burn=0, tolerance=1e-19, results_class=None,
+                 **kwargs):
+        super(KalmanFilter, self).__init__(
+            k_endog, k_states, k_posdef, **kwargs
+        )
 
         # Setup the underlying Kalman filter storage
         self._kalman_filters = {}
 
         # Filter options
-        self.loglikelihood_burn = kwargs.get('loglikelihood_burn', 0)
-        self.results_class = kwargs.get('results_class', FilterResults)
+        self.loglikelihood_burn = loglikelihood_burn
+        self.results_class = (
+            results_class if results_class is not None else FilterResults
+        )
 
         self.set_filter_method(**kwargs)
         self.set_inversion_method(**kwargs)
         self.set_stability_method(**kwargs)
         self.set_conserve_memory(**kwargs)
 
-        self.tolerance = kwargs.get('tolerance', 1e-19)
+        self.tolerance = tolerance
 
     @property
     def _kalman_filter(self):
@@ -149,8 +183,7 @@ class KalmanFilter(Representation):
 
     def _initialize_filter(self, filter_method=None, inversion_method=None,
                            stability_method=None, conserve_memory=None,
-                           tolerance=None, loglikelihood_burn=None,
-                           *args, **kwargs):
+                           tolerance=None, loglikelihood_burn=None):
         if filter_method is None:
             filter_method = self.filter_method
         if inversion_method is None:
@@ -209,6 +242,72 @@ class KalmanFilter(Representation):
         return prefix, dtype, create_filter, create_statespace
 
     def set_filter_method(self, filter_method=None, **kwargs):
+        """
+        Set the filtering method
+
+        The filtering method controls aspects of which Kalman filtering
+        approach will be used.
+
+        Parameters
+        ----------
+        filter_method : integer, optional
+            Bitmask value to set the filter method to. See notes for details.
+        **kwargs
+            Keyword arguments may be used to influence the filter method by
+            setting individual boolean flags. See notes for details.
+
+        Notes
+        -----
+        The filtering method is defined by a collection of boolean flags, and
+        is internally stored as a bitmask. The methods available are:
+
+        FILTER_CONVENTIONAL = 0x01
+            Conventional Kalman filter.
+        FILTER_UNIVARIATE = 0x10
+            Univariate approach to Kalman filtering. Overrides conventional
+            method if both are specified.
+        FILTER_COLLAPSED = 0x20
+            Collapsed approach to Kalman filtering. Will be used *in addition*
+            to conventional or univariate filtering.
+
+        If the bitmask is set directly via the `filter_method` argument, then
+        the full method must be provided.
+
+        If keyword arguments are used to set individual boolean flags, then
+        the lowercase of the method must be used as an argument name, and the
+        value is the desired value of the boolean flag (True or False).
+
+        Note that the filter method may also be specified by directly modifying
+        the class attributes which are defined similarly to the keyword
+        arguments.
+
+        The default filtering method is FILTER_CONVENTIONAL.
+
+        Examples
+        --------
+        >>> mod = dp.ssm.KalmanFilter(1,1)
+        >>> mod.filter_method
+        1
+        >>> mod.filter_conventional
+        True
+        >>> mod.filter_univariate = True
+        >>> mod.filter_method
+        17
+        >>> mod.set_filter_method(filter_univariate=False,
+                                  filter_collapsed=True)
+        >>> mod.filter_method
+        33
+        >>> mod.set_filter_method(filter_method=1)
+        >>> mod.filter_conventional
+        True
+        >>> mod.filter_univariate
+        False
+        >>> mod.filter_collapsed
+        False
+        >>> mod.filter_univariate = True
+        >>> mod.filter_method
+        17
+        """
         if filter_method is not None:
             self.filter_method = filter_method
         for name in KalmanFilter.filter_methods:
@@ -216,6 +315,88 @@ class KalmanFilter(Representation):
                 setattr(self, name, kwargs[name])
 
     def set_inversion_method(self, inversion_method=None, **kwargs):
+        """
+        Set the inversion method
+
+        The Kalman filter may contain one matrix inversion: that of the
+        forecast error covariance matrix. The inversion method controls how and
+        if that inverse is performed.
+
+        Parameters
+        ----------
+        inversion_method : integer, optional
+            Bitmask value to set the inversion method to. See notes for
+            details.
+        **kwargs
+            Keyword arguments may be used to influence the inversion method by
+            setting individual boolean flags. See notes for details.
+
+        Notes
+        -----
+        The inversion method is defined by a collection of boolean flags, and
+        is internally stored as a bitmask. The methods available are:
+
+        INVERT_UNIVARIATE = 0x01
+            If the endogenous time series is univariate, then inversion can be
+            performed by simple division. If this flag is set and the time
+            series is univariate, then division will always be used even if
+            other flags are also set.
+        SOLVE_LU = 0x02
+            Use an LU decomposition along with a linear solver (rather than
+            ever actually inverting the matrix).
+        INVERT_LU = 0x04
+            Use an LU decomposition along with typical matrix inversion.
+        SOLVE_CHOLESKY = 0x08
+        INVERT_CHOLESKY = 0x10
+            Use an LU decomposition along with typical matrix inversion.
+        INVERT_NUMPY = 0x20
+            Use the numpy inversion function. This is not recommended except
+            for testing as it will be substantially slower than the other
+            methods.
+
+        If the bitmask is set directly via the `inversion_method` argument,
+        then the full method must be provided.
+
+        If keyword arguments are used to set individual boolean flags, then
+        the lowercase of the method must be used as an argument name, and the
+        value is the desired value of the boolean flag (True or False).
+
+        Note that the inversion method may also be specified by directly
+        modifying the class attributes which are defined similarly to the
+        keyword arguments.
+
+        The default inversion method is `INVERT_UNIVARIATE | SOLVE_CHOLESKY`
+
+        Several things to keep in mind are:
+
+        - If the filtering method is specified to be univariate, then simple
+          division is always used regardless of the dimension of the endogenous
+          time series.
+        - Cholesky decomposition is about twice as fast as LU decomposition,
+          but it requires that the matrix be positive definite. While this
+          should generally be true, it may not be in every case.
+        - Using a linear solver rather than true matrix inversion is generally
+          faster and is numerically more stable.
+
+        Examples
+        --------
+        >>> mod = dp.ssm.KalmanFilter(1,1)
+        >>> mod.inversion_method
+        1
+        >>> mod.solve_cholesky
+        True
+        >>> mod.invert_univariate
+        True
+        >>> mod.invert_lu
+        False
+        >>> mod.invert_univariate = False
+        >>> mod.inversion_method
+        8
+        >>> mod.set_inversion_method(solve_cholesky=False,
+                                     invert_cholesky=True)
+        >>> mod.inversion_method
+        16
+        """
         if inversion_method is not None:
             self.inversion_method = inversion_method
         for name in KalmanFilter.inversion_methods:
@@ -223,6 +404,57 @@ class KalmanFilter(Representation):
                 setattr(self, name, kwargs[name])
 
     def set_stability_method(self, stability_method=None, **kwargs):
+        """
+        Set the numerical stability method
+
+        The Kalman filter is a recursive algorithm that may in some cases
+        suffer issues with numerical stability. The stability method controls
+        what, if any, measures are taken to promote stability.
+
+        Parameters
+        ----------
+        stability_method : integer, optional
+            Bitmask value to set the stability method to. See notes for
+            details.
+        **kwargs
+            Keyword arguments may be used to influence the stability method by
+            setting individual boolean flags. See notes for details.
+
+        Notes
+        -----
+        The stability method is defined by a collection of boolean flags, and
+        is internally stored as a bitmask. The methods available are:
+
+        STABILITY_FORCE_SYMMETRY = 0x01
+            If this flag is set, symmetry of the predicted state covariance
+            matrix is enforced at each iteration of the filter, where each
+            element is set to the average of the corresponding elements in the
+            upper and lower triangle.
+
+        If the bitmask is set directly via the `stability_method` argument,
+        then the full method must be provided.
+
+        If keyword arguments are used to set individual boolean flags, then
+        the lowercase of the method must be used as an argument name, and the
+        value is the desired value of the boolean flag (True or False).
+
+        Note that the stability method may also be specified by directly
+        modifying the class attributes which are defined similarly to the
+        keyword arguments.
+
+        The default stability method is `STABILITY_FORCE_SYMMETRY`
+
+        Examples
+        --------
+        >>> mod = dp.ssm.KalmanFilter(1,1)
+        >>> mod.stability_method
+        1
+        >>> mod.stability_force_symmetry
+        True
+        >>> mod.stability_force_symmetry = False
+        >>> mod.stability_method
+        0
+        """
         if stability_method is not None:
             self.stability_method = stability_method
         for name in KalmanFilter.stability_methods:
@@ -230,6 +462,80 @@ class KalmanFilter(Representation):
                 setattr(self, name, kwargs[name])
 
     def set_conserve_memory(self, conserve_memory=None, **kwargs):
+        """
+        Set the memory conservation method
+
+        By default, the Kalman filter computes a number of intermediate
+        matrices at each iteration. The memory conservation options control
+        which of those matrices are stored.
+
+        Parameters
+        ----------
+        conserve_memory : integer, optional
+            Bitmask value to set the memory conservation method to. See notes
+            for details.
+        **kwargs
+            Keyword arguments may be used to influence the memory conservation
+            method by setting individual boolean flags. See notes for details.
+
+        Notes
+        -----
+        The memory conservation method is defined by a collection of boolean
+        flags, and is internally stored as a bitmask. The methods available
+        are:
+
+        MEMORY_STORE_ALL = 0
+            Store all intermediate matrices. This is the default value.
+        MEMORY_NO_FORECAST = 0x01
+            Do not store the forecast, forecast error, or forecast error
+            covariance matrices. If this option is used, the `predict` method
+            from the results class is unavailable.
+        MEMORY_NO_PREDICTED = 0x02
+            Do not store the predicted state or predicted state covariance
+            matrices.
+        MEMORY_NO_FILTERED = 0x04
+            Do not store the filtered state or filtered state covariance
+            matrices.
+        MEMORY_NO_LIKELIHOOD = 0x08
+            Do not store the vector of loglikelihood values for each
+            observation. Only the sum of the loglikelihood values is stored.
+        MEMORY_NO_GAIN = 0x10
+            Do not store the Kalman gain matrices.
+        MEMORY_NO_SMOOTHING = 0x20
+            Do not store temporary variables related to Klaman smoothing. If
+            this option is used, smoothing is unavailable.
+        MEMORY_CONSERVE
+            Do not store any intermediate matrices.
+
+        If the bitmask is set directly via the `conserve_memory` argument,
+        then the full method must be provided.
+
+        If keyword arguments are used to set individual boolean flags, then
+        the lowercase of the method must be used as an argument name, and the
+        value is the desired value of the boolean flag (True or False).
+
+        Note that the memory conservation method may also be specified by
+        directly modifying the class attributes which are defined similarly to
+        the keyword arguments.
+
+        The default memory conservation method is `MEMORY_STORE_ALL`, so that
+        all intermediate matrices are stored.
+
+        Examples
+        --------
+        >>> mod = dp.ssm.KalmanFilter(1,1)
+        >>> mod.conserve_memory
+        0
+        >>> mod.memory_no_predicted
+        False
+        >>> mod.memory_no_predicted = True
+        >>> mod.conserve_memory
+        2
+        >>> mod.set_conserve_memory(memory_no_filtered=True,
+                                    memory_no_forecast=True)
+        >>> mod.conserve_memory
+        7
+        """
         if conserve_memory is not None:
             self.conserve_memory = conserve_memory
         for name in KalmanFilter.memory_options:
@@ -238,8 +544,7 @@ class KalmanFilter(Representation):
 
     def filter(self, filter_method=None, inversion_method=None,
                stability_method=None, conserve_memory=None, tolerance=None,
-               loglikelihood_burn=None, results=None,
-               *args, **kwargs):
+               loglikelihood_burn=None, results=None):
         """
         Apply the Kalman filter to the statespace model.
 
@@ -281,8 +586,7 @@ class KalmanFilter(Representation):
         prefix, dtype, create_filter, create_statespace = (
             self._initialize_filter(
                 filter_method, inversion_method, stability_method,
-                conserve_memory, tolerance, loglikelihood_burn,
-                *args, **kwargs
+                conserve_memory, tolerance, loglikelihood_burn
             )
         )
         kfilter = self._kalman_filters[prefix]
@@ -315,7 +619,7 @@ class KalmanFilter(Representation):
 
         return results
 
-    def loglike(self, loglikelihood_burn=None, *args, **kwargs):
+    def loglike(self, loglikelihood_burn=None, **kwargs):
         """
         Calculate the loglikelihood associated with the statespace model.
 
@@ -324,6 +628,9 @@ class KalmanFilter(Representation):
         loglikelihood_burn : int, optional
             The number of initial periods during which the loglikelihood is not
             recorded. Default is 0.
+        **kwargs
+            Additional keyword arguments to pass to the Kalman filter. See
+            `KalmanFilter.filter` for more details.
 
         Returns
         -------
@@ -336,7 +643,7 @@ class KalmanFilter(Representation):
         if loglikelihood_burn is None:
             loglikelihood_burn = self.loglikelihood_burn
         kwargs['results'] = 'loglikelihood'
-        return np.sum(self.filter(*args, **kwargs)[loglikelihood_burn:])
+        return np.sum(self.filter(**kwargs)[loglikelihood_burn:])
 
 
 class FilterResults(FrozenRepresentation):
@@ -446,7 +753,9 @@ class FilterResults(FrozenRepresentation):
         forecast error covariance matrices of collapsed observations at each
         time period.
     standardized_forecast_error : array
-        The standardized forecast errors
+        The standardized forecast errors.
+    kalman_gain : array
+        The Kalman gain matrices.
     """
     _filter_attributes = [
         'filter_method', 'inversion_method', 'stability_method',
@@ -473,6 +782,21 @@ class FilterResults(FrozenRepresentation):
         self._standardized_forecasts_error = None
 
     def update_representation(self, model, only_options=False):
+        """
+        Update the results to match a given model
+
+        Parameters
+        ----------
+        model : Representation
+            The model object from which to take the updated values.
+        only_options : boolean, optional
+            If set to true, only the filter options are updated, and the state
+            space representation is not updated. Default is False.
+
+        Notes
+        -----
+        This method is rarely required except for internal usage.
+        """
         if not only_options:
             super(FilterResults, self).update_representation(model)
 
@@ -481,6 +805,18 @@ class FilterResults(FrozenRepresentation):
             setattr(self, name, getattr(model, name, None))
 
     def update_filter(self, kalman_filter):
+        """
+        Update the filter results
+
+        Parameters
+        ----------
+        kalman_filter : KalmanFilter
+            The model object from which to take the updated values.
+
+        Notes
+        -----
+        This method is rarely required except for internal usage.
+        """
         # State initialization
         self.initial_state = np.array(
             kalman_filter.model.initial_state, copy=True
@@ -646,7 +982,7 @@ class FilterResults(FrozenRepresentation):
         return self._standardized_forecasts_error
 
     def predict(self, start=None, end=None, dynamic=None, full_results=False,
-                *args, **kwargs):
+                **kwargs):
         """
         In-sample and out-of-sample prediction for state space models generally
 
@@ -668,6 +1004,14 @@ class FilterResults(FrozenRepresentation):
             If True, returns a FilterResults instance; if False returns a
             tuple with forecasts, the forecast errors, and the forecast error
             covariance matrices. Default is False.
+        **kwargs
+            If the prediction range is outside of the sample range, any
+            of the state space representation matrices that are time-varying
+            must have updated values provided for the out-of-sample range.
+            For example, of `obs_intercept` is a time-varying component and
+            the prediction range extends 10 periods beyond the end of the
+            sample, a (`k_endog` x 10) matrix must be provided with the new
+            intercept values.
 
         Returns
         -------
@@ -827,8 +1171,8 @@ class FilterResults(FrozenRepresentation):
                 self.initial_state,
                 self.initial_state_cov
             )
-            model._initialize_filter(*args, **kwargs)
-            model._initialize_state(*args, **kwargs)
+            model._initialize_filter()
+            model._initialize_state()
 
             result = self._predict(nstatic, ndynamic, nforecast, model)
 
@@ -841,7 +1185,7 @@ class FilterResults(FrozenRepresentation):
                 result.forecasts_error_cov[:, :, start:end]
             )
 
-    def _predict(self, nstatic, ndynamic, nforecast, model, *args, **kwargs):
+    def _predict(self, nstatic, ndynamic, nforecast, model):
         # TODO: this doesn't use self, and can either be a static method or
         #       moved outside the class altogether.
 

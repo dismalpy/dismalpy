@@ -29,14 +29,13 @@ class Model(model.Model, SimulationSmoother, KalmanSmoother, KalmanFilter,
     --------
     dismalpy.model.Model
     """
-    def __init__(self, endog, k_states, nobs=None, *args, **kwargs):
+    def __init__(self, endog, k_states, nobs=None, **kwargs):
         # Initialize the generic Model
         super(Model, self).__init__(endog, nobs)
 
         # Initialize the Representation
         kwargs['nobs'] = self.nobs
-        SimulationSmoother.__init__(self, self.k_endog, k_states,
-                                    *args, **kwargs)
+        SimulationSmoother.__init__(self, self.k_endog, k_states, **kwargs)
 
     def bind(self, endog):
         # Bind the data using the generic Model

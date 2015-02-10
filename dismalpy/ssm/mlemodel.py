@@ -23,7 +23,7 @@ from statsmodels.tools.eval_measures import aic, bic, hqic
 class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
                Representation, tsbase.TimeSeriesModel):
     """
-    State space model
+    State space model for maximum likelihood estimation
 
     Parameters
     ----------
@@ -40,6 +40,12 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
     freq : str, optional
         The frequency of the time-series. A Pandas offset or 'B', 'D', 'W',
         'M', 'A', or 'Q'. This is optional if dates are given.
+    **kwargs
+        Keyword arguments may be used to provide default values for state space
+        matrices, for Kalman filtering options, for Kalman smoothing
+        options, or for Simulation smoothing options.
+        See `Representation`, `KalmanFilter`, and `KalmanSmoother` for more
+        details.
 
     Attributes
     ----------
@@ -56,9 +62,10 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
     See Also
     --------
     dismalpy.ssm.representation.Representation
+    MLEResults
     """
     def __init__(self, endog, k_states, exog=None, dates=None, freq=None,
-                 *args, **kwargs):
+                 **kwargs):
         # Set the default results class to be MLEResults
         kwargs.setdefault('results_class', MLEResults)
 
@@ -88,8 +95,7 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
         endog = endog.T
 
         # Initialize the statespace representation
-        super(MLEModel, self).__init__(endog.shape[0], k_states,
-                                       *args, **kwargs)
+        super(MLEModel, self).__init__(endog.shape[0], k_states, **kwargs)
         # Bind the data to the model
         self.bind(endog)
 
@@ -99,7 +105,7 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
     def fit(self, start_params=None, transformed=True,
             method='lbfgs', maxiter=50, full_output=1,
             disp=5, callback=None, return_params=False,
-            bfgs_tune=False, *args, **kwargs):
+            bfgs_tune=False, **kwargs):
         """
         Fits the model by maximum likelihood via Kalman filter.
 
@@ -146,6 +152,8 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
             maximizing parameters from the BFGS method are used as starting
             parameters for a second round of maximization using complex-step
             differentiation. Has no effect for other methods. Default is False.
+        **kwargs
+            Additional keyword arguments to pass to the optimizer.
 
         Returns
         -------
@@ -201,7 +209,7 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
 
         # Just return the fitted parameters if requested
         if return_params:
-            self.filter(return_loglike=True)
+            self.filter(results='loglikelihood')
             return self.params
         # Otherwise construct the results class if desired
         else:
@@ -212,7 +220,7 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
             return res
 
     def loglike(self, params=None, average_loglike=False, transformed=True,
-                set_params=True, *args, **kwargs):
+                set_params=True, **kwargs):
         """
         Loglikelihood evaluation
 
@@ -230,6 +238,9 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
         set_params : boolean
             Whether or not to copy `params` to the model object's params
             attribute. Default is True.
+        **kwargs
+            Additional keyword arguments to pass to the Kalman filter. See
+            `KalmanFilter.filter` for more details.
 
         Notes
         -----
@@ -249,12 +260,7 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
         if params is not None:
             self.update(params, transformed=transformed, set_params=set_params)
 
-        # By default, we do not need to consider recreating the entire
-        # _statespace and Cython Kalman filter objects because only parameters
-        # will be changing and not dimensions of matrices.
-        kwargs.setdefault('recreate', False)
-
-        loglike = super(MLEModel, self).loglike(*args, **kwargs)
+        loglike = super(MLEModel, self).loglike(**kwargs)
 
         # Koopman, Shephard, and Doornik recommend maximizing the average
         # likelihood to avoid scale issues.
@@ -271,6 +277,8 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
         ----------
         params : array_like
             Array of parameters at which to evaluate the score.
+        *args, **kwargs
+            Additional arguments to the `loglike` method.
 
         Returns
         ----------
@@ -280,6 +288,10 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
         Notes
         -----
         This is a numerical approximation.
+
+        Both *args and **kwargs are necessary because the optimizer from `fit`
+        must call this function and only supports passing arguments via *args
+        (for example `scipy.optimize.fmin_l_bfgs`).
         """
         nargs = len(args)
         if nargs < 1:
@@ -289,8 +301,8 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
         if nargs < 3:
             kwargs.setdefault('set_params', False)
 
-        initial_state = kwargs.get('initial_state', None)
-        initial_state_cov = kwargs.get('initial_state_cov', None)
+        initial_state = kwargs.pop('initial_state', None)
+        initial_state_cov = kwargs.pop('initial_state_cov', None)
         if initial_state is not None and initial_state_cov is not None:
             # If initialization is stationary, we don't want to recalculate the
             # initial_state_cov for each new set of parameters here
@@ -322,6 +334,8 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
         ----------
         params : array_like
             Array of parameters at which to evaluate the hessian.
+        *args, **kwargs
+            Additional arguments to the `loglike` method.
 
         Returns
         -------
@@ -331,6 +345,10 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
         Notes
         -----
         This is a numerical approximation.
+
+        Both *args and **kwargs are necessary because the optimizer from `fit`
+        must call this function and only supports passing arguments via *args
+        (for example `scipy.optimize.fmin_l_bfgs`).
         """
         nargs = len(args)
         if nargs < 1:
@@ -340,8 +358,8 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
         if nargs < 3:
             kwargs.setdefault('set_params', False)
 
-        initial_state = kwargs.get('initial_state', None)
-        initial_state_cov = kwargs.get('initial_state_cov', None)
+        initial_state = kwargs.pop('initial_state', None)
+        initial_state_cov = kwargs.pop('initial_state_cov', None)
         if initial_state is not None and initial_state_cov is not None:
             # If initialization is stationary, we don't want to recalculate the
             # initial_state_cov for each new set of parameters here
@@ -498,7 +516,7 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
         return params
 
     @classmethod
-    def from_formula(cls, formula, data, subset=None, *args, **kwargs):
+    def from_formula(cls, formula, data, subset=None):
         """
         Not implemented for State space models
         """
@@ -562,7 +580,7 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
     t_test
     wald_test
     """
-    def __init__(self, model, *args, **kwargs):
+    def __init__(self, model):
         self.data = model.data
 
         # Save the model output
@@ -579,7 +597,7 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
         # Initialize the Statsmodels model base
         tsbase.TimeSeriesModelResults.__init__(self, model, params,
                                                normalized_cov_params=None,
-                                               scale=1., *args, **kwargs)
+                                               scale=1.)
 
         # Initialize the statespace representation
         super(MLEResults, self).__init__(model)
@@ -658,7 +676,7 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
         return self.params / self.bse
 
     def predict(self, start=None, end=None, dynamic=False, alpha=.05,
-                full_results=False, *args, **kwargs):
+                full_results=False, **kwargs):
         """
         In-sample prediction and out-of-sample forecasting
 
@@ -690,6 +708,9 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
             If True, returns a FilterResults instance; if False returns a
             tuple with forecasts, the forecast errors, and the forecast error
             covariance matrices. Default is False.
+        **kwargs
+            Additional arguments may required for forecasting beyond the end
+            of the sample. See `FilterResults.predict` for more details.
 
         Returns
         -------
@@ -726,7 +747,7 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
 
         # Perform the prediction
         res = super(MLEResults, self).predict(
-            start, end+out_of_sample+1, dynamic, full_results, *args, **kwargs
+            start, end+out_of_sample+1, dynamic, full_results, **kwargs
         )
 
         if full_results:
@@ -751,7 +772,7 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
 
         return forecasts, forecasts_error_cov, confidence_intervals, index
 
-    def forecast(self, steps=1, alpha=.05, *args, **kwargs):
+    def forecast(self, steps=1, alpha=.05, **kwargs):
         """
         Out-of-sample forecasts
 
@@ -763,6 +784,9 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
         alpha : float, optional
             The confidence intervals for the forecasts are (1 - alpha) %.
             Default is 0.05.
+        **kwargs
+            Additional arguments may required for forecasting beyond the end
+            of the sample. See `FilterResults.predict` for more details.
 
         Returns
         -------
@@ -777,9 +801,9 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
             on the type of `endog`.
         """
         return self.predict(start=self.nobs, end=self.nobs+steps-1,
-                            alpha=alpha, *args, **kwargs)
+                            alpha=alpha, **kwargs)
 
-    def summary(self, alpha=.05, start=None, *args, **kwargs):
+    def summary(self, alpha=.05, start=None, model_name=None):
         """
         Summarize the Model
 
@@ -789,6 +813,8 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
             Significance level for the confidence intervals. Default is 0.05.
         start : int, optional
             Integer of the start observation. Default is 0.
+        model_name : string
+            The name of the model used. Default is to use model class name.
 
         Returns
         -------
@@ -815,9 +841,12 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
         else:
             sample = [str(start), ' - ' + str(self.model.nobs)]
 
+        if model_name is None:
+            model_name = model.__class__.__name__
+
         top_left = [
             ('Dep. Variable:', None),
-            ('Model:', [kwargs.get('model', model.__class__.__name__)]),
+            ('Model:', [model_name]),
             ('Date:', None),
             ('Time:', None),
             ('Sample:', [sample[0]]),

@@ -86,6 +86,12 @@ class SARIMAX(MLEModel):
     hamilton_representation : boolean, optional
         Whether or not to use the Hamilton representation of an ARMA process
         (if True) or the Harvey representation (if False). Default is False.
+    **kwargs
+        Keyword arguments may be used to provide default values for state space
+        matrices, for Kalman filtering options, for Kalman smoothing
+        options, or for Simulation smoothing options.
+        See `Representation`, `KalmanFilter`, and `KalmanSmoother` for more
+        details.
 
     Attributes
     ----------
@@ -261,7 +267,7 @@ class SARIMAX(MLEModel):
                  measurement_error=False, time_varying_regression=False,
                  mle_regression=True, simple_differencing=False,
                  enforce_stationarity=True, enforce_invertibility=True,
-                 hamilton_representation=False, *args, **kwargs):
+                 hamilton_representation=False, **kwargs):
 
         # Model parameters
         self.k_seasons = seasonal_order[3]
@@ -493,8 +499,7 @@ class SARIMAX(MLEModel):
 
         # Initialize the statespace
         super(SARIMAX, self).__init__(
-            endog, exog=exog, k_states=k_states, k_posdef=k_posdef,
-            *args, **kwargs
+            endog, exog=exog, k_states=k_states, k_posdef=k_posdef, **kwargs
         )
 
         # Initialize the fixed components of the statespace model
@@ -1377,7 +1382,7 @@ class SARIMAX(MLEModel):
 
         return unconstrained
 
-    def update(self, params, *args, **kwargs):
+    def update(self, params, transformed=True, set_params=True):
         """
         Update the parameters of the model
 
@@ -1388,13 +1393,19 @@ class SARIMAX(MLEModel):
         ----------
         params : array_like
             Array of new parameters.
+        transformed : boolean, optional
+            Whether or not `params` is already transformed. If set to False,
+            `transform_params` is called. Default is True.
+        set_params : boolean
+            Whether or not to copy `params` to the model object's params
+            attribute. Usually set to True.
 
         Returns
         -------
         params : array_like
             Array of parameters.
         """
-        params = super(SARIMAX, self).update(params, *args, **kwargs)
+        params = super(SARIMAX, self).update(params, transformed, set_params)
 
         params_trend = None
         params_exog = None
@@ -1691,8 +1702,8 @@ class SARIMAXResults(MLEResults):
     dismalpy.ssm.representation.FilterResults
     dismalpy.ssm.model.MLEResults
     """
-    def __init__(self, model, *args, **kwargs):
-        super(SARIMAXResults, self).__init__(model, *args, **kwargs)
+    def __init__(self, model):
+        super(SARIMAXResults, self).__init__(model)
 
         # Set additional model parameters
         self.k_seasons = self.model.k_seasons
@@ -1780,7 +1791,7 @@ class SARIMAXResults(MLEResults):
         return self._params_ma
 
     def predict(self, start=None, end=None, exog=None, dynamic=False,
-                alpha=.05, *args, **kwargs):
+                alpha=.05, **kwargs):
         """
         In-sample prediction and out-of-sample forecasting
 
@@ -1816,6 +1827,9 @@ class SARIMAXResults(MLEResults):
             If True, returns a FilterResults instance; if False returns a
             tuple with forecasts, the forecast errors, and the forecast error
             covariance matrices. Default is False.
+        **kwargs
+            Additional arguments may required for forecasting beyond the end
+            of the sample. See `FilterResults.predict` for more details.
 
         Returns
         -------
@@ -1890,10 +1904,10 @@ class SARIMAXResults(MLEResults):
 
         return super(SARIMAXResults, self).predict(
             start=start, end=end, exog=exog, dynamic=dynamic, alpha=alpha,
-            *args, **kwargs
+            **kwargs
         )
 
-    def forecast(self, steps=1, exog=None, alpha=.05, *args, **kwargs):
+    def forecast(self, steps=1, exog=None, alpha=.05, **kwargs):
         """
         Out-of-sample forecasts
 
@@ -1909,6 +1923,9 @@ class SARIMAXResults(MLEResults):
         alpha : float, optional
             The confidence intervals for the forecasts are (1 - alpha) %.
             Default is 0.05.
+        **kwargs
+            Additional arguments may required for forecasting beyond the end
+            of the sample. See `FilterResults.predict` for more details.
 
         Returns
         -------
@@ -1923,10 +1940,10 @@ class SARIMAXResults(MLEResults):
             on the type of `endog`.
         """
         return super(SARIMAXResults, self).forecast(
-            steps, exog=exog, alpha=alpha, *args, **kwargs
+            steps, exog=exog, alpha=alpha, **kwargs
         )
 
-    def summary(self, alpha=.05, start=None, *args, **kwargs):
+    def summary(self, alpha=.05, start=None):
         # Create the model name
 
         # See if we have an ARIMA component
@@ -1969,10 +1986,9 @@ class SARIMAXResults(MLEResults):
                                str(order_seasonal_ma), self.k_seasons))
             if not order == '':
                 order += 'x'
-        model = ('%s%s%s' %
+        model_name = ('%s%s%s' %
                  (self.model.__class__.__name__, order, seasonal_order))
-        kwargs.setdefault('model', model)
         return super(SARIMAXResults, self).summary(
-            alpha=alpha, start=start, *args, **kwargs
+            alpha=alpha, start=start, model_name=model_name
         )
     summary.__doc__ = MLEResults.summary.__doc__

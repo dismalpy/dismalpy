@@ -20,39 +20,104 @@ class SimulationSmoother(KalmanSmoother):
     r"""
     State space representation of a time series process, with Kalman filter
     and smoother, and with simulation smoother.
+
+    Parameters
+    ----------
+    k_endog : array_like or integer
+        The observed time-series process :math:`y` if array like or the
+        number of variables in the process if an integer.
+    k_states : int
+        The dimension of the unobserved state process.
+    k_posdef : int, optional
+        The dimension of a guaranteed positive definite covariance matrix
+        describing the shocks in the measurement equation. Must be less than
+        or equal to `k_states`. Default is `k_states`.
+    simulation_smooth_results_class : class, optional
+        Default results class to use to save output of simulation smoothing.
+        Default is `SimulationSmoothResults`. If specified, class must extend
+        from `SimulationSmoothResults`.
+    **kwargs
+        Keyword arguments may be used to provide default values for state space
+        matrices, for Kalman filtering options, for Kalman smoothing
+        options, or for Simulation smoothing options.
+        See `Representation`, `KalmanFilter`, and `KalmanSmoother` for more
+        details.
     """
 
     simulation_outputs = [
         'simulate_state', 'simulate_disturbance', 'simulate_all'
     ]
     
-    def __init__(self, *args, **kwargs):
-        super(SimulationSmoother, self).__init__(*args, **kwargs)
+    def __init__(self, k_endog, k_states, k_posdef=None,
+                 simulation_smooth_results_class=None, **kwargs):
+        super(SimulationSmoother, self).__init__(
+            k_endog, k_states, k_posdef, **kwargs
+        )
 
-        self.simulation_smooth_results_class = kwargs.get('simulation_smooth_results_class', SimulationSmoothResults)
+        if simulation_smooth_results_class is None:
+            simulation_smooth_results_class = SimulationSmoothResults
+        self.simulation_smooth_results_class = simulation_smooth_results_class
 
-    def get_simulation_output(self, simulation_output=None, **kwargs):
+    def get_simulation_output(self, simulation_output=None,
+                              simulate_state=None, simulate_disturbance=None,
+                              simulate_all=None, **kwargs):
+        """
+        Get simulation output bitmask
+
+        Helper method to get final simulation output bitmask from a set of
+        optional arguments including the bitmask itself and possibly boolean
+        flags.
+
+        Parameters
+        ----------
+        simulation_output : integer, optional
+            Simulation output bitmask. If this is specified, it is simply
+            returned and the other arguments are ignored.
+        simulate_state : boolean, optional
+            Whether or not to include the state in the simulation output.
+        simulate_disturbance : boolean, optional
+            Whether or not to include the state and observation disturbances
+            in the simulation output.
+        simulate_all : boolean, optional
+            Whether or not to include all simulation output.
+        **kwargs
+            Additional keyword arguments. Present so that calls to this method
+            can use **kwargs without clearing out additional arguments.
+        """
         # If we don't explicitly have simulation_output, try to get it from
         # kwargs
         if simulation_output is None:
             simulation_output = 0
 
-            if 'simulate_state' in kwargs and kwargs['simulate_state']:
+            if simulate_state == True:
                 simulation_output |= SIMULATION_STATE
-            if 'simulate_disturbance' in kwargs and kwargs['simulate_disturbance']:
+            if simulate_disturbance == True:
                 simulation_output |= SIMULATION_DISTURBANCE
-            if 'simulate_all' in kwargs and kwargs['simulate_all']:
+            if simulate_all == True:
                 simulation_output |= SIMULATION_ALL
 
-            # If no information was in kwargs, set simulation output to be the
-            # same as smoother output
+            # Handle case of no information in kwargs
             if simulation_output == 0:
+
+                # If some arguments were passed, but we still don't have any
+                # simulation output, raise an exception
+                argument_set = not all([
+                    simulate_state is None, simulate_disturbance is None,
+                    simulate_all is None
+                ])
+                if argument_set:
+                    raise ValueError("Invalid simulation output options:"
+                                     " given options would result in no"
+                                     " output.")
+
+                # Otherwise set simulation output to be the same as smoother
+                # output
                 simulation_output = self.smoother_output
 
         return simulation_output
 
     def simulation_smoother(self, simulation_output=None,
-                            results_class=None, *args, **kwargs):
+                            results_class=None, prefix=None, **kwargs):
         """
         Retrieve a simulation smoother for the statespace model.
 
@@ -61,6 +126,16 @@ class SimulationSmoother(KalmanSmoother):
         simulation_output : int, optional
             Determines which simulation smoother output is calculated.
             Default is all (including state and disturbances).
+        simulation_smooth_results_class : class, optional
+            Default results class to use to save output of simulation
+            smoothing. Default is `SimulationSmoothResults`. If specified,
+            class must extend from `SimulationSmoothResults`.
+        prefix : string
+            The prefix of the datatype. Usually only used internally.
+        **kwargs
+            Additional keyword arguments, used to set the simulation output.
+            See `set_simulation_output` for more details.
+
         Returns
         -------
         SimulationSmoothResults
@@ -75,8 +150,10 @@ class SimulationSmoother(KalmanSmoother):
             raise ValueError('Invalid results class provided.')
 
         # Make sure we have the required Statespace representation
-        prefix, dtype, create_statespace = self._initialize_representation(
-            *args, **kwargs
+        if prefix is None:
+            prefix = self.prefix
+        prefix, dtype, create_statespace = (
+            self._initialize_representation(prefix)
         )
 
         # Simulation smoother parameters
@@ -102,14 +179,54 @@ class SimulationSmoother(KalmanSmoother):
         )
 
         # Create results object
-        results = results_class(self, simulation_smoother, *args, **kwargs)
+        results = results_class(self, simulation_smoother)
 
         return results
 
 
 class SimulationSmoothResults(object):
+    """
+    Results from applying the Kalman smoother and/or filter to a state space
+    model.
+
+    Parameters
+    ----------
+    model : Representation
+        A Statespace representation
+    simulation_smoother : {{prefix}}SimulationSmoother object
+        The Cython simulation smoother object with which to simulation smooth.
+
+    Attributes
+    ----------
+    model : Representation
+        A Statespace representation
+    dtype : dtype
+        Datatype of representation matrices
+    prefix : str
+        BLAS prefix of representation matrices
+    simulation_output : integer
+        Bitmask controlling simulation output.
+    simulate_state : boolean
+        Flag for if the state is included in simulation output.
+    simulate_disturbance : boolean
+        Flag for if the state and observation disturbances are included in
+        simulation output.
+    simulate_all : boolean
+        Flag for if simulation output should include everything.
+    generated_obs : array
+        Generated observation vector produced as a byproduct of simulation
+        smoothing.
+    generated_state : array
+        Generated state vector produced as a byproduct of simulation smoothing.
+    simulated_state : array
+        Simulated state.
+    simulated_measurement_disturbance : array
+        Simulated measurement disturbance.
+    simulated_state_disturbance : array
+        Simulated state disturbance.
+    """
     
-    def __init__(self, model, simulation_smoother, *args, **kwargs):
+    def __init__(self, model, simulation_smoother):
         self.model = model
         self.prefix = model.prefix
         self.dtype = model.dtype
@@ -202,7 +319,27 @@ class SimulationSmoothResults(object):
         return self._simulated_state_disturbance
 
     def simulate(self, simulation_output=-1, disturbance_variates=None,
-                 initial_state_variates=None, *args, **kwargs):
+                 initial_state_variates=None):
+        """
+        Perform simulation smoothing
+
+        Does not return anything, but populates the object's `simulated_*`
+        attributes, as specified by simulation output.
+
+        Parameters
+        ----------
+        simulation_output : integer, optional
+            Bitmask controlling simulation output. Default is to use the
+            simulation output defined in object initialization.
+        disturbance_variates : array_likes, optional
+            Random values to use as disturbance variates. Usually only
+            specified if results are to be replicated (e.g. to enforce a seed)
+            or for testing. If not specified, random variates are drawn.
+        initial_state_variates : array_likes, optional
+            Random values to use as initial state variates. Usually only
+            specified if results are to be replicated (e.g. to enforce a seed)
+            or for testing. If not specified, random variates are drawn.
+        """
         # Clear any previous output
         self._generated_obs = None
         self._generated_state = None
@@ -211,7 +348,7 @@ class SimulationSmoothResults(object):
         self._simulated_state_disturbance = None
 
         # Re-initialize the _statespace representation
-        self.model._initialize_representation(prefix=self.prefix, *args, **kwargs)
+        self.model._initialize_representation(prefix=self.prefix)
 
         # Initialize the state
         self.model._initialize_state(prefix=self.prefix)
