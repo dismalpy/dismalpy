@@ -415,6 +415,11 @@ class SmootherResults(FilterResults):
         for name in self._smoother_options:
             setattr(self, name, getattr(model, name, None))
 
+        # Initialize holders for smoothed forecasts
+        self._smoothed_forecasts = None
+        self._smoothed_forecasts_error = None
+        self._smoothed_forecasts_error_cov = None
+
     def update_smoother(self, smoother):
         """
         Update the smoother results
@@ -476,3 +481,73 @@ class SmootherResults(FilterResults):
             self.scaled_smoothed_estimator = self.scaled_smoothed_estimator[:,1:]
         if 'scaled_smoothed_estimator_cov' in attributes:
             self.scaled_smoothed_estimator_cov = self.scaled_smoothed_estimator_cov[:,1:]
+
+        # Clear the smoothed forecasts
+        self._smoothed_forecasts = None
+        self._smoothed_forecasts_error = None
+        self._smoothed_forecasts_error_cov = None
+
+    def _get_smoothed_forecasts(self):
+        if self._smoothed_forecasts is None:
+            # Initialize empty arrays
+            self._smoothed_forecasts = np.zeros(self.forecasts.shape)
+            self._smoothed_forecasts_error = (
+                np.zeros(self.forecasts_error.shape)
+            )
+            self._smoothed_forecasts_error_cov = (
+                np.zeros(self.forecasts_error_cov.shape)
+            )
+
+            for t in range(self.nobs):
+                design_t = 0 if self.design.shape[2] == 1 else t
+                obs_cov_t = 0 if self.obs_cov.shape[2] == 1 else t
+                obs_intercept_t = 0 if self.obs_intercept.shape[1] == 1 else t
+
+                # For completely missing observations
+                if self.nmissing[t] == self.k_endog:
+                    # We can recover forecasts
+                    self._smoothed_forecasts[:, t] = np.dot(
+                        self.design[:, :, design_t], self.smoothed_state[:, t]
+                    ) + self.obs_intercept[:, obs_intercept_t]
+                    self._smoothed_forecasts_error[:, t] = np.nan
+                    self._smoothed_forecasts_error_cov[:, :, t] = np.dot(
+                        np.dot(self.design[:, :, design_t],
+                               self.smoothed_state_cov[:, :, t]),
+                        self.design[:, :, design_t].T
+                    ) + self.obs_cov[:, :, obs_cov_t]
+                # For partially missing observations
+                elif self.nmissing[t] > 0:
+                    self._smoothed_forecasts[:, t] = np.nan
+                    self._smoothed_forecasts_error[:, t] = np.nan
+                    self._smoothed_forecasts_error_cov[:, :, t] = np.nan
+                else:
+                    self._smoothed_forecasts[:, t] = np.dot(
+                        self.design[:, :, design_t], self.smoothed_state[:, t]
+                    ) + self.obs_intercept[:, obs_intercept_t]
+
+                    self._smoothed_forecasts_error[:, t] = (
+                        self.endog[:, t] - self.forecasts[:, t]
+                    )
+
+                    self._smoothed_forecasts_error_cov[:, :, t] = np.dot(
+                        np.dot(self.design[:, :, design_t],
+                               self.smoothed_state_cov[:, :, t]),
+                        self.design[:, :, design_t].T
+                    ) + self.obs_cov[:, :, obs_cov_t]
+        return (
+            self._smoothed_forecasts,
+            self._smoothed_forecasts_error,
+            self._smoothed_forecasts_error_cov
+        )
+
+    @property
+    def smoothed_forecasts(self):
+        return self._get_smoothed_forecasts()[0]
+
+    @property
+    def smoothed_forecasts_error(self):
+        return self._get_smoothed_forecasts()[1]
+
+    @property
+    def smoothed_forecasts_error_cov(self):
+        return self._get_smoothed_forecasts()[2]
