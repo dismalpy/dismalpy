@@ -59,11 +59,53 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
     model_latex_names : list of str
         The latex names of all possible model parameters.
 
+    Notes
+    -----
+    This class extends the state space model with Kalman filtering, Kalman
+    smoothing, and Simulation smoothing to add in functionality for maximum
+    likelihood estimation. In particular, it adds the concept of updating the
+    state space representation based on a defined set of parameters, through
+    the `update` method or `updater` attribute (see below for more details on
+    which to use when), and it adds a `fit` method which uses a numerical
+    optimizer to select the parameters that maximize the likelihood of the
+    model.
+
+    It is used in one of two ways:
+
+    1. A base class
+    2. Ad-hoc MLE
+
+    **As a base class**
+
+    The most typical usage of the MLEModel class is as a base class so that a
+    specific state space model can be built as a subclass without having to
+    deal with optimization-related functionality.
+
+    In this case, the `start_params` `update` method must be overridden in the
+    child class (and the `transform` and `untransform` methods, if needed).
+
+    **Ad-hoc MLE**
+
+    This class can also be instantiated directly for ad-hoc MLE, particularly
+    if the model is very simple.
+
+    In this case, the `start_params` attribute can be set directly and in place
+    of the `update`, `transform`, and `untransform` methods, the attributes
+    `updater`, `transformer`, and `untransformer` can be set with callback
+    functions to perform that functionality.
+
     See Also
     --------
-    dismalpy.ssm.representation.Representation
     MLEResults
+    dismalpy.ssm.simulation_smoother.SimulationSmoother
+    dismalpy.ssm.kalman_smoother.KalmanSmoother
+    dismalpy.ssm.kalman_filter.KalmanFilter
+    dismalpy.ssm.representation.Representation
     """
+    updater = None
+    transformer = None
+    untransformer = None
+
     def __init__(self, endog, k_states, exog=None, dates=None, freq=None,
                  **kwargs):
         # Set the default results class to be MLEResults
@@ -451,7 +493,11 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
         This is a noop in the base class, subclasses should override where
         appropriate.
         """
-        return unconstrained
+        if self.transformer is not None:
+            constrained = self.transformer(self, unconstrained)
+        else:
+            constrained = unconstrained
+        return constrained
 
     def untransform_params(self, constrained):
         """
@@ -474,7 +520,11 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
         This is a noop in the base class, subclasses should override where
         appropriate.
         """
-        return constrained
+        if self.untransformer is not None:
+            unconstrained = self.untransformer(self, constrained)
+        else:
+            unconstrained = constrained
+        return unconstrained
 
     def update(self, params, transformed=True, set_params=True):
         """
@@ -509,6 +559,10 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
             params = self.transform_params(params)
         if set_params:
             self.params = params
+
+        if self.updater is not None:
+            self.updater(self, params)
+
         return params
 
     @classmethod
@@ -575,6 +629,13 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
     summary
     t_test
     wald_test
+
+    See Also
+    --------
+    MLEModel
+    dismalpy.ssm.kalman_smoother.SmootherResults
+    dismalpy.ssm.kalman_filter.KalmanResults
+    dismalpy.ssm.representation.FrozenRepresentation
     """
     def __init__(self, model):
         self.data = model.data
