@@ -387,10 +387,6 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
         raise NotImplementedError
 
     @property
-    def endog_names(self):
-        return self._endog_names
-
-    @property
     def params_names(self):
         return self.model_names
 
