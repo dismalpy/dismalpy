@@ -114,8 +114,8 @@ class Trivariate(object):
 
     def test_loglike(self):
         assert_allclose(
-            self.results_a.loglikelihood,
-            self.results_b.loglikelihood
+            self.results_a.llf_obs,
+            self.results_b.llf_obs
         )
 
     def test_smoothed_states(self):

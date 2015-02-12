@@ -169,8 +169,8 @@ class TestClark1989(object):
 
     def test_loglike(self):
         assert_almost_equal(
-            self.conventional_results.loglikelihood,
-            self.univariate_results.loglikelihood, 7
+            self.conventional_results.llf_obs,
+            self.univariate_results.llf_obs, 7
         )
 
     def test_smoothed_states(self):

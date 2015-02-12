@@ -742,7 +742,7 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
         """
         (float) The value of the log-likelihood function evaluated at `params`.
         """
-        return self.loglikelihood[self.loglikelihood_burn:].sum()
+        return self.llf_obs[self.loglikelihood_burn:].sum()
 
     @cache_readonly
     def pvalues(self):
