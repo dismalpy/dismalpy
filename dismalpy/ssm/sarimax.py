@@ -1032,9 +1032,11 @@ class SARIMAX(MLEModel):
     ]
 
     @property
-    def params_included(self):
+    def param_terms(self):
         """
         List of parameters actually included in the model, in sorted order.
+
+        TODO Make this an OrderedDict with slice or indices as the values.
         """
         model_orders = self.model_orders
         # Get basic list from model orders
@@ -1055,7 +1057,7 @@ class SARIMAX(MLEModel):
         List of human readable parameter names (for parameters actually
         included in the model).
         """
-        params_sort_order = self.params_included
+        params_sort_order = self.param_terms
         model_names = self.model_names
         return [
             name for param in params_sort_order for name in model_names[param]
@@ -1609,7 +1611,7 @@ class SARIMAXResults(MLEResults):
 
     Attributes
     ----------
-    params_included : list of str
+    param_terms : list of str
         List of parameters actually included in the model, in sorted order.
     k_ar : int
         Highest autoregressive order in the model, zero-indexed.
@@ -1745,9 +1747,9 @@ class SARIMAXResults(MLEResults):
 
         # Distinguish parameters
         self.model_orders = self.model.model_orders
-        self.params_included = self.model.params_included
+        self.param_terms = self.model.param_terms
         start = end = 0
-        for name in self.params_included:
+        for name in self.param_terms:
             end += self.model_orders[name]
             setattr(self, '_params_%s' % name, self.params[start:end])
             start += self.model_orders[name]
