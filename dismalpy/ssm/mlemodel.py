@@ -145,11 +145,13 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
 
         # Initialize the statespace representation
         super(MLEModel, self).__init__(endog.shape[0], k_states, **kwargs)
+
         # Bind the data to the model
         self.bind(endog)
 
         # Initialize the parameters
         self.params = None
+        self.data.param_names = self.param_names
 
         # Initialize placeholders
         self.updater = None
@@ -641,7 +643,7 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
         self._endog_names = model.endog_names
         self._exog_names = model.endog_names
         self._params = model.params
-        self._param_names = model.param_names
+        self._param_names = model.data.param_names
         self._model_names = model.model_names
         self._model_latex_names = model.model_latex_names
 
