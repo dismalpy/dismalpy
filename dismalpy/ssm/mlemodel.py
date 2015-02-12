@@ -22,7 +22,7 @@ from statsmodels.tools.eval_measures import aic, bic, hqic
 
 class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
                Representation, tsbase.TimeSeriesModel):
-    """
+    r"""
     State space model for maximum likelihood estimation
 
     Parameters
@@ -49,15 +49,25 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
 
     Attributes
     ----------
-    start_params : array
-        Starting parameters for maximum likelihood estimation.
-    params_names : list of str
-        List of human readable parameter names (for parameters actually
-        included in the model).
-    model_names : list of str
-        The plain text names of all possible model parameters.
-    model_latex_names : list of str
-        The latex names of all possible model parameters.
+    updater : callable or None
+        Can be set with a callable accepting arguments
+        (`model`, `params`) that can be used to update
+        the state space representation so that maximum
+        likelihood estimation can be performed in an
+        ad-hoc setup.
+    transformer : callable or None
+        Can be set with a callable accepting arguments
+        (`model`, `params`) that can be used to transform
+        parameters from unconstrained optimization
+        parameters to constrained parameters for
+        likelihood estimation in an ad-hoc setup.
+    untransformer : callable or None
+        Can be set with a callable accepting arguments
+        (`model`, `params`) that can be used to perform
+        a reverse transformation of parameters from
+        constrained parameters for likelihood estimation
+        back to unconstrained optimization parameters
+        in an ad-hoc setup.
 
     Notes
     -----
@@ -102,9 +112,6 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
     dismalpy.ssm.kalman_filter.KalmanFilter
     dismalpy.ssm.representation.Representation
     """
-    updater = None
-    transformer = None
-    untransformer = None
 
     def __init__(self, endog, k_states, exog=None, dates=None, freq=None,
                  **kwargs):
@@ -143,6 +150,11 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
 
         # Initialize the parameters
         self.params = None
+
+        # Initialize placeholders
+        self.updater = None
+        self.transformer = None
+        self.untransformer = None
 
     def fit(self, start_params=None, transformed=True,
             method='lbfgs', maxiter=50, full_output=1,
@@ -331,9 +343,9 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
         -----
         This is a numerical approximation.
 
-        Both *args and **kwargs are necessary because the optimizer from `fit`
-        must call this function and only supports passing arguments via *args
-        (for example `scipy.optimize.fmin_l_bfgs`).
+        Both \*args and \*\*kwargs are necessary because the optimizer from
+        `fit` must call this function and only supports passing arguments via
+        \*args (for example `scipy.optimize.fmin_l_bfgs`).
         """
         nargs = len(args)
         if nargs < 1:
@@ -388,9 +400,9 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
         -----
         This is a numerical approximation.
 
-        Both *args and **kwargs are necessary because the optimizer from `fit`
-        must call this function and only supports passing arguments via *args
-        (for example `scipy.optimize.fmin_l_bfgs`).
+        Both \*args and \*\*kwargs are necessary because the optimizer from
+        `fit` must call this function and only supports passing arguments via
+        \*args (for example `scipy.optimize.fmin_l_bfgs`).
         """
         nargs = len(args)
         if nargs < 1:
@@ -426,18 +438,38 @@ class MLEModel(SimulationSmoother, KalmanSmoother, KalmanFilter,
 
     @property
     def start_params(self):
-        raise NotImplementedError
+        """
+        (array) Starting parameters for maximum likelihood estimation.
+        """
+        if hasattr(self, '_start_params'):
+            return self._start_params
+        else:
+            raise NotImplementedError
+
+    @start_params.setter
+    def start_params(self, values):
+        self._start_params = np.asarray(values)
 
     @property
     def params_names(self):
+        """
+        (list of str) List of human readable parameter names (for parameters
+        actually included in the model).
+        """
         return self.model_names
 
     @property
     def model_names(self):
+        """
+        (list of str) The plain text names of all possible model parameters.
+        """
         return self._get_model_names(latex=False)
 
     @property
     def model_latex_names(self):
+        """
+        (list of str) The latex names of all possible model parameters.
+        """
         return self._get_model_names(latex=True)
 
     def _get_model_names(self, latex=False):
@@ -586,49 +618,14 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
 
     Attributes
     ----------
-    aic : float
-        Akaike Information Criterion
-    bic : float
-        Bayes Information Criterion
-    bse : array
-        The standard errors of the parameters. Computed using the numerical
-        Hessian.
-    cov_params : array
-        The variance / covariance matrix. Computed using the numerical Hessian.
-    hqic : array
-        Hannan-Quinn Information Criterion
-    llf : float
-        The value of the log-likelihood function evaluated at `params`.
     model : Model instance
         A reference to the model that was fit.
     nobs : float
         The number of observations used to fit the model.
     params : array
         The parameters of the model.
-    pvalues : array
-        The p-values associated with the z-statistics of the coefficients.
-        Note that the coefficients are assumed to have a Normal distribution.
     scale : float
         This is currently set to 1.0 and not used by the model or its results.
-    sigma2 : float
-        The variance of the residuals.
-    zvalues : array
-        The z-statistics for the coefficients.
-
-    Methods
-    -------
-    conf_int
-    f_test
-    fittedvalues
-    forecast
-    load
-    predict
-    remove_data
-    resid
-    save
-    summary
-    t_test
-    wald_test
 
     See Also
     --------
@@ -664,19 +661,32 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
 
     @cache_readonly
     def aic(self):
+        """
+        (float) Akaike Information Criterion
+        """
         # return -2*self.llf + 2*self.params.shape[0]
         return aic(self.llf, self.nobs, self.params.shape[0])
 
     @cache_readonly
     def bic(self):
+        """
+        (float) Bayes Information Criterion
+        """
         # return -2*self.llf + self.params.shape[0]*np.log(self.nobs)
         return bic(self.llf, self.nobs, self.params.shape[0])
 
     def cov_params(self):
+        """
+        The variance / covariance matrix. Computed using the numerical Hessian.
+        """
         return self.cov_params_default
 
     @cache_readonly
     def cov_params_default(self):
+        """
+        (array) The variance / covariance matrix. Computed using the numerical
+        Hessian computed without using parameter transformations.
+        """
         hessian = self.model.hessian(
             self._params, set_params=False, transformed=True,
             initial_state=self.initial_state,
@@ -691,7 +701,11 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
 
     @cache_readonly
     def cov_params_delta(self):
-        # Uses Delta method (method of propagation of errors)
+        """
+        (array) The variance / covariance matrix. Computed using the numerical
+        Hessian computed using parameter transformations and the Delta method
+        (method of propagation of errors).
+        """
 
         unconstrained = self.model.untransform_params(self._params)
         jacobian = self.model.transform_jacobian(unconstrained)
@@ -708,28 +722,46 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
         return jacobian.dot(-np.linalg.inv(hessian*self.nobs)).dot(jacobian.T)
 
     def fittedvalues(self):
-        """The predicted values of the model."""
+        """
+        (array) The predicted values of the model.
+        """
         return self.forecasts
 
     @cache_readonly
     def hqic(self):
+        """
+        (float) Hannan-Quinn Information Criterion
+        """
         # return -2*self.llf + 2*np.log(np.log(self.nobs))*self.params.shape[0]
         return hqic(self.llf, self.nobs, self.params.shape[0])
 
     @cache_readonly
     def llf(self):
+        """
+        (float) The value of the log-likelihood function evaluated at `params`.
+        """
         return self.loglikelihood[self.loglikelihood_burn:].sum()
 
     @cache_readonly
     def pvalues(self):
+        """
+        (array) The p-values associated with the z-statistics of the
+        coefficients. Note that the coefficients are assumed to have a Normal
+        distribution.
+        """
         return norm.sf(np.abs(self.zvalues)) * 2
 
     def resid(self):
-        """The model residuals."""
+        """
+        (array) The model residuals.
+        """
         return self.forecasts_error
 
     @cache_readonly
     def zvalues(self):
+        """
+        (array) The z-statistics for the coefficients.
+        """
         return self.params / self.bse
 
     def predict(self, start=None, end=None, dynamic=False, alpha=.05,

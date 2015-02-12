@@ -70,7 +70,6 @@ class KalmanFilter(Representation):
     results_class : class, optional
         Default results class to use to save filtering output. Default is
         `FilterResults`. If specified, class must extend from `FilterResults`.
-
     **kwargs
         Keyword arguments may be used to provide values for the filter,
         inversion, and stability methods. See `set_filter_method`,
@@ -80,6 +79,28 @@ class KalmanFilter(Representation):
 
     Notes
     -----
+    There are several types of options available for controlling the Kalman
+    filter operation. All options are internally held as bitmasks, but can be
+    manipulated by setting class attributes, which act like boolean flags. For
+    more information, see the `set_*` class method documentation. The options
+    are:
+
+    filter_method
+        The filtering method controls aspects of which
+        Kalman filtering approach will be used.
+    inversion_method
+        The Kalman filter may contain one matrix inversion: that of the
+        forecast error covariance matrix. The inversion method controls how and
+        if that inverse is performed.
+    stability_method
+        The Kalman filter is a recursive algorithm that may in some cases
+        suffer issues with numerical stability. The stability method controls
+        what, if any, measures are taken to promote stability.
+    conserve_memory
+        By default, the Kalman filter computes a number of intermediate
+        matrices at each iteration. The memory conservation options control
+        which of those matrices are stored.
+
     The `filter_method` and `inversion_method` options intentionally allow
     the possibility that multiple methods will be indicated. In the case that
     multiple methods are selected, the underlying Kalman filter will attempt to
@@ -93,6 +114,11 @@ class KalmanFilter(Representation):
     than explicit matrix inversion) is used. If only SOLVE_CHOLESKY had been
     set, then the Cholesky decomposition method would *always* be used, even in
     the case of 1-dimensional data.
+
+    See Also
+    --------
+    FilterResults
+    dismalpy.ssm.representation.Representation
     """
 
     filter_methods = [
@@ -102,13 +128,37 @@ class KalmanFilter(Representation):
     ]
 
     filter_conventional = OptionWrapper('filter_method', FILTER_CONVENTIONAL)
+    """
+    (bool) Flag for conventional Kalman filtering.
+    """
     filter_exact_initial = OptionWrapper('filter_method', FILTER_EXACT_INITIAL)
+    """
+    (bool) Flag for exact initial Kalman filtering. Not implemented.
+    """
     filter_augmented = OptionWrapper('filter_method', FILTER_AUGMENTED)
+    """
+    (bool) Flag for augmented Kalman filtering. Not implemented.
+    """
     filter_square_root = OptionWrapper('filter_method', FILTER_SQUARE_ROOT)
+    """
+    (bool) Flag for square-root Kalman filtering. Not implemented.
+    """
     filter_univariate = OptionWrapper('filter_method', FILTER_UNIVARIATE)
+    """
+    (bool) Flag for univariate filtering of multivariate observation vector.
+    """
     filter_collapsed = OptionWrapper('filter_method', FILTER_COLLAPSED)
+    """
+    (bool) Flag for Kalman filtering with collapsed observation vector.
+    """
     filter_extended = OptionWrapper('filter_method', FILTER_EXTENDED)
+    """
+    (bool) Flag for extended Kalman filtering. Not implemented.
+    """
     filter_unscented = OptionWrapper('filter_method', FILTER_UNSCENTED)
+    """
+    (bool) Flag for unscented Kalman filtering. Not implemented.
+    """
 
     inversion_methods = [
         'invert_univariate', 'solve_lu', 'invert_lu', 'solve_cholesky',
@@ -116,17 +166,38 @@ class KalmanFilter(Representation):
     ]
 
     invert_univariate = OptionWrapper('inversion_method', INVERT_UNIVARIATE)
+    """
+    (bool) Flag for univariate inversion method (recommended).
+    """
     solve_lu = OptionWrapper('inversion_method', SOLVE_LU)
+    """
+    (bool) Flag for LU and linear solver inversion method.
+    """
     invert_lu = OptionWrapper('inversion_method', INVERT_LU)
+    """
+    (bool) Flag for LU inversion method.
+    """
     solve_cholesky = OptionWrapper('inversion_method', SOLVE_CHOLESKY)
+    """
+    (bool) Flag for Cholesky and linear solver inversion method (recommended).
+    """
     invert_cholesky = OptionWrapper('inversion_method', INVERT_CHOLESKY)
+    """
+    (bool) Flag for Cholesky inversion method.
+    """
     invert_numpy = OptionWrapper('inversion_method', INVERT_NUMPY)
+    """
+    (bool) Flag for inversion using numpy (not recommended).
+    """
 
     stability_methods = ['stability_force_symmetry']
 
     stability_force_symmetry = (
         OptionWrapper('stability_method', STABILITY_FORCE_SYMMETRY)
     )
+    """
+    (bool) Flag for enforcing covariance matrix symmetry
+    """
 
     memory_options = [
         'memory_store_all', 'memory_no_forecast', 'memory_no_predicted',
@@ -135,21 +206,57 @@ class KalmanFilter(Representation):
     ]
 
     memory_store_all = OptionWrapper('conserve_memory', MEMORY_STORE_ALL)
+    """
+    (bool) Flag for storing all intermediate results in memory (default).
+    """
     memory_no_forecast = OptionWrapper('conserve_memory', MEMORY_NO_FORECAST)
+    """
+    (bool) Flag to prevent storing forecasts.
+    """
     memory_no_predicted = OptionWrapper('conserve_memory', MEMORY_NO_PREDICTED)
+    """
+    (bool) Flag to prevent storing predicted state and covariance matrices.
+    """
     memory_no_filtered = OptionWrapper('conserve_memory', MEMORY_NO_FILTERED)
+    """
+    (bool) Flag to prevent storing filtered state and covariance matrices.
+    """
     memory_no_likelihood = (
         OptionWrapper('conserve_memory', MEMORY_NO_LIKELIHOOD)
     )
+    """
+    (bool) Flag to prevent storing likelihood values for each observation.
+    """
     memory_no_gain = OptionWrapper('conserve_memory', MEMORY_NO_GAIN)
+    """
+    (bool) Flag to prevent storing the Kalman gain matrices.
+    """
     memory_no_smoothing = OptionWrapper('conserve_memory', MEMORY_NO_SMOOTHING)
+    """
+    (bool) Flag to prevent storing temporary values used in smoothing.
+    """
     memory_conserve = OptionWrapper('conserve_memory', MEMORY_CONSERVE)
+    """
+    (bool) Flag to conserve the maximum amount of memory.
+    """
 
     # Default filter options
     filter_method = FILTER_CONVENTIONAL
+    """
+    (int) Filtering method bitmask.
+    """
     inversion_method = INVERT_UNIVARIATE | SOLVE_CHOLESKY
+    """
+    (int) Inversion method bitmask.
+    """
     stability_method = STABILITY_FORCE_SYMMETRY
+    """
+    (int) Stability method bitmask.
+    """
     conserve_memory = MEMORY_STORE_ALL
+    """
+    (int) Memory conservation bitmask.
+    """
 
     def __init__(self, k_endog, k_states, k_posdef=None,
                  loglikelihood_burn=0, tolerance=1e-19, results_class=None,
@@ -347,8 +454,9 @@ class KalmanFilter(Representation):
         INVERT_LU = 0x04
             Use an LU decomposition along with typical matrix inversion.
         SOLVE_CHOLESKY = 0x08
+            Use a Cholesky decomposition along with a linear solver.
         INVERT_CHOLESKY = 0x10
-            Use an LU decomposition along with typical matrix inversion.
+            Use an Cholesky decomposition along with typical matrix inversion.
         INVERT_NUMPY = 0x20
             Use the numpy inversion function. This is not recommended except
             for testing as it will be substantially slower than the other
@@ -664,15 +772,16 @@ class FilterResults(FrozenRepresentation):
     k_states : int
         The dimension of the unobserved state process.
     k_posdef : int
-        The dimension of a guaranteed positive definite covariance matrix
-        describing the shocks in the measurement equation.
+        The dimension of a guaranteed positive definite
+        covariance matrix describing the shocks in the
+        measurement equation.
     dtype : dtype
         Datatype of representation matrices
     prefix : str
         BLAS prefix of representation matrices
-    shapes : dictionary of name:tuple
-        A dictionary recording the shapes of each of the representation
-        matrices as tuples.
+    shapes : dictionary of name,tuple
+        A dictionary recording the shapes of each of the
+        representation matrices as tuples.
     endog : array
         The observation vector.
     design : array
@@ -690,12 +799,14 @@ class FilterResults(FrozenRepresentation):
     state_cov : array
         The covariance matrix for the state equation :math:`Q`.
     missing : array of bool
-        An array of the same size as `endog`, filled with boolean values that
-        are True if the corresponding entry in `endog` is NaN and False
+        An array of the same size as `endog`, filled
+        with boolean values that are True if the
+        corresponding entry in `endog` is NaN and False
         otherwise.
     nmissing : array of int
-        An array of size `nobs`, where the ith entry is the number (between 0
-        and k_endog) of NaNs in the ith row of the `endog` array.
+        An array of size `nobs`, where the ith entry
+        is the number (between 0 and `k_endog`) of NaNs in
+        the ith row of the `endog` array.
     time_invariant : bool
         Whether or not the representation matrices are time-invariant
     initialization : str
@@ -707,19 +818,20 @@ class FilterResults(FrozenRepresentation):
     filter_method : int
         Bitmask representing the Kalman filtering method
     inversion_method : int
-        Bitmask representing the method used to invert the forecast error
-        covariance matrix.
+        Bitmask representing the method used to
+        invert the forecast error covariance matrix.
     stability_method : int
-        Bitmask representing the methods used to promote numerical stability in
-        the Kalman filter recursions.
+        Bitmask representing the methods used to promote
+        numerical stability in the Kalman filter
+        recursions.
     conserve_memory : int
         Bitmask representing the selected memory conservation method.
     tolerance : float
-        The tolerance at which the Kalman filter determines convergence to
-        steady-state.
+        The tolerance at which the Kalman filter
+        determines convergence to steady-state.
     loglikelihood_burn : int
-        The number of initial periods during which the loglikelihood is not
-        recorded.
+        The number of initial periods during which
+        the loglikelihood is not recorded.
     converged : bool
         Whether or not the Kalman filter converged.
     period_converged : int
@@ -752,10 +864,6 @@ class FilterResults(FrozenRepresentation):
         If filtering using collapsed observations, stores the one-step-ahead
         forecast error covariance matrices of collapsed observations at each
         time period.
-    standardized_forecast_error : array
-        The standardized forecast errors.
-    kalman_gain : array
-        The Kalman gain matrices.
     """
     _filter_attributes = [
         'filter_method', 'inversion_method', 'stability_method',
@@ -967,6 +1075,9 @@ class FilterResults(FrozenRepresentation):
 
     @property
     def standardized_forecasts_error(self):
+        """
+        Standardized forecast errors
+        """
         if self._standardized_forecasts_error is None:
             from scipy import linalg
             self._standardized_forecasts_error = np.zeros(

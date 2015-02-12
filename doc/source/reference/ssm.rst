@@ -18,7 +18,40 @@ Representation
    :toctree: _generated/
 
    Representation
+   FrozenRepresentation
+
+Kalman filter
+-------------
+
+.. currentmodule:: dismalpy.ssm.kalman_filter
+
+.. autosummary::
+   :toctree: _generated/
+
+   KalmanFilter
    FilterResults
+
+Kalman smoother 
+---------------
+
+.. currentmodule:: dismalpy.ssm.kalman_smoother
+
+.. autosummary::
+   :toctree: _generated/
+
+   KalmanSmoother
+   SmootherResults
+
+Simulation smoother
+-------------------
+
+.. currentmodule:: dismalpy.ssm.simulation_smoother
+
+.. autosummary::
+   :toctree: _generated/
+
+   SimulationSmoother
+   SimulationSmoothResults
 
 Model
 -----
@@ -29,7 +62,17 @@ Model
    :toctree: _generated/
 
    Model
-   StatespaceResults
+
+Maximum Likelihood Estimation
+-----------------------------
+
+.. currentmodule:: dismalpy.ssm.mlemodel
+
+.. autosummary::
+   :toctree: _generated/
+
+   MLEModel
+   MLEResults
 
 SARIMAX
 -------

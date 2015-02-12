@@ -93,7 +93,7 @@ def companion_matrix(polynomial):
         n = polynomial
         polynomial = None
     else:
-        n = len(polynomial)-1
+        n = len(polynomial) - 1
         polynomial = np.asanyarray(polynomial)
 
     matrix = np.zeros((n, n))
@@ -106,7 +106,7 @@ def companion_matrix(polynomial):
 
 
 def diff(series, k_diff=1, k_seasonal_diff=None, k_seasons=1):
-    """
+    r"""
     Difference a series simply and/or seasonally along the zero-th axis.
 
     Given a series (denoted :math:`y_t`), performs the differencing operation
@@ -115,8 +115,9 @@ def diff(series, k_diff=1, k_seasonal_diff=None, k_seasons=1):
 
         \Delta^d \Delta_s^D y_t
 
-    where :math:`d = diff`, :math:`s = k\_seasons`, :math:`D = seasonal\_diff`,
-    and :math:`\Delta` is the difference operator.
+    where :math:`d =` `diff`, :math:`s =` `k_seasons`,
+    :math:`D =` `seasonal\_diff`, and :math:`\Delta` is the difference
+    operator.
 
     Parameters
     ----------
@@ -195,7 +196,7 @@ def concat(series, axis=0, allow_mix=False):
 
 
 def is_invertible(polynomial, threshold=1.):
-    """
+    r"""
     Determine if a polynomial is invertible.
 
     Requires all roots of the polynomial lie inside the unit circle.
