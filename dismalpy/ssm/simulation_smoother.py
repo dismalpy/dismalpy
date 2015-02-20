@@ -248,7 +248,7 @@ class SimulationSmoothResults(object):
 
     @property
     def simulate_state(self):
-        return self.simulation_output & SIMULATION_STATE
+        return bool(self.simulation_output & SIMULATION_STATE)
     @simulate_state.setter
     def simulate_state(self, value):
         if bool(value):
@@ -258,7 +258,7 @@ class SimulationSmoothResults(object):
 
     @property
     def simulate_disturbance(self):
-        return self.simulation_output & SIMULATION_DISTURBANCE
+        return bool(self.simulation_output & SIMULATION_DISTURBANCE)
     @simulate_disturbance.setter
     def simulate_disturbance(self, value):
         if bool(value):
@@ -268,7 +268,7 @@ class SimulationSmoothResults(object):
 
     @property
     def simulate_all(self):
-        return self.simulation_output & SIMULATION_ALL
+        return bool(self.simulation_output & SIMULATION_ALL)
     @simulate_all.setter
     def simulate_all(self, value):
         if bool(value):
