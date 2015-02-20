@@ -126,7 +126,7 @@ class Gamma(RandomVariable):
             value = value[:, np.newaxis]
         elif not value.ndim == 2:
             raise ValueError('Invalid exogenous array dimensions. Required '
-                             ' (nobs, %d), got %s' % (self.dim, value.shape))
+                             ' (nobs, ncoef), got %s' % value.shape)
 
         if self._beta is not None:
             if not value.shape[1] == self._beta.shape[0]:
