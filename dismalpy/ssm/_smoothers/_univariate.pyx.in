@@ -121,7 +121,7 @@ cdef int {{prefix}}smoothed_estimators_univariate({{prefix}}KalmanSmoother smoot
             {{else}}
             blas.{{prefix}}gemv("N", &inc, &model._k_states,
                            &alpha, smoother._scaled_smoothed_estimator, &inc,
-                                   &kfilter._kalman_gain[i*kfilter.k_states], &kfilter.k_states,
+                                   &kfilter._kalman_gain[i*kfilter.k_states], &inc,
                            &beta, &smoother._smoothed_measurement_disturbance[i], &inc)
             {{endif}}
 
@@ -131,8 +131,8 @@ cdef int {{prefix}}smoothed_estimators_univariate({{prefix}}KalmanSmoother smoot
         if smoother.smoother_output & SMOOTHER_DISTURBANCE_COV:
             blas.{{prefix}}gemv("N", &model._k_states, &model._k_states,
                                      &alpha, smoother._scaled_smoothed_estimator_cov, &kfilter.k_states,
-                                             &kfilter._kalman_gain[i*kfilter.k_states], &kfilter.k_states,
-                                     &beta, smoother._tmpL, &kfilter.k_states)
+                                             &kfilter._kalman_gain[i*kfilter.k_states], &inc,
+                                     &beta, smoother._tmpL, &inc)
             # Note: zdot and cdot are broken, so have to use gemv for those
             {{if combined_prefix == 'd'}}
             smoother._smoothed_measurement_disturbance_cov[i + i*kfilter.k_endog] = (
@@ -142,7 +142,7 @@ cdef int {{prefix}}smoothed_estimators_univariate({{prefix}}KalmanSmoother smoot
             {{else}}
             blas.{{prefix}}gemv("N", &inc, &model._k_states,
                            &alpha, smoother._tmpL, &inc,
-                                   &kfilter._kalman_gain[i*kfilter.k_states], &kfilter.k_states,
+                                   &kfilter._kalman_gain[i*kfilter.k_states], &inc,
                            &beta, &smoother._smoothed_measurement_disturbance_cov[i*kfilter.k_endog + i], &inc)
             {{endif}}
 
