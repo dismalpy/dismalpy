@@ -688,11 +688,6 @@ class MLEResults(SmootherResults, tsbase.TimeSeriesModelResults):
         # return -2*self.llf + self.params.shape[0]*np.log(self.nobs)
         return bic(self.llf, self.nobs, self.params.shape[0])
 
-    def cov_params(self):
-        """
-        The variance / covariance matrix. Computed using the numerical Hessian.
-        """
-        return self.cov_params_default
 
     @cache_readonly
     def cov_params_default(self):
