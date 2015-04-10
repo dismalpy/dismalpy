@@ -526,7 +526,7 @@ class SmootherResults(FilterResults):
                     ) + self.obs_intercept[:, obs_intercept_t]
 
                     self._smoothed_forecasts_error[:, t] = (
-                        self.endog[:, t] - self.forecasts[:, t]
+                        self.endog[:, t] - self._smoothed_forecasts[:, t]
                     )
 
                     self._smoothed_forecasts_error_cov[:, :, t] = np.dot(
