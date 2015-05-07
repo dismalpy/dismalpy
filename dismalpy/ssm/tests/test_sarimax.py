@@ -24,7 +24,7 @@ coverage_path = 'results' + os.sep + 'results_sarimax_coverage.csv'
 coverage_results = pd.read_csv(current_path + os.sep + coverage_path)
 
 
-class SARIMAXStatsmodelsTests(object):
+class TestSARIMAXStatsmodels(object):
     """
     Test ARIMA model using SARIMAX class against statsmodels ARIMA class
     """
@@ -38,7 +38,8 @@ class SARIMAXStatsmodelsTests(object):
         self.model_b = sarimax.SARIMAX(endog, order=(1, 1, 1), trend='c',
                                        simple_differencing=True,
                                        hamilton_representation=True)
-        self.result_b = self.model_b.fit(disp=-1)
+        self.result_b = self.model_b.fit(disp=-1,
+                                         information_matrix_type='oim')
 
     def test_loglike(self):
         assert_allclose(self.result_b.llf, self.result_a.llf)
@@ -57,14 +58,25 @@ class SARIMAXStatsmodelsTests(object):
         # the intercept. Convert the mean to intercept to compare
         params_a = self.result_a.params
         params_a[0] = (1 - params_a[1]) * params_a[0]
-        assert_allclose(self.result_b.params[:-1], params_a, atol=1e-3)
+        assert_allclose(self.result_b.params[:-1], params_a, atol=5e-5)
 
     def test_bse(self):
+        # Make sure the default type is OIM for this example
+        assert(self.result_b.information_matrix_type == 'oim')
+        # Test the OIM BSE values
         assert_allclose(
             self.result_b.bse[1:-1],
             self.result_a.bse[1:],
             atol=1e-2
         )
+
+
+    def test_t_test(self):
+        import statsmodels.tools._testing as smt
+        #self.result_b.pvalues
+        #self.result_b._cache['pvalues'] += 1  # use to trigger failure
+        smt.check_ttest_tvalues(self.result_b)
+        smt.check_ftest_pvalues(self.result_b)
 
 
 class SARIMAXStataTests(object):
@@ -139,13 +151,38 @@ class TestARIMAStationary(ARIMA):
         self.result = self.model.filter()
 
     def test_bse(self):
+        # Default covariance type (OPG)
         assert_allclose(
-            self.result.bse[1], self.true['se_ar_oim'],
+            self.result.bse[1], self.true['se_ar_opg'],
             atol=1e-3,
         )
         assert_allclose(
-            self.result.bse[2], self.true['se_ma_oim'],
-            atol=1e-3, rtol=1e-2
+            self.result.bse[2], self.true['se_ma_opg'],
+            atol=1e-3,
+        )
+
+    def test_bse_oim(self):
+        # OIM covariance type
+        oim_bse = self.result.cov_params_oim.diagonal()**0.5
+        assert_allclose(
+            oim_bse[1], self.true['se_ar_oim'],
+            atol=1e-3,
+        )
+        assert_allclose(
+            oim_bse[2], self.true['se_ma_oim'],
+            atol=1e-2,
+        )
+
+    def test_bse_cs(self):
+        # CS covariance type
+        cs_bse = self.result.cov_params_cs.diagonal()**0.5
+        assert_allclose(
+            cs_bse[1], self.true['se_ar_oim'],
+            atol=1e-2,
+        )
+        assert_allclose(
+            cs_bse[2], self.true['se_ma_oim'],
+            atol=1e-2,
         )
 
 
@@ -156,13 +193,40 @@ class TestARIMADiffuse(ARIMA):
         self.result = self.model.filter()
 
     def test_bse(self):
+        # Make sure the default type is OPG
+        assert(self.result.information_matrix_type == 'opg')
+        # Test the OPG BSE values
         assert_allclose(
-            self.result.bse[1], self.true['se_ar_oim'],
-            atol=1e-1,
+            self.result.bse[1], self.true['se_ar_opg'],
+            atol=1e-3,
         )
         assert_allclose(
-            self.result.bse[2], self.true['se_ma_oim'],
-            atol=1e-1, rtol=1e-1
+            self.result.bse[2], self.true['se_ma_opg'],
+            atol=1e-3,
+        )
+
+    def test_bse_oim(self):
+        # OIM covariance type
+        oim_bse = self.result.cov_params_oim.diagonal()**0.5
+        assert_allclose(
+            oim_bse[1], self.true['se_ar_oim'],
+            atol=1e-2,
+        )
+        assert_allclose(
+            oim_bse[2], self.true['se_ma_oim'],
+            atol=1e-2, rtol=1e-1
+        )
+
+    def test_bse_cs(self):
+        # CS covariance type
+        cs_bse = self.result.cov_params_cs.diagonal()**0.5
+        assert_allclose(
+            cs_bse[1], self.true['se_ar_oim'],
+            atol=1e-2,
+        )
+        assert_allclose(
+            cs_bse[2], self.true['se_ma_oim'],
+            atol=1e-2, rtol=1e-1
         )
 
 
@@ -207,13 +271,40 @@ class TestAdditiveSeasonal(AdditiveSeasonal):
         self.result = self.model.filter()
 
     def test_bse(self):
+        # Make sure the default type is OPG
+        assert(self.result.information_matrix_type == 'opg')
+        # Test the OPG BSE values
         assert_allclose(
-            self.result.bse[1], self.true['se_ar_oim'],
-            atol=1e-3, rtol=1e-2
+            self.result.bse[1], self.true['se_ar_opg'],
+            atol=1e-3,
         )
         assert_allclose(
-            self.result.bse[2:4], self.true['se_ma_oim'],
+            self.result.bse[2:4], self.true['se_ma_opg'],
             atol=1e-3,
+        )
+
+    def test_bse_oim(self):
+        # OIM covariance type
+        oim_bse = self.result.cov_params_oim.diagonal()**0.5
+        assert_allclose(
+            oim_bse[1], self.true['se_ar_oim'],
+            atol=1e-2,
+        )
+        assert_allclose(
+            oim_bse[2:4], self.true['se_ma_oim'],
+            atol=1e-1
+        )
+
+    def test_bse_cs(self):
+        # CS covariance type
+        cs_bse = self.result.cov_params_cs.diagonal()**0.5
+        assert_allclose(
+            cs_bse[1], self.true['se_ar_oim'],
+            atol=1e-2,
+        )
+        assert_allclose(
+            cs_bse[2:4], self.true['se_ma_oim'],
+            atol=1e-1
         )
 
 
@@ -256,13 +347,40 @@ class TestAirlineHamilton(Airline):
         self.result = self.model.filter()
 
     def test_bse(self):
+        # Make sure the default type is OPG
+        assert(self.result.information_matrix_type == 'opg')
+        # Test the OPG BSE values
         assert_allclose(
-            self.result.bse[0], self.true['se_ma_oim'],
+            self.result.bse[0], self.true['se_ma_opg'],
             atol=1e-4,
         )
         assert_allclose(
-            self.result.bse[1], self.true['se_seasonal_ma_oim'],
+            self.result.bse[1], self.true['se_seasonal_ma_opg'],
             atol=1e-3,
+        )
+
+    def test_bse_oim(self):
+        # OIM covariance type
+        oim_bse = self.result.cov_params_oim.diagonal()**0.5
+        assert_allclose(
+            oim_bse[0], self.true['se_ma_oim'],
+            atol=1e-2,
+        )
+        assert_allclose(
+            oim_bse[1], self.true['se_seasonal_ma_oim'],
+            atol=1e-1
+        )
+
+    def test_bse_cs(self):
+        # CS covariance type
+        cs_bse = self.result.cov_params_cs.diagonal()**0.5
+        assert_allclose(
+            cs_bse[0], self.true['se_ma_oim'],
+            atol=1e-2,
+        )
+        assert_allclose(
+            cs_bse[1], self.true['se_seasonal_ma_oim'],
+            atol=1e-1
         )
 
 
@@ -274,13 +392,40 @@ class TestAirlineHarvey(Airline):
         self.result = self.model.filter()
 
     def test_bse(self):
+        # Make sure the default type is OPG
+        assert(self.result.information_matrix_type == 'opg')
+        # Test the OPG BSE values
         assert_allclose(
-            self.result.bse[0], self.true['se_ma_oim'],
+            self.result.bse[0], self.true['se_ma_opg'],
+            atol=1e-3,
+        )
+        assert_allclose(
+            self.result.bse[1], self.true['se_seasonal_ma_opg'],
+            atol=1e-3,
+        )
+
+    def test_bse_oim(self):
+        # OIM covariance type
+        oim_bse = self.result.cov_params_oim.diagonal()**0.5
+        assert_allclose(
+            oim_bse[0], self.true['se_ma_oim'],
             atol=1e-2,
         )
         assert_allclose(
-            self.result.bse[1], self.true['se_seasonal_ma_oim'],
-            atol=1e-3,
+            oim_bse[1], self.true['se_seasonal_ma_oim'],
+            atol=1e-1
+        )
+
+    def test_bse_cs(self):
+        # OIM covariance type
+        cs_bse = self.result.cov_params_cs.diagonal()**0.5
+        assert_allclose(
+            cs_bse[0], self.true['se_ma_oim'],
+            atol=1e-2,
+        )
+        assert_allclose(
+            cs_bse[1], self.true['se_seasonal_ma_oim'],
+            atol=1e-1
         )
 
 
@@ -309,13 +454,40 @@ class TestAirlineStateDifferencing(Airline):
         )
 
     def test_bse(self):
+        # Make sure the default type is OPG
+        assert(self.result.information_matrix_type == 'opg')
+        # Test the OPG BSE values
         assert_allclose(
-            self.result.bse[0], self.true['se_ma_oim'],
+            self.result.bse[0], self.true['se_ma_opg'],
             atol=1e-3,
         )
         assert_allclose(
-            self.result.bse[1], self.true['se_seasonal_ma_oim'],
+            self.result.bse[1], self.true['se_seasonal_ma_opg'],
             atol=1e-4,
+        )
+
+    def test_bse_oim(self):
+        # OIM covariance type
+        oim_bse = self.result.cov_params_oim.diagonal()**0.5
+        assert_allclose(
+            oim_bse[0], self.true['se_ma_oim'],
+            atol=1e-2,
+        )
+        assert_allclose(
+            oim_bse[1], self.true['se_seasonal_ma_oim'],
+            atol=1e-1
+        )
+
+    def test_bse_cs(self):
+        # CS covariance type
+        cs_bse = self.result.cov_params_cs.diagonal()**0.5
+        assert_allclose(
+            cs_bse[0], self.true['se_ma_oim'],
+            atol=1e-2,
+        )
+        assert_allclose(
+            cs_bse[1], self.true['se_seasonal_ma_oim'],
+            atol=1e-1
         )
 
 
@@ -325,10 +497,11 @@ class Friedman(SARIMAXStataTests):
 
     Stata arima documentation, Example 4
     """
-    def __init__(self, true, *args, **kwargs):
+    def __init__(self, true, exog=None, *args, **kwargs):
         self.true = true
         endog = np.r_[true['data']['consump']]
-        exog = add_constant(true['data']['m2'])
+        if exog is None:
+            exog = add_constant(true['data']['m2'])
 
         kwargs.setdefault('simple_differencing', True)
         kwargs.setdefault('hamilton_representation', True)
@@ -358,20 +531,63 @@ class TestFriedmanMLERegression(Friedman):
         )
 
     def test_bse(self):
+        # Make sure the default type is OPG
+        assert(self.result.information_matrix_type == 'opg')
+        # Test the OPG BSE values
         assert_allclose(
-            self.result.bse[0], self.true['se_exog_oim'][0],
-            rtol=3e-1
+            self.result.bse[0], self.true['se_exog_opg'][0],
+            rtol=1e-1
         )
         assert_allclose(
-            self.result.bse[1], self.true['se_exog_oim'][1],
+            self.result.bse[1], self.true['se_exog_opg'][1],
             atol=1e-2,
         )
         assert_allclose(
-            self.result.bse[2], self.true['se_ar_oim'],
-            atol=1e-1,
+            self.result.bse[2], self.true['se_ar_opg'],
+            atol=1e-2,
         )
         assert_allclose(
-            self.result.bse[3], self.true['se_ma_oim'],
+            self.result.bse[3], self.true['se_ma_opg'],
+            atol=1e-2,
+        )
+
+    def test_bse_oim(self):
+        # OIM covariance type
+        oim_bse = self.result.cov_params_oim.diagonal()**0.5
+        assert_allclose(
+            oim_bse[0], self.true['se_exog_oim'][0],
+            rtol=1e-1
+        )
+        assert_allclose(
+            oim_bse[1], self.true['se_exog_oim'][1],
+            atol=1e-2,
+        )
+        assert_allclose(
+            oim_bse[2], self.true['se_ar_oim'],
+            atol=1e-2,
+        )
+        assert_allclose(
+            oim_bse[3], self.true['se_ma_oim'],
+            atol=1e-2,
+        )
+
+    def test_bse_cs(self):
+        # CS covariance type
+        cs_bse = self.result.cov_params_oim.diagonal()**0.5
+        assert_allclose(
+            cs_bse[0], self.true['se_exog_oim'][0],
+            rtol=1e-1
+        )
+        assert_allclose(
+            cs_bse[1], self.true['se_exog_oim'][1],
+            atol=1e-2,
+        )
+        assert_allclose(
+            cs_bse[2], self.true['se_ar_oim'],
+            atol=1e-2,
+        )
+        assert_allclose(
+            cs_bse[3], self.true['se_ma_oim'],
             atol=1e-2,
         )
 
@@ -381,22 +597,38 @@ class TestFriedmanStateRegression(Friedman):
         # Remove the regression coefficients from the parameters, since they
         # will be estimated as part of the state vector
         true = dict(results_sarimax.friedman2_mle)
+        exog = add_constant(true['data']['m2']) / 10.
 
         true['mle_params_exog'] = true['params_exog'][:]
-        true['mle_se_exog'] = true['se_exog_oim'][:]
+        true['mle_se_exog'] = true['se_exog_opg'][:]
 
         true['params_exog'] = []
         true['se_exog'] = []
 
         super(TestFriedmanStateRegression, self).__init__(
-            true, mle_regression=False
+            true, exog=exog, mle_regression=False
         )
 
         self.result = self.model.filter()
 
+    def test_mle(self):
+        result = self.model.fit(disp=-1)
+        assert_allclose(
+            result.params, self.result.params,
+            atol=1e-1, rtol=1e-1
+        )
+
     def test_regression_parameters(self):
+        # The regression effects are integrated into the state vector as
+        # the last two states (thus the index [-2:]). The filtered
+        # estimates of the state vector produced by the Kalman filter and
+        # stored in `filtered_state` for these state elements give the
+        # recursive least squares estimates of the regression coefficients
+        # at each time period. To get the estimates conditional on the
+        # entire dataset, use the filtered states from the last time
+        # period (thus the index [-1]).
         assert_almost_equal(
-            self.result.filtered_state[-2:, -1],
+            self.result.filtered_state[-2:, -1] / 10.,
             self.true['mle_params_exog'], 1
         )
 
@@ -412,13 +644,40 @@ class TestFriedmanStateRegression(Friedman):
         pass
 
     def test_bse(self):
+        # Make sure the default type is OPG
+        assert(self.result.information_matrix_type == 'opg')
+        # Test the OPG BSE values
         assert_allclose(
-            self.result.bse[0], self.true['se_ar_oim'],
+            self.result.bse[0], self.true['se_ar_opg'],
+            atol=1e-2
+        )
+        assert_allclose(
+            self.result.bse[1], self.true['se_ma_opg'],
+            atol=1e-2
+        )
+
+    def test_bse_oim(self):
+        # OIM covariance type
+        oim_bse = self.result.cov_params_oim.diagonal()**0.5
+        assert_allclose(
+            oim_bse[0], self.true['se_ar_oim'],
             atol=1e-1,
         )
         assert_allclose(
-            self.result.bse[1], self.true['se_ma_oim'],
-            atol=1e-4,
+            oim_bse[1], self.true['se_ma_oim'],
+            atol=1e-2, rtol=1e-2
+        )
+
+    def test_bse_cs(self):
+        # CS covariance type
+        cs_bse = self.result.cov_params_cs.diagonal()**0.5
+        assert_allclose(
+            cs_bse[0], self.true['se_ar_oim'],
+            atol=1e-1,
+        )
+        assert_allclose(
+            cs_bse[1], self.true['se_ma_oim'],
+            atol=1e-2, rtol=1e-2
         )
 
 
@@ -455,14 +714,14 @@ class TestFriedmanPredict(Friedman):
 
     def test_predict(self):
         assert_almost_equal(
-            self.result.predict()[0][0],
+            self.result.predict()[0],
             self.true['predict'], 3
         )
 
     def test_dynamic_predict(self):
         dynamic = len(self.true['data']['consump'])-15-1
         assert_almost_equal(
-            self.result.predict(dynamic=dynamic)[0][0],
+            self.result.predict(dynamic=dynamic)[0],
             self.true['dynamic_predict'], 3
         )
 
@@ -517,7 +776,7 @@ class TestFriedmanForecast(Friedman):
         end = len(self.true['data']['consump'])+15-1
         exog = add_constant(self.true['forecast_data']['m2'])
         assert_almost_equal(
-            self.result.predict(end=end, exog=exog)[0][0],
+            self.result.predict(end=end, exog=exog)[0],
             self.true['forecast'], 3
         )
 
@@ -526,7 +785,7 @@ class TestFriedmanForecast(Friedman):
         dynamic = len(self.true['data']['consump'])-1
         exog = add_constant(self.true['forecast_data']['m2'])
         assert_almost_equal(
-            self.result.predict(end=end, dynamic=dynamic, exog=exog)[0][0],
+            self.result.predict(end=end, dynamic=dynamic, exog=exog)[0],
             self.true['dynamic_forecast'], 3
         )
 
@@ -555,10 +814,10 @@ class SARIMAXCoverageTest(object):
         self.model.update(self.true_params)
         self.result = self.model.filter()
 
-        assert_almost_equal( 
+        assert_allclose(
             self.result.llf,
             self.true_loglike,
-            self.decimal
+            atol=0.7 * 10**(-self.decimal)
         )
 
     def test_start_params(self):
@@ -585,7 +844,7 @@ class SARIMAXCoverageTest(object):
         )
         contracted_polynomial_seasonal_ma = self.model.polynomial_seasonal_ma[self.model.polynomial_seasonal_ma.nonzero()]
         self.model.enforce_invertibility = (
-            (self.model.k_ma == 0 or tools.is_invertible(np.r_[1, -self.model.polynomial_ma[1:]])) and 
+            (self.model.k_ma == 0 or tools.is_invertible(np.r_[1, -self.model.polynomial_ma[1:]])) and
             (len(contracted_polynomial_seasonal_ma) <= 1 or tools.is_invertible(np.r_[1, -contracted_polynomial_seasonal_ma[1:]]))
         )
 
@@ -603,6 +862,47 @@ class SARIMAXCoverageTest(object):
 
         # Just make sure that no exceptions are thrown during summary
         self.result.summary()
+
+        # And make sure no expections are thrown calculating any of the
+        # covariance matrix types
+        self.result.cov_params_default
+        self.result.cov_params_cs
+        # Some of the below models have non-invertible parameters, which causes
+        # problems with the reverse parameter transformation used in the
+        # `cov_params_delta` procedure. This is unavoidable with these types of
+        # parameters, and should not be considered a failure.
+        try:
+            self.result.cov_params_delta
+        except np.linalg.LinAlgError:
+            pass
+        self.result.cov_params_oim
+        self.result.cov_params_opg
+
+    def test_init_keys_replicate(self):
+        mod1 = self.model
+        mod1.update(self.true_params)  # test with side effect ?
+
+        if mod1.initialization == 'approximate_diffuse':
+            raise SkipTest('known failure: init_keys incomplete')
+        kwargs = self.model._get_init_kwds()
+        # TODO: current limitations #2259 comments
+        #endog = mod1.endog.squeeze() # test failures, endog may be transformed
+        # this works
+        #endog = mod1.orig_endog
+        #exog = mod1.orig_exog
+
+        # in SARIMAX endog, exog will always be in kwargs but not in other models
+        if 'endog' in kwargs:
+            endog = kwargs.pop('endog')
+        if 'exog' in kwargs:
+            exog = kwargs.pop('exog')
+
+        model2 = sarimax.SARIMAX(endog, exog, **kwargs)
+        model2.update(self.true_params)
+        res1 = self.model.filter()
+        res2 = model2.filter()
+        assert_allclose(res2.llf, res1.llf, rtol=1e-13)
+
 
 class Test_ar(SARIMAXCoverageTest):
     # // AR: (p,0,0) x (0,0,0,0)
@@ -699,7 +999,7 @@ class Test_ar_no_enforce(SARIMAXCoverageTest):
         self.model.update(self.true_params)
         self.result = self.model.filter()
 
-        assert_allclose( 
+        assert_allclose(
             self.result.llf,
             self.true_loglike,
             atol=2
@@ -734,7 +1034,7 @@ class Test_ar_exogenous_in_state(SARIMAXCoverageTest):
         self.model.update(self.true_params)
         self.result = self.model.filter()
 
-        assert_allclose( 
+        assert_allclose(
             self.result.llf,
             self.true_loglike,
             atol=2
@@ -747,7 +1047,7 @@ class Test_ar_exogenous_in_state(SARIMAXCoverageTest):
         self.model.update(self.true_params)
         self.result = self.model.filter()
 
-        assert_allclose( 
+        assert_allclose(
             self.result.filtered_state[3][-1],
             self.true_regression_coefficient,
             self.decimal
@@ -905,6 +1205,8 @@ class Test_arma_diffuse(SARIMAXCoverageTest):
     # save_results 24
     def __init__(self, *args, **kwargs):
         kwargs['order'] = (3,0,2)
+        # TODO: diffuse initialization not supported through keywords #2259
+        kwargs['initial_variance'] = 1e9
         super(Test_arma_diffuse, self).__init__(23, *args, **kwargs)
         self.model.initialize_approximate_diffuse(1e9)
 
@@ -1133,6 +1435,23 @@ class Test_seasonal_arma_trend_ct(SARIMAXCoverageTest):
         # Modify true params to convert from mean to intercept form
         self.true_params[:2] = (1 - self.true_params[2:5].sum()) * self.true_params[:2]
 
+    def test_results(self):
+        self.model.update(self.true_params)
+        self.result = self.model.filter()
+
+        # Just make sure that no exceptions are thrown during summary
+        self.result.summary()
+
+        # And make sure no expections are thrown calculating any of the
+        # covariance matrix types
+        self.result.cov_params_default
+        # Known failure due to the complex step inducing non-stationary
+        # parameters, causing a failure in the solve_discrete_lyapunov call
+        # self.result.cov_params_cs
+        # self.result.cov_params_delta
+        self.result.cov_params_oim
+        self.result.cov_params_opg
+
 class Test_seasonal_arma_trend_polynomial(SARIMAXCoverageTest):
     # // polynomial [1,0,0,1]
     # arima wpi c t3, sarima(3,0,2,4) noconstant vce(oim)
@@ -1172,6 +1491,23 @@ class Test_seasonal_arma_diff_seasonal_diff(SARIMAXCoverageTest):
         kwargs['order'] = (0,2,0)
         kwargs['seasonal_order'] = (3,2,2,4)
         super(Test_seasonal_arma_diff_seasonal_diff, self).__init__(47, *args, **kwargs)
+
+    def test_results(self):
+        self.model.update(self.true_params)
+        self.result = self.model.filter()
+
+        # Just make sure that no exceptions are thrown during summary
+        self.result.summary()
+
+        # And make sure no expections are thrown calculating any of the
+        # covariance matrix types
+        self.result.cov_params_default
+        # Known failure due to the complex step inducing non-stationary
+        # parameters, causing a failure in the solve_discrete_lyapunov call
+        # self.result.cov_params_cs
+        #s self.result.cov_params_delta
+        self.result.cov_params_oim
+        self.result.cov_params_opg
 
 class Test_seasonal_arma_diffuse(SARIMAXCoverageTest):
     # // SARMA and diffuse initialization
