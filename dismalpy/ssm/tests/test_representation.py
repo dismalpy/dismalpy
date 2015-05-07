@@ -20,7 +20,7 @@ import os
 
 from dismalpy.ssm import Representation, Model
 import dismalpy.ssm.tests.results_kalman as results_kalman_filter
-from numpy.testing import assert_equal, assert_almost_equal, assert_raises
+from numpy.testing import assert_equal, assert_almost_equal, assert_allclose, assert_raises
 from nose.exc import SkipTest
 
 current_path = os.path.dirname(os.path.abspath(__file__))
@@ -36,7 +36,7 @@ class Clark1987(object):
 
     See `results.results_kalman_filter` for more information.
     """
-    def __init__(self, dtype=float, **kwargs):
+    def __init__(self, dtype=float, alternate_timing=False, **kwargs):
         self.true = results_kalman_filter.uc_uni
         self.true_states = pd.DataFrame(self.true['states'])
 
@@ -73,10 +73,13 @@ class Clark1987(object):
         initial_state_cov = np.eye(k_states)*100
 
         # Initialization: modification
-        initial_state_cov = np.dot(
-            np.dot(self.model.transition[:, :, 0], initial_state_cov),
-            self.model.transition[:, :, 0].T
-        )
+        if not alternate_timing:
+            initial_state_cov = np.dot(
+                np.dot(self.model.transition[:, :, 0], initial_state_cov),
+                self.model.transition[:, :, 0].T
+            )
+        else:
+            self.model.timing_init_filtered = True
         self.model.initialize_known(initial_state, initial_state_cov)
 
     def run_filter(self):
@@ -127,6 +130,17 @@ class TestClark1987Double(Clark1987):
         self.run_filter()
 
 
+class TestClark1987DoubleAlternate(Clark1987):
+    """
+    Basic double precision test for the loglikelihood and filtered states.
+    """
+    def __init__(self):
+        super(TestClark1987DoubleAlternate, self).__init__(
+            dtype=float, alternate_timing=True, conserve_memory=0
+        )
+        self.run_filter()
+
+
 class TestClark1987SingleComplex(Clark1987):
     """
     Basic single precision complex test for the loglikelihood and filtered
@@ -152,6 +166,18 @@ class TestClark1987DoubleComplex(Clark1987):
         self.run_filter()
 
 
+class TestClark1987DoubleComplexAlternate(Clark1987):
+    """
+    Basic double precision complex test for the loglikelihood and filtered
+    states.
+    """
+    def __init__(self):
+        super(TestClark1987DoubleComplexAlternate, self).__init__(
+            dtype=complex, alternate_timing=True, conserve_memory=0
+        )
+        self.run_filter()
+
+
 class TestClark1987Conserve(Clark1987):
     """
     Memory conservation test for the loglikelihood and filtered states.
@@ -159,6 +185,17 @@ class TestClark1987Conserve(Clark1987):
     def __init__(self):
         super(TestClark1987Conserve, self).__init__(
             dtype=float, conserve_memory=0x01 | 0x02
+        )
+        self.run_filter()
+
+
+class TestClark1987ConserveAlternate(Clark1987):
+    """
+    Memory conservation test for the loglikelihood and filtered states.
+    """
+    def __init__(self):
+        super(TestClark1987ConserveAlternate, self).__init__(
+            dtype=float, alternate_timing=True, conserve_memory=0x01 | 0x02
         )
         self.run_filter()
 
@@ -233,9 +270,9 @@ class TestClark1987ConserveAll(Clark1987):
     Memory conservation forecasting test for the loglikelihood and filtered
     states.
     """
-    def __init__(self):
+    def __init__(self, **kwargs):
         super(TestClark1987ConserveAll, self).__init__(
-            dtype=float, conserve_memory=0x01 | 0x02 | 0x04 | 0x08
+            dtype=float, conserve_memory=0x01 | 0x02 | 0x04 | 0x08, **kwargs
         )
         self.model.loglikelihood_burn = self.true['start']
         self.run_filter()
@@ -257,6 +294,13 @@ class TestClark1987ConserveAll(Clark1987):
         )
 
 
+class TestClark1987ConserveAllAlternate(TestClark1987ConserveAll):
+    def __init__(self):
+        super(TestClark1987ConserveAllAlternate, self).__init__(
+            alternate_timing=True
+        )
+        self.run_filter()
+
 class Clark1989(object):
     """
     Clark's (1989) bivariate unobserved components model of real GDP (as
@@ -269,7 +313,7 @@ class Clark1989(object):
 
     See `results.results_kalman_filter` for more information.
     """
-    def __init__(self, dtype=float, **kwargs):
+    def __init__(self, dtype=float, alternate_timing=False, **kwargs):
         self.true = results_kalman_filter.uc_bi
         self.true_states = pd.DataFrame(self.true['states'])
 
@@ -313,11 +357,14 @@ class Clark1989(object):
         initial_state = np.zeros((k_states,))
         initial_state_cov = np.eye(k_states)*100
 
-        # Initialization: self.modelification
-        initial_state_cov = np.dot(
-            np.dot(self.model.transition[:, :, 0], initial_state_cov),
-            self.model.transition[:, :, 0].T
-        )
+        # Initialization: modification
+        if not alternate_timing:
+            initial_state_cov = np.dot(
+                np.dot(self.model.transition[:, :, 0], initial_state_cov),
+                self.model.transition[:, :, 0].T
+            )
+        else:
+            self.model.timing_init_filtered = True
         self.model.initialize_known(initial_state, initial_state_cov)
 
     def run_filter(self):
@@ -325,10 +372,10 @@ class Clark1989(object):
         self.results = self.model.filter()
 
     def test_loglike(self):
-        assert_almost_equal(
+        assert_allclose(
             # self.results.llf_obs[self.true['start']:].sum(),
             self.results.llf_obs[0:].sum(),
-            self.true['loglike'], 2
+            self.true['loglike'], rtol=1e-4, atol=1e-4
         )
 
     def test_filtered_state(self):
@@ -355,8 +402,14 @@ class TestClark1989(Clark1989):
     Basic double precision test for the loglikelihood and filtered
     states with two-dimensional observation vector.
     """
+    def __init__(self, **kwargs):
+        super(TestClark1989, self).__init__(dtype=float, conserve_memory=0, **kwargs)
+        self.run_filter()
+
+
+class TestClark1989Alternate(TestClark1989):
     def __init__(self):
-        super(TestClark1989, self).__init__(dtype=float, conserve_memory=0)
+        super(TestClark1989Alternate, self).__init__(alternate_timing=True)
         self.run_filter()
 
 
@@ -365,10 +418,16 @@ class TestClark1989Conserve(Clark1989):
     Memory conservation test for the loglikelihood and filtered states with
     two-dimensional observation vector.
     """
-    def __init__(self):
+    def __init__(self, **kwargs):
         super(TestClark1989Conserve, self).__init__(
-            dtype=float, conserve_memory=0x01 | 0x02
+            dtype=float, conserve_memory=0x01 | 0x02, **kwargs
         )
+        self.run_filter()
+
+
+class TestClark1989ConserveAlternate(TestClark1989Conserve):
+    def __init__(self):
+        super(TestClark1989ConserveAlternate, self).__init__(alternate_timing=True)
         self.run_filter()
 
 
@@ -377,9 +436,9 @@ class Clark1989Forecast(Clark1989):
     Memory conservation test for the loglikelihood and filtered states with
     two-dimensional observation vector.
     """
-    def __init__(self, dtype=float, nforecast=100, conserve_memory=0):
+    def __init__(self, dtype=float, nforecast=100, conserve_memory=0, **kwargs):
         super(Clark1989Forecast, self).__init__(
-            dtype=dtype, conserve_memory=conserve_memory
+            dtype=dtype, conserve_memory=conserve_memory, **kwargs
         )
         self.nforecast = nforecast
 
@@ -418,8 +477,14 @@ class TestClark1989ForecastDouble(Clark1989Forecast):
     """
     Basic double forecasting test for the loglikelihood and filtered states.
     """
+    def __init__(self, **kwargs):
+        super(TestClark1989ForecastDouble, self).__init__(**kwargs)
+        self.run_filter()
+
+
+class TestClark1989ForecastDoubleAlternate(TestClark1989ForecastDouble):
     def __init__(self):
-        super(TestClark1989ForecastDouble, self).__init__()
+        super(TestClark1989ForecastDoubleAlternate, self).__init__(alternate_timing=True)
         self.run_filter()
 
 
@@ -428,10 +493,16 @@ class TestClark1989ForecastDoubleComplex(Clark1989Forecast):
     Basic double complex forecasting test for the loglikelihood and filtered
     states.
     """
-    def __init__(self):
+    def __init__(self, **kwargs):
         super(TestClark1989ForecastDoubleComplex, self).__init__(
-            dtype=complex
+            dtype=complex, **kwargs
         )
+        self.run_filter()
+
+
+class TestClark1989ForecastDoubleComplexAlternate(TestClark1989ForecastDoubleComplex):
+    def __init__(self):
+        super(TestClark1989ForecastDoubleComplexAlternate, self).__init__(alternate_timing=True)
         self.run_filter()
 
 
@@ -440,10 +511,16 @@ class TestClark1989ForecastConserve(Clark1989Forecast):
     Memory conservation forecasting test for the loglikelihood and filtered
     states.
     """
-    def __init__(self):
+    def __init__(self, **kwargs):
         super(TestClark1989ForecastConserve, self).__init__(
-            dtype=float, conserve_memory=0x01 | 0x02
+            dtype=float, conserve_memory=0x01 | 0x02, **kwargs
         )
+        self.run_filter()
+
+
+class TestClark1989ForecastConserveAlternate(TestClark1989ForecastConserve):
+    def __init__(self):
+        super(TestClark1989ForecastConserveAlternate, self).__init__(alternate_timing=True)
         self.run_filter()
 
 
@@ -452,17 +529,17 @@ class TestClark1989ConserveAll(Clark1989):
     Memory conservation forecasting test for the loglikelihood and filtered
     states.
     """
-    def __init__(self):
+    def __init__(self, **kwargs):
         super(TestClark1989ConserveAll, self).__init__(
-            dtype=float, conserve_memory=0x01 | 0x02 | 0x04 | 0x08
+            dtype=float, conserve_memory=0x01 | 0x02 | 0x04 | 0x08, **kwargs
         )
         # self.model.loglikelihood_burn = self.true['start']
         self.model.loglikelihood_burn = 0
         self.run_filter()
 
     def test_loglike(self):
-        assert_almost_equal(
-            self.results.llf_obs[0], self.true['loglike'], 2
+        assert_allclose(
+            self.results.llf_obs[0], self.true['loglike'], rtol=1e-4, atol=1e-4
         )
 
     def test_filtered_state(self):
@@ -483,6 +560,13 @@ class TestClark1989ConserveAll(Clark1989):
             self.results.filtered_state[5][-1],
             self.true_states.iloc[end-1, 3], 4
         )
+
+
+class TestClark1989ConserveAllAlternate(TestClark1989ConserveAll):
+    def __init__(self):
+        super(TestClark1989ConserveAllAlternate, self).__init__(alternate_timing=True)
+        self.run_filter()
+
 
 # Miscellaneous coverage-related tests
 def test_slice_notation():

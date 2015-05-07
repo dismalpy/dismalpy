@@ -108,7 +108,7 @@ cdef class sKalmanSmoother(object):
     cpdef seek(self, unsigned int t)
     cdef void initialize_statespace_object_pointers(self) except *
     cdef void initialize_filter_object_pointers(self)
-    cdef void initialize_smoother_object_pointers(self)
+    cdef void initialize_smoother_object_pointers(self) except *
     cdef void initialize_function_pointers(self) except *
 
 # Double precision
@@ -195,7 +195,7 @@ cdef class dKalmanSmoother(object):
     cpdef seek(self, unsigned int t)
     cdef void initialize_statespace_object_pointers(self) except *
     cdef void initialize_filter_object_pointers(self)
-    cdef void initialize_smoother_object_pointers(self)
+    cdef void initialize_smoother_object_pointers(self) except *
     cdef void initialize_function_pointers(self) except *
 
 # Single precision complex
@@ -282,7 +282,7 @@ cdef class cKalmanSmoother(object):
     cpdef seek(self, unsigned int t)
     cdef void initialize_statespace_object_pointers(self) except *
     cdef void initialize_filter_object_pointers(self)
-    cdef void initialize_smoother_object_pointers(self)
+    cdef void initialize_smoother_object_pointers(self) except *
     cdef void initialize_function_pointers(self) except *
 
 # Double precision complex
@@ -369,5 +369,5 @@ cdef class zKalmanSmoother(object):
     cpdef seek(self, unsigned int t)
     cdef void initialize_statespace_object_pointers(self) except *
     cdef void initialize_filter_object_pointers(self)
-    cdef void initialize_smoother_object_pointers(self)
+    cdef void initialize_smoother_object_pointers(self) except *
     cdef void initialize_function_pointers(self) except *

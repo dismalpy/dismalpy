@@ -20,7 +20,7 @@ import os
 
 from dismalpy import ssm
 import dismalpy.ssm.tests.results_kalman as results_kalman_filter
-from numpy.testing import assert_almost_equal
+from numpy.testing import assert_almost_equal, assert_allclose
 from nose.exc import SkipTest
 
 current_path = os.path.dirname(os.path.abspath(__file__))
@@ -38,7 +38,7 @@ class TestClark1989(object):
 
     See `results.results_kalman_filter` for more information.
     """
-    def __init__(self, dtype=float, **kwargs):
+    def __init__(self, dtype=float, alternate_timing=False, **kwargs):
         self.true = results_kalman_filter.uc_bi
         self.true_states = pd.DataFrame(self.true['states'])
 
@@ -83,10 +83,13 @@ class TestClark1989(object):
         initial_state_cov = np.eye(k_states)*100
 
         # Initialization: self.modification
-        initial_state_cov = np.dot(
-            np.dot(self.model.transition[:, :, 0], initial_state_cov),
-            self.model.transition[:, :, 0].T
-        )
+        if not alternate_timing:
+            initial_state_cov = np.dot(
+                np.dot(self.model.transition[:, :, 0], initial_state_cov),
+                self.model.transition[:, :, 0].T
+            )
+        else:
+            self.model.timing_init_filtered = True
         self.model.initialize_known(initial_state, initial_state_cov)
 
         # Conventional filtering, smoothing, and simulation smoothing
@@ -116,13 +119,13 @@ class TestClark1989(object):
         assert not self.conventional_results.filter_univariate
         assert self.univariate_results.filter_univariate
 
-        assert_almost_equal(
+        assert_allclose(
             self.conventional_results.forecasts_error_cov[1,1,0],
-            143.03724478030821, 9
+            143.03724478030821
         )
-        assert_almost_equal(
+        assert_allclose(
             self.univariate_results.forecasts_error_cov[1,1,0],
-            120.66208525029386, 9
+            120.66208525029386
         )
 
     def test_forecasts(self):
@@ -168,9 +171,9 @@ class TestClark1989(object):
         )
 
     def test_loglike(self):
-        assert_almost_equal(
+        assert_allclose(
             self.conventional_results.llf_obs,
-            self.univariate_results.llf_obs, 7
+            self.univariate_results.llf_obs
         )
 
     def test_smoothed_states(self):
@@ -200,9 +203,10 @@ class TestClark1989(object):
         )
 
     def test_smoothed_state_disturbance(self):
-        assert_almost_equal(
+        assert_allclose(
             self.conventional_results.smoothed_state_disturbance,
-            self.univariate_results.smoothed_state_disturbance, 9
+            self.univariate_results.smoothed_state_disturbance,
+            atol=1e-7
         )
 
     def test_smoothed_state_disturbance_cov(self):
@@ -228,3 +232,11 @@ class TestClark1989(object):
             self.conventional_sim.simulated_state_disturbance,
             self.univariate_sim.simulated_state_disturbance, 9
         )
+
+
+class TestClark1989Alternate(TestClark1989):
+    def __init__(self, *args, **kwargs):
+        super(TestClark1989Alternate, self).__init__(alternate_timing=True, *args, **kwargs)
+
+    def test_using_alterate(self):
+        assert(self.model._kalman_filter.filter_timing == 1)

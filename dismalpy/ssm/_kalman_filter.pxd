@@ -43,6 +43,10 @@ cdef int MEMORY_NO_GAIN
 cdef int MEMORY_NO_SMOOTHING
 cdef int MEMORY_CONSERVE
 
+# ### Timing options
+cdef int TIMING_INIT_FILTERED
+cdef int TIMING_INIT_PREDICTED
+
 # Typical imports
 cimport numpy as np
 
@@ -65,6 +69,7 @@ cdef class sKalmanFilter(object):
     cdef public int inversion_method
     cdef public int stability_method
     cdef readonly int conserve_memory
+    cdef public int filter_timing
     cdef readonly int loglikelihood_burn
 
     # ### Kalman filter properties
@@ -191,6 +196,7 @@ cdef class dKalmanFilter(object):
     cdef public int inversion_method
     cdef public int stability_method
     cdef readonly int conserve_memory
+    cdef public int filter_timing
     cdef readonly int loglikelihood_burn
 
     # ### Kalman filter properties
@@ -317,6 +323,7 @@ cdef class cKalmanFilter(object):
     cdef public int inversion_method
     cdef public int stability_method
     cdef readonly int conserve_memory
+    cdef public int filter_timing
     cdef readonly int loglikelihood_burn
 
     # ### Kalman filter properties
@@ -443,6 +450,7 @@ cdef class zKalmanFilter(object):
     cdef public int inversion_method
     cdef public int stability_method
     cdef readonly int conserve_memory
+    cdef public int filter_timing
     cdef readonly int loglikelihood_burn
 
     # ### Kalman filter properties

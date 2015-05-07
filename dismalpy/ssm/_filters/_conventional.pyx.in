@@ -202,6 +202,29 @@ cdef int {{prefix}}updating_conventional({{prefix}}KalmanFilter kfilter, {{prefi
                       kfilter._input_state_cov, &kfilter.k_states,
               &alpha, kfilter._filtered_state_cov, &kfilter.k_states)
 
+    # #### Kalman gain for time t
+    # $K_t = T_t P_t Z_t' F_t^{-1}$
+    #
+    # *Note*: this and does nothing at all to `kalman_gain` if
+    # converged == True
+    # *Note*: Kim and Nelson (1999) have a different version of the Kalman
+    # gain, defined as $P_t Z_t' F_t^{-1}$. That is not adopted here.
+    if not kfilter.converged:
+        # `tmp00` array used here, dimension $(m \times m)$  
+        # $\\#_{00} = 1.0 * T_t P_t$  
+        # $(m \times m) = (m \times m) (m \times m)$
+        blas.{{prefix}}gemm("N", "N", &model._k_states, &model._k_states, &model._k_states,
+              &alpha, model._transition, &model._k_states,
+                      kfilter._input_state_cov, &kfilter.k_states,
+              &beta, kfilter._tmp00, &kfilter.k_states)
+
+        # K_t = 1.0 * \\#_{00} \\#_3'
+        # $(m \times p) = (m \times m) (m \times p)$
+        blas.{{prefix}}gemm("N", "T", &model._k_states, &model._k_endog, &model._k_states,
+              &alpha, kfilter._tmp00, &kfilter.k_states,
+                      kfilter._tmp3, &kfilter.k_endog,
+              &beta, kfilter._kalman_gain, &kfilter.k_states)
+
     return 0
 
 cdef int {{prefix}}prediction_conventional({{prefix}}KalmanFilter kfilter, {{prefix}}Statespace model):
@@ -243,27 +266,6 @@ cdef int {{prefix}}prediction_conventional({{prefix}}KalmanFilter kfilter, {{pre
               &alpha, kfilter._tmp0, &kfilter.k_states,
                       model._transition, &model._k_states,
               &alpha, kfilter._predicted_state_cov, &kfilter.k_states)
-
-    # #### Kalman gain for time t
-    # $K_t = T_t P_t Z_t' F_t^{-1}$
-    #
-    # *Note*: this and does nothing at all to `kalman_gain` if
-    # converged == True
-    if not kfilter.converged:
-        # `tmp00` array used here, dimension $(m \times m)$  
-        # $\\#_{00} = 1.0 * T_t P_t$  
-        # $(m \times m) = (m \times m) (m \times m)$
-        blas.{{prefix}}gemm("N", "N", &model._k_states, &model._k_states, &model._k_states,
-              &alpha, model._transition, &model._k_states,
-                      kfilter._input_state_cov, &kfilter.k_states,
-              &beta, kfilter._tmp00, &kfilter.k_states)
-
-        # K_t = 1.0 * \\#_{00} \\#_3'
-        # $(m \times p) = (m \times m) (m \times p)$
-        blas.{{prefix}}gemm("N", "T", &model._k_states, &model._k_endog, &model._k_states,
-              &alpha, kfilter._tmp00, &kfilter.k_states,
-                      kfilter._tmp3, &kfilter.k_endog,
-              &beta, kfilter._kalman_gain, &kfilter.k_states)
 
     return 0
 

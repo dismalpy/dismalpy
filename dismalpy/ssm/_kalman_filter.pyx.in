@@ -59,6 +59,15 @@ cdef int MEMORY_CONSERVE = (
     MEMORY_NO_LIKELIHOOD | MEMORY_NO_GAIN | MEMORY_NO_SMOOTHING
 )
 
+# ### Timing options
+# By default, assume filter is initialized with predicted values (as in
+# Durbin and Koopman 2012)
+#
+# Alternately, assume filter is initialized with filtered values (as in
+# Kim and Nelson 1999)
+cdef int TIMING_INIT_PREDICTED = 0
+cdef int TIMING_INIT_FILTERED = 1
+
 # Typical imports
 import numpy as np
 import warnings
@@ -120,7 +129,7 @@ if prefix == 's':
 # ## Kalman filter
 cdef class {{prefix}}KalmanFilter(object):
     """
-    {{prefix}}KalmanFilter(model, filter_method=FILTER_CONVENTIONAL, inversion_method=INVERT_UNIVARIATE | SOLVE_CHOLESKY, stability_method=STABILITY_FORCE_SYMMETRY, tolerance=1e-19)
+    {{prefix}}KalmanFilter(model, filter_method=FILTER_CONVENTIONAL, inversion_method=INVERT_UNIVARIATE | SOLVE_CHOLESKY, stability_method=STABILITY_FORCE_SYMMETRY, filter_timing=TIMING_INIT_PREDICTED, tolerance=1e-19)
 
     A representation of the Kalman filter recursions.
 
@@ -208,6 +217,9 @@ cdef class {{prefix}}KalmanFilter(object):
     # Whether or not to conserve memory
     # If True, only stores filtered states and covariance matrices
     # cdef readonly int conserve_memory
+    # Whether or not to use alternate timing
+    # If True, uses the Kim and Nelson (1999) timing
+    # cdef readonly int filter_timing
     # If conserving loglikelihood, the number of periods to "burn"
     # before starting to record the loglikelihood
     # cdef readonly int loglikelihood_burn
@@ -344,6 +356,7 @@ cdef class {{prefix}}KalmanFilter(object):
                  int inversion_method=INVERT_UNIVARIATE | SOLVE_CHOLESKY,
                  int stability_method=STABILITY_FORCE_SYMMETRY,
                  int conserve_memory=MEMORY_STORE_ALL,
+                 int filter_timing=TIMING_INIT_PREDICTED,
                  np.float64_t tolerance=1e-19,
                  int loglikelihood_burn=0):
 
@@ -355,6 +368,7 @@ cdef class {{prefix}}KalmanFilter(object):
         self.inversion_method = inversion_method
         self.stability_method = stability_method
         self.conserve_memory = conserve_memory
+        self.filter_timing = filter_timing
         self.loglikelihood_burn = loglikelihood_burn
 
         # Initialize the constant values
@@ -597,6 +611,9 @@ cdef class {{prefix}}KalmanFilter(object):
         """
         Perform an iteration of the Kalman filter
         """
+        cdef int filtered_t = self.t
+        if self.conserve_memory & MEMORY_NO_FILTERED > 0:
+            filtered_t = 1
 
         # Get time subscript, and stop the iterator if at the end
         if not self.t < self.model.nobs:
@@ -623,6 +640,29 @@ cdef class {{prefix}}KalmanFilter(object):
         # Post-convergence: copy previous iteration arrays
         self.post_convergence()
 
+        # Prediction step (alternate timing)
+        if self.filter_timing == TIMING_INIT_FILTERED:
+            # We need to shift back to the previous filtered_* arrays, or to
+            # the initial_* arrays if we're at time t==0
+            if self.t == 0:
+                self._filtered_state = self.model._initial_state
+                self._filtered_state_cov = self.model._initial_state_cov
+            else:
+                self._filtered_state = &self.filtered_state[0, filtered_t-1]
+                self._filtered_state_cov = &self.filtered_state_cov[0, 0, filtered_t-1]
+
+            # Perform the prediction step
+            self.prediction(self, self.model)
+            # self._prediction()
+
+            # Aids to numerical stability
+            self.numerical_stability()
+
+            # Now shift back to the current filtered_* arrays (so they can be
+            # set in the updating step)
+            self._filtered_state = &self.filtered_state[0, filtered_t]
+            self._filtered_state_cov = &self.filtered_state_cov[0, 0, filtered_t]
+
         # Form forecasts
         self.forecasting(self, self.model)
         # self._forecasting()
@@ -644,12 +684,13 @@ cdef class {{prefix}}KalmanFilter(object):
                 self.model.collapse_loglikelihood
             )
 
-        # Prediction step
-        self.prediction(self, self.model)
-        # self._prediction()
+        # Prediction step (default timing)
+        if self.filter_timing == TIMING_INIT_PREDICTED:
+            self.prediction(self, self.model)
+            # self._prediction()
 
-        # Aids to numerical stability
-        self.numerical_stability()
+            # Aids to numerical stability
+            self.numerical_stability()
 
         # Check for convergence
         self.check_convergence()
@@ -726,9 +767,20 @@ cdef class {{prefix}}KalmanFilter(object):
 
         # Copy initialization arrays to input arrays if we're starting the
         # filter
-        if t == 0:
+        if t == 0 and self.filter_timing == TIMING_INIT_PREDICTED:
             # `predicted_state[:,0]` $= a_1 =$ `initial_state`  
             # `predicted_state_cov[:,:,0]` $= P_1 =$ `initial_state_cov`  
+            # Under the default timing assumption (TIMING_INIT_PREDICTED), the
+            # recursion takes $a_t, P_t$ as input, and as a last step computes
+            # $a_{t+1}, P_{t+1}$, which can be input for the next recursion.
+            # This means that the filter ends by computing $a_{T+1}, P_{T+1}$,
+            # so that the predicted_* arrays have time-dimension T+1, rather than
+            # T like all the other arrays.
+            # Note that $a_{T+1}, P_{T+1}$ should not be in use anywhere.
+            # TODO phase out any use of these, and eventually stop computing it
+            # This means that the zeroth entry in the time-dimension can hold the
+            # input array (even though it is no different than what is held in the
+            # initial_state_* arrays).
             blas.{{prefix}}copy(&self.model._k_states, self.model._initial_state, &inc, self._input_state, &inc)
             blas.{{prefix}}copy(&self.model._k_states2, self.model._initial_state_cov, &inc, self._input_state_cov, &inc)
 
@@ -739,9 +791,13 @@ cdef class {{prefix}}KalmanFilter(object):
 
         self._filtered_state = &self.filtered_state[0, filtered_t]
         self._filtered_state_cov = &self.filtered_state_cov[0, 0, filtered_t]
-
-        self._predicted_state = &self.predicted_state[0, predicted_t+1]
-        self._predicted_state_cov = &self.predicted_state_cov[0, 0, predicted_t+1]
+        
+        if self.filter_timing == TIMING_INIT_PREDICTED:
+            self._predicted_state = &self.predicted_state[0, predicted_t+1]
+            self._predicted_state_cov = &self.predicted_state_cov[0, 0, predicted_t+1]
+        else:
+            self._predicted_state = &self.predicted_state[0, predicted_t]
+            self._predicted_state_cov = &self.predicted_state_cov[0, 0, predicted_t]
 
         self._kalman_gain = &self.kalman_gain[0, 0, gain_t]
 
@@ -830,6 +886,9 @@ cdef class {{prefix}}KalmanFilter(object):
         if self.conserve_memory & MEMORY_NO_PREDICTED:
             predicted_t = 1
 
+        if self.filter_timing == TIMING_INIT_PREDICTED:
+            predicted_t += 1
+
         if self.stability_method & STABILITY_FORCE_SYMMETRY:
             # Enforce symmetry of predicted covariance matrix  
             # $P_{t+1} = 0.5 * (P_{t+1} + P_{t+1}')$  
@@ -837,11 +896,11 @@ cdef class {{prefix}}KalmanFilter(object):
             for i in range(self.k_states):
                 for j in range(i, self.k_states):
                     value = 0.5 * (
-                        self.predicted_state_cov[i,j,predicted_t+1] +
-                        self.predicted_state_cov[j,i,predicted_t+1]
+                        self.predicted_state_cov[i,j,predicted_t] +
+                        self.predicted_state_cov[j,i,predicted_t]
                     )
-                    self.predicted_state_cov[i,j,predicted_t+1] = value
-                    self.predicted_state_cov[j,i,predicted_t+1] = value
+                    self.predicted_state_cov[i,j,predicted_t] = value
+                    self.predicted_state_cov[j,i,predicted_t] = value
 
     cdef void check_convergence(self):
         # Constants
@@ -874,8 +933,15 @@ cdef class {{prefix}}KalmanFilter(object):
             # 
             # `tmp0` array used here, dimension $(m \times m)$  
             # `tmp00` array used here, dimension $(1 \times 1)$  
-            blas.{{prefix}}copy(&self.k_states2, self._input_state_cov, &inc, self._tmp0, &inc)
-            blas.{{prefix}}axpy(&self.k_states2, &gamma, self._predicted_state_cov, &inc, self._tmp0, &inc)
+            if self.filter_timing == TIMING_INIT_PREDICTED:
+                blas.{{prefix}}copy(&self.k_states2, self._input_state_cov, &inc, self._tmp0, &inc)
+                blas.{{prefix}}axpy(&self.k_states2, &gamma, self._predicted_state_cov, &inc, self._tmp0, &inc)
+            elif self.t > 0:
+                blas.{{prefix}}copy(&self.k_states2, &self.predicted_state_cov[0,0,predicted_t], &inc, self._tmp0, &inc)
+                blas.{{prefix}}axpy(&self.k_states2, &gamma, &self.predicted_state_cov[0,0,predicted_t-1], &inc, self._tmp0, &inc)
+            else:
+                return
+
 
             {{if combined_prefix == 'd'}}
             if blas.{{prefix}}dot(&self.k_states2, self._tmp0, &inc, self._tmp0, &inc) < self.tolerance:
@@ -925,7 +991,8 @@ cdef class {{prefix}}KalmanFilter(object):
             blas.{{prefix}}copy(&self.k_states2, &self.predicted_state_cov[0, 0, 1], &inc, &self.predicted_state_cov[0, 0, 0], &inc)
 
             # Predicted: 2 -> 1
-            blas.{{prefix}}copy(&self.k_states, &self.predicted_state[0, 2], &inc, &self.predicted_state[0, 1], &inc)
-            blas.{{prefix}}copy(&self.k_states2, &self.predicted_state_cov[0, 0, 2], &inc, &self.predicted_state_cov[0, 0, 1], &inc)
+            if self.filter_timing == TIMING_INIT_PREDICTED:
+                blas.{{prefix}}copy(&self.k_states, &self.predicted_state[0, 2], &inc, &self.predicted_state[0, 1], &inc)
+                blas.{{prefix}}copy(&self.k_states2, &self.predicted_state_cov[0, 0, 2], &inc, &self.predicted_state_cov[0, 0, 1], &inc)
 
 {{endfor}}

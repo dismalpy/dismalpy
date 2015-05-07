@@ -25,7 +25,7 @@ class Trivariate(object):
     """
     Tests collapsing three-dimensional observation data to two-dimensional
     """
-    def __init__(self, dtype=float, **kwargs):
+    def __init__(self, dtype=float, alternate_timing=False, **kwargs):
         self.results = results_kalman_filter.uc_bi
 
         # GDP and Unemployment, Quarterly, 1948.1 - 1995.3
@@ -40,6 +40,8 @@ class Trivariate(object):
 
         k_states = 2
         self.model = ssm.Model(data, k_states=k_states, **kwargs)
+        if alternate_timing:
+            self.model.timing_init_filtered = True
 
         # Statespace representation
         self.model.selection = np.eye(self.model.k_states)
@@ -204,6 +206,13 @@ class TestTrivariateConventional(Trivariate):
             initial_state_variates=np.zeros(self.model.k_states)
         )
 
+class TestTrivariateConventionalAlternate(TestTrivariateConventional):
+    def __init__(self, *args, **kwargs):
+        super(TestTrivariateConventionalAlternate, self).__init__(alternate_timing=True, *args, **kwargs)
+
+    def test_using_alterate(self):
+        assert(self.model._kalman_filter.filter_timing == 1)
+
 
 class TestTrivariateConventionalPartialMissing(Trivariate):
 
@@ -233,7 +242,14 @@ class TestTrivariateConventionalPartialMissing(Trivariate):
             initial_state_variates=np.zeros(self.model.k_states)
         )
 
-        
+
+class TestTrivariateConventionalPartialMissingAlternate(TestTrivariateConventionalPartialMissing):
+    def __init__(self, *args, **kwargs):
+        super(TestTrivariateConventionalPartialMissingAlternate, self).__init__(alternate_timing=True, *args, **kwargs)
+
+    def test_using_alterate(self):
+        assert(self.model._kalman_filter.filter_timing == 1)
+
 
 class TestTrivariateConventionalAllMissing(Trivariate):
 
@@ -264,6 +280,14 @@ class TestTrivariateConventionalAllMissing(Trivariate):
         )
 
 
+class TestTrivariateConventionalAllMissingAlternate(TestTrivariateConventionalAllMissing):
+    def __init__(self, *args, **kwargs):
+        super(TestTrivariateConventionalAllMissingAlternate, self).__init__(alternate_timing=True, *args, **kwargs)
+
+    def test_using_alterate(self):
+        assert(self.model._kalman_filter.filter_timing == 1)
+
+
 class TestTrivariateUnivariate(Trivariate):
 
     def __init__(self, dtype=float, **kwargs):
@@ -288,6 +312,15 @@ class TestTrivariateUnivariate(Trivariate):
             disturbance_variates=np.zeros(n_disturbance_variates),
             initial_state_variates=np.zeros(self.model.k_states)
         )
+
+
+class TestTrivariateUnivariateAlternate(TestTrivariateUnivariate):
+    def __init__(self, *args, **kwargs):
+        super(TestTrivariateUnivariateAlternate, self).__init__(alternate_timing=True, *args, **kwargs)
+
+    def test_using_alterate(self):
+        assert(self.model._kalman_filter.filter_timing == 1)
+
 
 class TestTrivariateUnivariatePartialMissing(Trivariate):
 
@@ -317,6 +350,15 @@ class TestTrivariateUnivariatePartialMissing(Trivariate):
             initial_state_variates=np.zeros(self.model.k_states)
         )
 
+
+class TestTrivariateUnivariatePartialMissingAlternate(TestTrivariateUnivariatePartialMissing):
+    def __init__(self, *args, **kwargs):
+        super(TestTrivariateUnivariatePartialMissingAlternate, self).__init__(alternate_timing=True, *args, **kwargs)
+
+    def test_using_alterate(self):
+        assert(self.model._kalman_filter.filter_timing == 1)
+
+
 class TestTrivariateUnivariateAllMissing(Trivariate):
 
     def __init__(self, dtype=float, **kwargs):
@@ -344,3 +386,10 @@ class TestTrivariateUnivariateAllMissing(Trivariate):
             disturbance_variates=np.zeros(n_disturbance_variates),
             initial_state_variates=np.zeros(self.model.k_states)
         )
+
+class TestTrivariateUnivariateAllMissingAlternate(TestTrivariateUnivariateAllMissing):
+    def __init__(self, *args, **kwargs):
+        super(TestTrivariateUnivariateAllMissingAlternate, self).__init__(alternate_timing=True, *args, **kwargs)
+
+    def test_using_alterate(self):
+        assert(self.model._kalman_filter.filter_timing == 1)

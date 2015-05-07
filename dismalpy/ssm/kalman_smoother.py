@@ -551,3 +551,45 @@ class SmootherResults(FilterResults):
     @property
     def smoothed_forecasts_error_cov(self):
         return self._get_smoothed_forecasts()[2]
+
+    def _predict_broken(self, nstatic, ndynamic, nforecast, model):
+        # Replace the KalmanFilter model with KalmanSmoother
+        model_kwargs = {
+            'filter_method': model.filter_method,
+            'inversion_method': model.inversion_method,
+            'stability_method': model.stability_method,
+            'conserve_memory': model.conserve_memory,
+            'tolerance': model.tolerance,
+            'loglikelihood_burn': model.loglikelihood_burn,
+            'smoother_output': self.smoother_output
+        }
+
+        representation = {}
+        for name, shape in self.shapes.items():
+            if name == 'obs':
+                continue
+            representation[name] = getattr(self, name)
+        model_kwargs.update(representation)
+
+        model = KalmanSmoother(
+            model.endog, model.k_states, model.k_posdef, **model_kwargs
+        )
+        
+        model.initialize_known(
+            self.initial_state,
+            self.initial_state_cov
+        )
+        model._initialize_filter()
+        model._initialize_smoother()
+        model._initialize_state()
+
+        # 
+        results = super(SmootherResults, self)._predict(nstatic, ndynamic,
+                                                        nforecast, model)
+
+        # Replace with SmootherResults
+        results = SmootherResults(results.model)
+        results.update_filter(results.model._kalman_filter)
+        results.update_smoother(results.model._kalman_smoother)
+
+        return results

@@ -27,7 +27,7 @@ current_path = os.path.dirname(os.path.abspath(__file__))
 
 
 class TestStatesAR3(object):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, alternate_timing=False, *args, **kwargs):
         # Dataset / Stata comparison
         path = current_path + os.sep + 'results/results_wpi1_ar3_stata.csv'
         self.stata = pd.read_csv(path)
@@ -48,6 +48,8 @@ class TestStatesAR3(object):
             self.stata['wpi'], order=(3, 1, 0), simple_differencing=True,
             hamilton_representation=True, *args, **kwargs
         )
+        if alternate_timing:
+            self.model.timing_init_filtered = True
 
         # Parameters from from Stata's sspace MLE estimation
         self.model.update(np.r_[.5270715, .0952613, .2580355, .5307459])
@@ -76,7 +78,7 @@ class TestStatesAR3(object):
 
     def test_predict_obs(self):
         assert_almost_equal(
-            self.results.predict()[0][0],
+            self.results.predict()[0],
             self.stata.ix[1:, 'dep1'], 4
         )
 
@@ -169,8 +171,12 @@ class TestStatesAR3(object):
             self.regression[['state_disturbance']], 4
         )
 
-class TestStatesMissingAR3(object):
+class TestStatesAR3Alternate(TestStatesAR3):
     def __init__(self, *args, **kwargs):
+        super(TestStatesAR3Alternate, self).__init__(alternate_timing=True, *args, **kwargs)
+
+class TestStatesMissingAR3(object):
+    def __init__(self, alternate_timing=True, *args, **kwargs):
         # Dataset
         path = current_path + os.sep + 'results/results_wpi1_ar3_stata.csv'
         self.stata = pd.read_csv(path)
@@ -195,6 +201,8 @@ class TestStatesMissingAR3(object):
             self.stata.ix[1:,'dwpi'], order=(3, 0, 0),
             hamilton_representation=True, *args, **kwargs
         )
+        if alternate_timing:
+            self.model.timing_init_filtered = True
 
         # Parameters from from Stata's sspace MLE estimation
         self.model.update(np.r_[.5270715, .0952613, .2580355, .5307459])
@@ -292,3 +300,7 @@ class TestStatesMissingAR3(object):
     #         self.sim.simulated_state_disturbance.T,
     #         self.regression[['state_disturbance']], 4
     #     )
+
+class TestStatesMissingAR3Alternate(TestStatesMissingAR3):
+    def __init__(self, *args, **kwargs):
+        super(TestStatesMissingAR3Alternate, self).__init__(alternate_timing=True, *args, **kwargs)

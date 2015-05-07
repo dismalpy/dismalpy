@@ -45,6 +45,8 @@ MEMORY_CONSERVE = (
     MEMORY_NO_LIKELIHOOD | MEMORY_NO_GAIN | MEMORY_NO_SMOOTHING
 )
 
+TIMING_INIT_PREDICTED = 0
+TIMING_INIT_FILTERED = 1
 
 class KalmanFilter(Representation):
     r"""
@@ -100,6 +102,11 @@ class KalmanFilter(Representation):
         By default, the Kalman filter computes a number of intermediate
         matrices at each iteration. The memory conservation options control
         which of those matrices are stored.
+    filter_timing
+        By default, the Kalman filter follows Durbin and Koopman, 2012, in
+        initializing the filter with predicted values. Kim and Nelson, 1999,
+        instead initialize the filter with filtered values, which is
+        essentially just a different timing convention.
 
     The `filter_method` and `inversion_method` options intentionally allow
     the possibility that multiple methods will be indicated. In the case that
@@ -240,6 +247,18 @@ class KalmanFilter(Representation):
     (bool) Flag to conserve the maximum amount of memory.
     """
 
+    timing_options = [
+        'timing_init_predicted', 'timing_init_filtered'
+    ]
+    timing_init_predicted = OptionWrapper('filter_timing', TIMING_INIT_PREDICTED)
+    """
+    (bool) Flag for the default timing convention (Durbin and Koopman, 2012).
+    """
+    timing_init_filtered = OptionWrapper('filter_timing', TIMING_INIT_FILTERED)
+    """
+    (bool) Flag for the alternate timing convention (Kim and Nelson, 2012).
+    """
+
     # Default filter options
     filter_method = FILTER_CONVENTIONAL
     """
@@ -256,6 +275,10 @@ class KalmanFilter(Representation):
     conserve_memory = MEMORY_STORE_ALL
     """
     (int) Memory conservation bitmask.
+    """
+    filter_timing = TIMING_INIT_PREDICTED
+    """
+    (int) Filter timing.
     """
 
     def __init__(self, k_endog, k_states, k_posdef=None,
@@ -278,6 +301,7 @@ class KalmanFilter(Representation):
         self.set_inversion_method(**kwargs)
         self.set_stability_method(**kwargs)
         self.set_conserve_memory(**kwargs)
+        self.set_filter_timing(**kwargs)
 
         self.tolerance = tolerance
 
@@ -290,7 +314,8 @@ class KalmanFilter(Representation):
 
     def _initialize_filter(self, filter_method=None, inversion_method=None,
                            stability_method=None, conserve_memory=None,
-                           tolerance=None, loglikelihood_burn=None):
+                           tolerance=None, filter_timing=None,
+                           loglikelihood_burn=None):
         if filter_method is None:
             filter_method = self.filter_method
         if inversion_method is None:
@@ -301,6 +326,8 @@ class KalmanFilter(Representation):
             conserve_memory = self.conserve_memory
         if loglikelihood_burn is None:
             loglikelihood_burn = self.loglikelihood_burn
+        if filter_timing is None:
+            filter_timing = self.filter_timing
         if tolerance is None:
             tolerance = self.tolerance
 
@@ -333,7 +360,7 @@ class KalmanFilter(Representation):
             cls = prefix_kalman_filter_map[prefix]
             self._kalman_filters[prefix] = cls(
                 self._statespaces[prefix], filter_method, inversion_method,
-                stability_method, conserve_memory, tolerance,
+                stability_method, conserve_memory, filter_timing, tolerance,
                 loglikelihood_burn
             )
         # Otherwise, update the filter parameters
@@ -342,6 +369,7 @@ class KalmanFilter(Representation):
             kalman_filter.set_filter_method(filter_method, False)
             kalman_filter.inversion_method = inversion_method
             kalman_filter.stability_method = stability_method
+            kalman_filter.filter_timing = filter_timing
             kalman_filter.tolerance = tolerance
             # conserve_memory and loglikelihood_burn changes always lead to
             # re-created filters
@@ -650,9 +678,49 @@ class KalmanFilter(Representation):
             if name in kwargs:
                 setattr(self, name, kwargs[name])
 
+    def set_filter_timing(self, alternate_timing=None, **kwargs):
+        """
+        Set the filter timing convention
+
+        By default, the Kalman filter follows Durbin and Koopman, 2012, in
+        initializing the filter with predicted values. Kim and Nelson, 1999,
+        instead initialize the filter with filtered values, which is
+        essentially just a different timing convention.
+
+        Parameters
+        ----------
+        alternate_timing : integer, optional
+            Whether or not to use the alternate timing convention. Default is
+            unspecified.
+        **kwargs
+            Keyword arguments may be used to influence the memory conservation
+            method by setting individual boolean flags. See notes for details.
+
+        Examples
+        --------
+        >>> mod = dp.ssm.KalmanFilter(1,1)
+        >>> mod.conserve_memory
+        0
+        >>> mod.memory_no_predicted
+        False
+        >>> mod.memory_no_predicted = True
+        >>> mod.conserve_memory
+        2
+        >>> mod.set_conserve_memory(memory_no_filtered=True,
+                                    memory_no_forecast=True)
+        >>> mod.conserve_memory
+        7
+        """
+        if alternate_timing is not None:
+            self.filter_timing = int(alternate_timing)
+        if 'timing_init_predicted' in kwargs:
+            self.filter_timing = int(not kwargs['timing_init_predicted'])
+        if 'timing_init_filtered' in kwargs:
+            self.filter_timing = int(kwargs['timing_init_filtered'])
+
     def filter(self, filter_method=None, inversion_method=None,
-               stability_method=None, conserve_memory=None, tolerance=None,
-               loglikelihood_burn=None, results=None):
+               stability_method=None, conserve_memory=None, filter_timing=None,
+               tolerance=None, loglikelihood_burn=None, results=None):
         """
         Apply the Kalman filter to the statespace model.
 
@@ -669,6 +737,10 @@ class KalmanFilter(Representation):
         conserve_memory : int, optional
             Determines what output from the filter to store. Default is to
             store everything.
+        filter_timing : int, optional
+            Determines the timing convention of the filter. Default is that
+            from Durbin and Koopman (2012), in which the filter is initialized
+            with predicted values.
         tolerance : float, optional
             The tolerance at which the Kalman filter determines convergence to
             steady-state. Default is 1e-19.
@@ -694,7 +766,7 @@ class KalmanFilter(Representation):
         prefix, dtype, create_filter, create_statespace = (
             self._initialize_filter(
                 filter_method, inversion_method, stability_method,
-                conserve_memory, tolerance, loglikelihood_burn
+                conserve_memory, filter_timing, tolerance, loglikelihood_burn
             )
         )
         kfilter = self._kalman_filters[prefix]
@@ -826,6 +898,8 @@ class FilterResults(FrozenRepresentation):
         recursions.
     conserve_memory : int
         Bitmask representing the selected memory conservation method.
+    filter_timing : int
+        Whether or not to use the alternate timing convention.
     tolerance : float
         The tolerance at which the Kalman filter
         determines convergence to steady-state.
@@ -867,12 +941,13 @@ class FilterResults(FrozenRepresentation):
     """
     _filter_attributes = [
         'filter_method', 'inversion_method', 'stability_method',
-        'conserve_memory', 'tolerance', 'loglikelihood_burn', 'converged',
-        'period_converged', 'filtered_state', 'filtered_state_cov',
-        'predicted_state', 'predicted_state_cov', 'kalman_gain', 'tmp1',
-        'tmp2', 'tmp3', 'tmp4', 'forecasts', 'forecasts_error',
-        'forecasts_error_cov', 'llf_obs', 'collapsed_forecasts',
-        'collapsed_forecasts_error', 'collapsed_forecasts_error_cov',
+        'conserve_memory', 'filter_timing', 'tolerance', 'loglikelihood_burn',
+        'converged', 'period_converged', 'filtered_state',
+        'filtered_state_cov', 'predicted_state', 'predicted_state_cov',
+        'kalman_gain', 'tmp1', 'tmp2', 'tmp3', 'tmp4', 'forecasts',
+        'forecasts_error', 'forecasts_error_cov', 'llf_obs',
+        'collapsed_forecasts', 'collapsed_forecasts_error',
+        'collapsed_forecasts_error_cov',
     ]
 
     _filter_options = (
@@ -938,6 +1013,7 @@ class FilterResults(FrozenRepresentation):
         self.inversion_method = kalman_filter.inversion_method
         self.stability_method = kalman_filter.stability_method
         self.conserve_memory = kalman_filter.conserve_memory
+        self.filter_timing = kalman_filter.filter_timing
         self.tolerance = kalman_filter.tolerance
         self.loglikelihood_burn = kalman_filter.loglikelihood_burn
 
