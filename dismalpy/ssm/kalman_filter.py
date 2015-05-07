@@ -1290,11 +1290,7 @@ class FilterResults(FrozenRepresentation):
         if full_results:
             return result
         else:
-            return (
-                result.forecasts[:, start:end],
-                result.forecasts_error[:, start:end],
-                result.forecasts_error_cov[:, :, start:end]
-            )
+            return result.forecasts[:, start:end]
 
     def _predict(self, nstatic, ndynamic, nforecast, model):
         # TODO: this doesn't use self, and can either be a static method or
