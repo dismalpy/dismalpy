@@ -490,12 +490,12 @@ class SmootherResults(FilterResults):
     def _get_smoothed_forecasts(self):
         if self._smoothed_forecasts is None:
             # Initialize empty arrays
-            self._smoothed_forecasts = np.zeros(self.forecasts.shape)
+            self._smoothed_forecasts = np.zeros(self.forecasts.shape, dtype=self.dtype)
             self._smoothed_forecasts_error = (
-                np.zeros(self.forecasts_error.shape)
+                np.zeros(self.forecasts_error.shape, dtype=self.dtype)
             )
             self._smoothed_forecasts_error_cov = (
-                np.zeros(self.forecasts_error_cov.shape)
+                np.zeros(self.forecasts_error_cov.shape, dtype=self.dtype)
             )
 
             for t in range(self.nobs):
