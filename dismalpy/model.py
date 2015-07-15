@@ -148,7 +148,7 @@ class Model(object):
         # Check that this fits the k_endog dimension that we previously had
         if not endog.shape[0] == self.k_endog:
             raise ValueError('Provided endogenous array does has the required'
-                             ' number of columns. Got %d, required %d)'
+                             ' number of columns. Got %d, required %d'
                              % (endog.shape[0], self.k_endog))
 
         # If we were provided a strict nobs in construction, make sure it
