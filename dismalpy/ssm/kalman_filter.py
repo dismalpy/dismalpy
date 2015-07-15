@@ -817,7 +817,7 @@ class KalmanFilter(Representation):
         loglike : float
             The joint loglikelihood.
         """
-        if self.filter_method & MEMORY_NO_LIKELIHOOD:
+        if self.memory_no_likelihood:
             raise RuntimeError('Cannot compute loglikelihood if'
                                ' MEMORY_NO_LIKELIHOOD option is selected.')
         if loglikelihood_burn is None:
