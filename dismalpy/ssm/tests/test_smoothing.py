@@ -52,8 +52,8 @@ class TestStatesAR3(object):
             self.model.timing_init_filtered = True
 
         # Parameters from from Stata's sspace MLE estimation
-        self.model.update(np.r_[.5270715, .0952613, .2580355, .5307459])
-        self.results = self.model.smooth()
+        params = np.r_[.5270715, .0952613, .2580355, .5307459]
+        self.results = self.model.smooth(params, return_ssm=True)
 
         # Calculate the determinant of the covariance matrices (for easy
         # comparison to other languages without having to store 2-dim arrays)
@@ -69,7 +69,7 @@ class TestStatesAR3(object):
         n_disturbance_variates = (
             (self.model.k_endog + self.model.k_posdef) * self.model.nobs
         )
-        self.sim = self.model.simulation_smoother()
+        self.sim = self.model.simulation_smoother(params)
         self.sim.simulate(
             disturbance_variates=np.zeros(n_disturbance_variates),
             initial_state_variates=np.zeros(self.model.k_states)
@@ -205,8 +205,8 @@ class TestStatesMissingAR3(object):
             self.model.timing_init_filtered = True
 
         # Parameters from from Stata's sspace MLE estimation
-        self.model.update(np.r_[.5270715, .0952613, .2580355, .5307459])
-        self.results = self.model.smooth()
+        params = np.r_[.5270715, .0952613, .2580355, .5307459]
+        self.results = self.model.smooth(params, return_ssm=True)
 
         # Calculate the determinant of the covariance matrices (for easy
         # comparison to other languages without having to store 2-dim arrays)
@@ -222,7 +222,7 @@ class TestStatesMissingAR3(object):
         n_disturbance_variates = (
             (self.model.k_endog + self.model.k_posdef) * self.model.nobs
         )
-        self.sim = self.model.simulation_smoother()
+        self.sim = self.model.simulation_smoother(params)
         self.sim.simulate(
             disturbance_variates=np.zeros(n_disturbance_variates),
             initial_state_variates=np.zeros(self.model.k_states)
