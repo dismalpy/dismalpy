@@ -123,11 +123,17 @@ class MLEMixin(object):
         """
         # Save the return_params argument
         return_params = kwargs.get('return_params', False)
+        kwargs['return_params'] = True
         results = super(MLEMixin, self).fit(*args, **kwargs)
 
         # Otherwise construct the results class if desired
         if not return_params:
-            self.ssm.smooth(results=results.filter_results)
+            result_kwargs = {}
+            if 'cov_type' in kwargs:
+                result_kwargs['cov_type'] = kwargs['cov_type']
+            if 'cov_kwds' in kwargs:
+                result_kwargs['cov_kwds'] = kwargs['cov_kwds']
+            results = self.smooth(results, **result_kwargs)
 
         return results
 
