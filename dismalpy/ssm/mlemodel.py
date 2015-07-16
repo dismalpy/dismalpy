@@ -162,7 +162,7 @@ class MLEMixin(object):
             Additional keyword arguments to pass to the Kalman filter. See
             `KalmanFilter.filter` for more details.
         """
-        params = np.array(params)
+        params = np.array(params, ndmin=1)
 
         # Transform parameters if necessary
         if not transformed:
@@ -211,7 +211,7 @@ class MLEMixin(object):
             Additional keyword arguments to pass to the Kalman filter. See
             `KalmanFilter.filter` for more details.
         """
-        params = np.array(params)
+        params = np.array(params, ndmin=1)
 
         if not transformed:
             params = self.transform_params(params)
@@ -259,7 +259,7 @@ class MLEMixin(object):
         -------
         SimulationSmoothResults
         """
-        params = np.array(params)
+        params = np.array(params, ndmin=1)
 
         if not transformed:
             params = self.transform_params(params)

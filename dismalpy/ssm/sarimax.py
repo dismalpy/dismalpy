@@ -14,7 +14,7 @@ import statsmodels.base.wrapper as wrap
 class SARIMAX(MLEMixin, sarimax.SARIMAX):
     def filter(self, params, transformed=True, cov_type=None, return_ssm=False,
                **kwargs):
-        params = np.array(params)
+        params = np.array(params, ndmin=1)
 
         # Transform parameters if necessary
         if not transformed:
@@ -38,7 +38,7 @@ class SARIMAX(MLEMixin, sarimax.SARIMAX):
 
     def smooth(self, params, transformed=True, cov_type=None, return_ssm=False,
                **kwargs):
-        params = np.array(params)
+        params = np.array(params, ndmin=1)
 
         if not transformed:
             params = self.transform_params(params)
