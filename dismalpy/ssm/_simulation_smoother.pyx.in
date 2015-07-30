@@ -126,14 +126,28 @@ cdef class {{prefix}}SimulationSmoother(object):
                  int loglikelihood_burn=0,
                  int smoother_output=SMOOTHER_ALL,
                  int simulation_output=SIMULATE_ALL,
-                 ):
+                 int nobs=-1):
         cdef int inc = 1
         cdef:
             np.npy_intp dim1[1]
             np.npy_intp dim2[2]
         cdef {{cython_type}} [::1,:] obs
         cdef {{cython_type}} [::1,:] secondary_obs
-        cdef int nobs_endog = model.nobs * model.k_endog
+        cdef int nobs_endog
+
+        # Use model nobs by default
+        if nobs == -1:
+            nobs = model.nobs
+        # Only allow more nobs if a time-invariant model
+        elif nobs > model.nobs and model.time_invariant == 0:
+            raise ValueError('In a time-varying model, cannot create more'
+                             ' simulations than there are observations.')
+        elif nobs <= 0:
+            raise ValueError('Invalid number of simulations; must be'
+                             ' positive.')
+
+        self.nobs = nobs
+        nobs_endog = self.nobs * model.k_endog
 
         # Model objects
         self.model = model
@@ -147,7 +161,7 @@ cdef class {{prefix}}SimulationSmoother(object):
         # )
 
         # Simulated model objects
-        dim2[0] = model.k_endog; dim2[1] = model.nobs;
+        dim2[0] = model.k_endog; dim2[1] = self.nobs;
         obs = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
         self.simulated_model = {{prefix}}Statespace(
             obs, model.design, model.obs_intercept, model.obs_cov,
@@ -171,7 +185,7 @@ cdef class {{prefix}}SimulationSmoother(object):
         # Koopman (2002).
         self.has_missing = model.has_missing
         if self.has_missing:
-            dim2[0] = model.k_endog; dim2[1] = model.nobs;
+            dim2[0] = model.k_endog; dim2[1] = self.nobs;
             secondary_obs = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
             blas.{{prefix}}copy(&nobs_endog, &model.obs[0,0], &inc, &secondary_obs[0,0], &inc)
             self.secondary_simulated_model = {{prefix}}Statespace(
@@ -199,7 +213,7 @@ cdef class {{prefix}}SimulationSmoother(object):
 
         # Parameters
         self.simulation_output = simulation_output
-        self.n_disturbance_variates = self.model.nobs * (self.model.k_endog + self.model.k_posdef)
+        self.n_disturbance_variates = self.nobs * (self.model.k_endog + self.model.k_posdef)
         self.n_initial_state_variates = self.model.k_states
 
         # Random variates
@@ -210,17 +224,17 @@ cdef class {{prefix}}SimulationSmoother(object):
 
         # Simulated data (\tilde eta_t, \tilde eps_t, \tilde alpha_t)
         # Note that these are (k_endog x nobs), (k_posdef x nobs), (k_states x nobs)
-        dim2[0] = self.model.k_endog; dim2[1] = self.model.nobs;
+        dim2[0] = self.model.k_endog; dim2[1] = self.nobs;
         self.simulated_measurement_disturbance = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
-        dim2[0] = self.model.k_posdef; dim2[1] = self.model.nobs+1;
+        dim2[0] = self.model.k_posdef; dim2[1] = self.nobs+1;
         self.simulated_state_disturbance = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
-        dim2[0] = self.model.k_states; dim2[1] = self.model.nobs+1;
+        dim2[0] = self.model.k_states; dim2[1] = self.nobs+1;
         self.simulated_state = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
 
         # Generated data (y_t^+, alpha_t^+)
-        dim2[0] = self.model.k_endog; dim2[1] = self.model.nobs;
+        dim2[0] = self.model.k_endog; dim2[1] = self.nobs;
         self.generated_obs = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
-        dim2[0] = self.model.k_states; dim2[1] = self.model.nobs+1;
+        dim2[0] = self.model.k_states; dim2[1] = self.nobs+1;
         self.generated_state = np.PyArray_ZEROS(2, dim2, {{typenum}}, FORTRAN)
 
         # Temporary arrays
@@ -266,9 +280,9 @@ cdef class {{prefix}}SimulationSmoother(object):
             int k_states = self.model.k_states
             int k_posdef = self.model.k_posdef
             int k_posdef2 = self.model.k_posdef**2
-            int nobs_endog = self.model.nobs * self.model.k_endog
-            int nobs1_kstates = (self.model.nobs+1) * self.model.k_states
-            int nobs_posdef = self.model.nobs * self.model.k_posdef
+            int nobs_endog = self.nobs * self.model.k_endog
+            int nobs1_kstates = (self.nobs+1) * self.model.k_states
+            int nobs_posdef = self.nobs * self.model.k_posdef
         cdef:
             {{cython_type}} alpha = 1.0
             {{cython_type}} gamma = -1.0
@@ -308,7 +322,7 @@ cdef class {{prefix}}SimulationSmoother(object):
             # combine the actual data with the generated data in the primary
             # model, so copy the actual data here and subtract data below)
             blas.{{prefix}}copy(&nobs_endog, &self.model.obs[0,0], &inc, &self.simulated_model.obs[0,0], &inc)
-        for t in range(self.model.nobs):
+        for t in range(self.nobs):
             # 1. Transform independent draws to w_t^+: eps_t^+ = ind_eps * chol(H_t)
             #                                          eta_t^+ = ind_eta * chol(Q_t)
 
@@ -333,6 +347,11 @@ cdef class {{prefix}}SimulationSmoother(object):
 
             state_idx += k_posdef
 
+            # If we are just generating new series (i.e. all we want is
+            # generated_obs, generated_state), go to the next iteration
+            if self.simulation_output == 0:
+                continue
+
             # Typically, rather than running the Kalman filter separately for
             # y_t^+ and y_t, we can instead run it over y_t^* = y_t - y_t^+
             if not self.has_missing:
@@ -352,6 +371,11 @@ cdef class {{prefix}}SimulationSmoother(object):
                 # 3-2. Iterate the Kalman filter on the y_t data
                 #      to get alpha_t+1
                 next(self.secondary_simulated_kfilter)
+
+        # If we are just generating new series (i.e. all we want is
+        # generated_obs, generated_state), return now
+        if self.simulation_output == 0:
+            return
 
         # Backwards recursion
         # This gives us \hat w_t^*        (simulation_output & SIMULATE_DISTURBANCE)

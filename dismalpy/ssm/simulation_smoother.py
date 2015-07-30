@@ -58,6 +58,10 @@ class SimulationSmoother(KalmanSmoother):
             simulation_smooth_results_class = SimulationSmoothResults
         self.simulation_smooth_results_class = simulation_smooth_results_class
 
+        # Holder for an model-level simulation smoother objects, to use in
+        # simulating new time series.
+        self._simulators = {}
+
     def get_simulation_output(self, simulation_output=None,
                               simulate_state=None, simulate_disturbance=None,
                               simulate_all=None, **kwargs):
@@ -116,6 +120,77 @@ class SimulationSmoother(KalmanSmoother):
 
         return simulation_output
 
+    def _simulate(self, nsimulations, measurement_shocks, state_shocks,
+                  initial_state):
+        
+        prefix = self.prefix
+
+        # Create the simulator if necessary
+        if (prefix not in self._simulators or
+                nsimulations > self._simulators[prefix].nobs):
+
+            # Make sure we have the required Statespace representation
+            prefix, dtype, create_statespace = self._initialize_representation()
+
+            # Initialize the state
+            self._initialize_state(prefix=self.prefix)
+
+            simulation_output = 0
+            # Kalman smoother parameters
+            smoother_output = -1
+            # Kalman filter parameters
+            filter_method = self.filter_method
+            inversion_method = self.inversion_method
+            stability_method = self.stability_method
+            conserve_memory = self.conserve_memory
+            loglikelihood_burn = self.loglikelihood_burn
+            tolerance = self.tolerance
+
+            # Create a new simulation smoother object
+            cls = prefix_simulation_smoother_map[prefix]
+            self._simulators[prefix] = cls(
+                self._statespaces[prefix],
+                filter_method, inversion_method, stability_method, conserve_memory,
+                tolerance, loglikelihood_burn, smoother_output, simulation_output,
+                nsimulations
+            )
+        simulator = self._simulators[prefix]
+
+        # Set the disturbance variates
+        disturbance_variates = np.array(
+            np.r_[measurement_shocks, state_shocks], dtype=self.dtype
+        ).squeeze()
+        simulator.set_disturbance_variates(disturbance_variates)
+
+        # Set the intial state vector
+        initial_state_variates = np.array(
+            initial_state, dtype=self.dtype
+        ).squeeze()
+        simulator.set_initial_state_variates(initial_state_variates)
+
+        # Perform simulation smoothing
+        # Note: simulation_output=-1 corresponds to whatever was setup when
+        # the simulation smoother was constructed
+        simulator.simulate(-1)
+
+        simulated_obs = np.array(simulator.generated_obs, copy=True)
+        simulated_state = np.array(simulator.generated_state, copy=True)
+
+        return (
+            simulated_obs[:, :nsimulations].T,
+            simulated_state[:, :nsimulations].T
+        )
+
+    @property
+    def generated_state(self):
+        if self._generated_state is None:
+            self._generated_state = np.array(
+                self._simulation_smoother.generated_state, copy=True
+            )
+        return self._generated_state
+
+        return simulator.generated_obs, simulator.generated_state[:, :-1]
+
     def simulation_smoother(self, simulation_output=None,
                             results_class=None, prefix=None, **kwargs):
         """
@@ -157,17 +232,22 @@ class SimulationSmoother(KalmanSmoother):
         )
 
         # Simulation smoother parameters
-        simulation_output = self.get_simulation_output(simulation_output, **kwargs)
+        simulation_output = self.get_simulation_output(simulation_output,
+                                                       **kwargs)
 
         # Kalman smoother parameters
         smoother_output = kwargs.get('smoother_output', simulation_output)
 
         # Kalman filter parameters
         filter_method = kwargs.get('filter_method', self.filter_method)
-        inversion_method = kwargs.get('inversion_method', self.inversion_method)
-        stability_method = kwargs.get('stability_method', self.stability_method)
-        conserve_memory = kwargs.get('conserve_memory', self.conserve_memory)
-        loglikelihood_burn = kwargs.get('loglikelihood_burn', self.loglikelihood_burn)
+        inversion_method = kwargs.get('inversion_method',
+                                      self.inversion_method)
+        stability_method = kwargs.get('stability_method',
+                                      self.stability_method)
+        conserve_memory = kwargs.get('conserve_memory',
+                                     self.conserve_memory)
+        loglikelihood_burn = kwargs.get('loglikelihood_burn',
+                                        self.loglikelihood_burn)
         tolerance = kwargs.get('tolerance', self.tolerance)
 
         # Create a new simulation smoother object

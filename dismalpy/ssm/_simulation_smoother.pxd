@@ -77,6 +77,9 @@ cdef class sSimulationSmoother(object):
     cdef np.float32_t * _tmp1
     cdef np.float32_t * _tmp2
 
+    # ### Parameters
+    cdef readonly int nobs
+
     cpdef draw_disturbance_variates(self)
     cpdef draw_initial_state_variates(self)
     cpdef set_disturbance_variates(self, np.float32_t [:] variates)
@@ -137,6 +140,9 @@ cdef class dSimulationSmoother(object):
     cdef np.float64_t * _tmp0
     cdef np.float64_t * _tmp1
     cdef np.float64_t * _tmp2
+
+    # ### Parameters
+    cdef readonly int nobs
 
     cpdef draw_disturbance_variates(self)
     cpdef draw_initial_state_variates(self)
@@ -199,6 +205,9 @@ cdef class cSimulationSmoother(object):
     cdef np.complex64_t * _tmp1
     cdef np.complex64_t * _tmp2
 
+    # ### Parameters
+    cdef readonly int nobs
+
     cpdef draw_disturbance_variates(self)
     cpdef draw_initial_state_variates(self)
     cpdef set_disturbance_variates(self, np.complex64_t [:] variates)
@@ -259,6 +268,9 @@ cdef class zSimulationSmoother(object):
     cdef np.complex128_t * _tmp0
     cdef np.complex128_t * _tmp1
     cdef np.complex128_t * _tmp2
+
+    # ### Parameters
+    cdef readonly int nobs
 
     cpdef draw_disturbance_variates(self)
     cpdef draw_initial_state_variates(self)
