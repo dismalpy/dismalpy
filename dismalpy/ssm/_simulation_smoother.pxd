@@ -79,6 +79,7 @@ cdef class sSimulationSmoother(object):
 
     # ### Parameters
     cdef readonly int nobs
+    cdef readonly int pretransformed_variates
 
     cpdef draw_disturbance_variates(self)
     cpdef draw_initial_state_variates(self)
@@ -143,6 +144,7 @@ cdef class dSimulationSmoother(object):
 
     # ### Parameters
     cdef readonly int nobs
+    cdef readonly int pretransformed_variates
 
     cpdef draw_disturbance_variates(self)
     cpdef draw_initial_state_variates(self)
@@ -207,6 +209,7 @@ cdef class cSimulationSmoother(object):
 
     # ### Parameters
     cdef readonly int nobs
+    cdef readonly int pretransformed_variates
 
     cpdef draw_disturbance_variates(self)
     cpdef draw_initial_state_variates(self)
@@ -271,6 +274,7 @@ cdef class zSimulationSmoother(object):
 
     # ### Parameters
     cdef readonly int nobs
+    cdef readonly int pretransformed_variates
 
     cpdef draw_disturbance_variates(self)
     cpdef draw_initial_state_variates(self)

@@ -152,7 +152,7 @@ class SimulationSmoother(KalmanSmoother):
                 self._statespaces[prefix],
                 filter_method, inversion_method, stability_method, conserve_memory,
                 tolerance, loglikelihood_burn, smoother_output, simulation_output,
-                nsimulations
+                nsimulations, True
             )
         simulator = self._simulators[prefix]
 
