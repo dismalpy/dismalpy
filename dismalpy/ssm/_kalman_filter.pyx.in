@@ -755,9 +755,9 @@ cdef class {{prefix}}KalmanFilter(object):
         if self.conserve_memory & MEMORY_NO_PREDICTED > 0:
             predicted_t = 1
         if self.conserve_memory & MEMORY_NO_GAIN > 0:
-            gain_t = 1
+            gain_t = 0
         if self.conserve_memory & MEMORY_NO_SMOOTHING > 0:
-            smoothing_t = 1
+            smoothing_t = 0
         if self.conserve_memory & MEMORY_NO_LIKELIHOOD > 0:
             loglikelihood_t = 0
 
@@ -922,7 +922,7 @@ cdef class {{prefix}}KalmanFilter(object):
         if self.conserve_memory & MEMORY_NO_PREDICTED > 0:
             predicted_t = 1
         if self.conserve_memory & MEMORY_NO_GAIN > 0:
-            gain_t = 1
+            gain_t = 0
 
         # Figure out if there is a missing value
         if self.model.nmissing[self.t] > 0 or (not self.t == 0 and self.model.nmissing[self.t-1] > 0):
