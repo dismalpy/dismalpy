@@ -655,6 +655,7 @@ cdef:
     sgemv_t *sgemv
     ssymm_t *ssymm
     ssymv_t *ssymv
+    strmm_t *strmm
     strmv_t *strmv
     scopy_t *scopy
     sswap_t *sswap
@@ -667,6 +668,7 @@ cdef:
     dgemv_t *dgemv
     dsymm_t *dsymm
     dsymv_t *dsymv
+    dtrmm_t *dtrmm
     dtrmv_t *dtrmv
     dcopy_t *dcopy
     dswap_t *dswap
@@ -679,6 +681,7 @@ cdef:
     cgemv_t *cgemv
     csymm_t *csymm
     csymv_t *csymv
+    ctrmm_t *ctrmm
     ctrmv_t *ctrmv
     ccopy_t *ccopy
     cswap_t *cswap
@@ -691,6 +694,7 @@ cdef:
     zgemv_t *zgemv
     zsymm_t *zsymm
     zsymv_t *zsymv
+    ztrmm_t *ztrmm
     ztrmv_t *ztrmv
     zcopy_t *zcopy
     zswap_t *zswap
