@@ -12,13 +12,20 @@ import os
 import re
 
 import warnings
-from dismalpy.ssm import kalman_filter, sarimax, MLEModel
+from dismalpy.ssm import kalman_filter, kalman_smoother, sarimax, MLEModel
 from dismalpy.ssm.mlemodel import MLEResultsWrapper
 from dismalpy.ssm.tests import results_sarimax
 from numpy.testing import assert_allclose, assert_almost_equal, assert_equal, assert_raises
 from nose.exc import SkipTest
+from statsmodels.datasets import nile
 
 current_path = os.path.dirname(os.path.abspath(__file__))
+
+try:
+    import matplotlib.pyplot as plt
+    have_matplotlib = True
+except ImportError:
+    have_matplotlib = False
 
 # Basic kwargs
 kwargs = {
@@ -28,11 +35,16 @@ kwargs = {
 }
 
 
-def get_dummy_mod(fit=True):
+def get_dummy_mod(fit=True, pandas=False):
     # This tests time-varying parameters regression when in fact the parameters
     # are not time-varying, and in fact the regression fit is perfect
     endog = np.arange(100)*1.0
     exog = 2*endog
+
+    if pandas:
+        index = pd.date_range('1960-01-01', periods=100, freq='MS')
+        endog = pd.TimeSeries(endog, index=index)
+        exog = pd.TimeSeries(exog, index=index)
 
     mod = sarimax.SARIMAX(endog, exog=exog, order=(0,0,0), time_varying_regression=True, mle_regression=False)
 
@@ -44,6 +56,120 @@ def get_dummy_mod(fit=True):
         res = None
     
     return mod, res
+
+
+def test_wrapping():
+    # Test the wrapping of various Representation / KalmanFilter /
+    # KalmanSmoother methods / attributes
+    mod, _ = get_dummy_mod(fit=False)
+
+    # Test that we can get the design matrix
+    assert_equal(mod['design', 0, 0], 2.0 * np.arange(100))
+
+    # Test that we can set individual elements of the design matrix
+    mod['design', 0, 0, :] = 2
+    assert_equal(mod.ssm['design', 0, 0, :], 2)
+    assert_equal(mod.ssm['design'].shape, (1, 1, 100))
+
+    # Test that we can set the entire design matrix
+    mod['design'] = [[3.]]
+    assert_equal(mod.ssm['design', 0, 0], 3.)
+    # (Now it's no longer time-varying, so only 2-dim)
+    assert_equal(mod.ssm['design'].shape, (1, 1))
+
+    # Test that we can change the following properties: loglikelihood_burn,
+    # initial_variance, tolerance
+    assert_equal(mod.loglikelihood_burn, 1)
+    mod.loglikelihood_burn = 0
+    assert_equal(mod.ssm.loglikelihood_burn, 0)
+
+    assert_equal(mod.tolerance, mod.ssm.tolerance)
+    mod.tolerance = 0.123
+    assert_equal(mod.ssm.tolerance, 0.123)
+
+    assert_equal(mod.initial_variance, 1e10)
+    mod.initial_variance = 1e12
+    assert_equal(mod.ssm.initial_variance, 1e12)
+
+    # Test that we can use the following wrappers: initialization,
+    # initialize_known, initialize_stationary, initialize_approximate_diffuse
+
+    # Initialization starts off as none
+    assert_equal(mod.initialization, None)
+
+    # Since the SARIMAX model may be fully stationary or may have diffuse
+    # elements, it uses a custom initialization by default, but it can be
+    # overridden by users
+    mod.initialize_state()
+    # (The default initialization in this case is known because there is a non-
+    # stationary state corresponding to the time-varying regression parameter)
+    assert_equal(mod.initialization, 'known')
+
+    mod.initialize_approximate_diffuse(1e5)
+    assert_equal(mod.initialization, 'approximate_diffuse')
+    assert_equal(mod.ssm._initial_variance, 1e5)
+
+    mod.initialize_known([5.], [[40]])
+    assert_equal(mod.initialization, 'known')
+    assert_equal(mod.ssm._initial_state, [5.])
+    assert_equal(mod.ssm._initial_state_cov, [[40]])
+
+    mod.initialize_stationary()
+    assert_equal(mod.initialization, 'stationary')
+
+    # Test that we can use the following wrapper methods: set_filter_method,
+    # set_stability_method, set_conserve_memory, set_smoother_output
+
+    # The defaults are as follows:
+    assert_equal(mod.ssm.filter_method, kalman_filter.FILTER_CONVENTIONAL)
+    assert_equal(mod.ssm.stability_method, kalman_filter.STABILITY_FORCE_SYMMETRY)
+    assert_equal(mod.ssm.conserve_memory, kalman_filter.MEMORY_STORE_ALL)
+    assert_equal(mod.ssm.smoother_output, kalman_smoother.SMOOTHER_ALL)
+
+    # Now, create the Cython filter object and assert that they have
+    # transferred correctly
+    mod.ssm._initialize_filter()
+    kf = mod.ssm._kalman_filter
+    assert_equal(kf.filter_method, kalman_filter.FILTER_CONVENTIONAL)
+    assert_equal(kf.stability_method, kalman_filter.STABILITY_FORCE_SYMMETRY)
+    assert_equal(kf.conserve_memory, kalman_filter.MEMORY_STORE_ALL)
+    # (the smoother object is so far not in Cython, so there is no
+    # transferring)
+
+    # Change the attributes in the model class
+    mod.set_filter_method(100)
+    mod.set_stability_method(101)
+    mod.set_conserve_memory(102)
+    mod.set_smoother_output(103)
+
+    # Assert that the changes have occurred in the ssm class
+    assert_equal(mod.ssm.filter_method, 100)
+    assert_equal(mod.ssm.stability_method, 101)
+    assert_equal(mod.ssm.conserve_memory, 102)
+    assert_equal(mod.ssm.smoother_output, 103)
+
+    # Assert that the changes have *not yet* occurred in the filter object
+    assert_equal(kf.filter_method, kalman_filter.FILTER_CONVENTIONAL)
+    assert_equal(kf.stability_method, kalman_filter.STABILITY_FORCE_SYMMETRY)
+    assert_equal(kf.conserve_memory, kalman_filter.MEMORY_STORE_ALL)
+
+    # Re-initialize the filter object (this would happen automatically anytime
+    # loglike, filter, etc. were called)
+    # In this case, an error will be raised since filter_method=100 is not
+    # valid
+    # assert_raises(NotImplementedError, mod.ssm._initialize_filter)
+
+    # Now, test the setting of the other two methods by resetting the
+    # filter method to a valid value
+    mod.set_filter_method(1)
+    mod.ssm._initialize_filter()
+    # Retrieve the new kalman filter object (a new object had to be created
+    # due to the changing filter method)
+    kf = mod.ssm._kalman_filter
+
+    assert_equal(kf.filter_method, 1)
+    assert_equal(kf.stability_method, 101)
+    assert_equal(kf.conserve_memory, 102)
 
 
 def test_fit_misc():
@@ -179,17 +305,22 @@ def test_params():
     assert_equal(mod.param_names, ['a'])
 
 
-def test_results():
-    mod, res = get_dummy_mod()
+def check_results(pandas):
+    mod, res = get_dummy_mod(pandas=pandas)
 
     # Test fitted values
-    assert_almost_equal(res.fittedvalues()[2:], mod.ssm.endog[2:])
+    assert_almost_equal(res.fittedvalues[2:], mod.endog[2:].squeeze())
 
     # Test residuals
-    assert_almost_equal(res.resid()[0,2:], np.zeros(mod.nobs-2))
+    assert_almost_equal(res.resid[2:], np.zeros(mod.nobs-2))
 
     # Test loglikelihood_burn
     assert_equal(res.loglikelihood_burn, 1)
+
+
+def test_results(pandas=False):
+    check_results(pandas=False)
+    check_results(pandas=True)
 
 
 def test_predict():
@@ -200,7 +331,9 @@ def test_predict():
 
     # Test that predict with start=None, end=None does prediction with full
     # dataset
-    assert_equal(res.predict().shape, (mod.k_endog, mod.nobs))
+    predict = res.predict()
+    assert_equal(predict.shape, (mod.nobs,))
+    assert_allclose(res.get_prediction().predicted_mean, predict)
 
     # Test a string value to the dynamic option
     assert_allclose(res.predict(dynamic='1981-01-01'), res.predict())
@@ -208,20 +341,32 @@ def test_predict():
     # Test an invalid date string value to the dynamic option
     assert_raises(ValueError, res.predict, dynamic='1982-01-01')
 
-    # Test predict with full results
-    assert_equal(isinstance(res.predict(full_results=True),
-                            kalman_filter.FilterResults), True)
+    # Test for passing a string to predict when dates are not set
+    mod = MLEModel([1,2], **kwargs)
+    res = mod.filter([])
+    assert_raises(ValueError, res.predict, dynamic='string')
 
 
 def test_forecast():
+    # Numpy
     mod = MLEModel([1,2], **kwargs)
     res = mod.filter([])
-    assert_allclose(res.forecast(steps=10), [[2]*10])
+    forecast = res.forecast(steps=10)
+    assert_allclose(forecast, np.ones((10,)) * 2)
+    assert_allclose(res.get_forecast(steps=10).predicted_mean, forecast)
+
+    # Pandas
+    index = pd.date_range('1960-01-01', periods=2, freq='MS')
+    mod = MLEModel(pd.Series([1,2], index=index), **kwargs)
+    res = mod.filter([])
+    assert_allclose(res.forecast(steps=10), np.ones((10,)) * 2)
+    assert_allclose(res.forecast(steps='1960-12-01'), np.ones((10,)) * 2)
+    assert_allclose(res.get_forecast(steps=10).predicted_mean, np.ones((10,)) * 2)
 
 
 def test_summary():
-    dates = pd.date_range(start='1980-01-01', end='1981-01-01', freq='AS')
-    endog = pd.TimeSeries([1,2], index=dates)
+    dates = pd.date_range(start='1980-01-01', end='1984-01-01', freq='AS')
+    endog = pd.TimeSeries([1,2,3,4,5], index=dates)
     mod = MLEModel(endog, **kwargs)
     res = mod.filter([])
 
@@ -230,7 +375,7 @@ def test_summary():
 
     # Test res.summary when the model has dates
     assert_equal(re.search('Sample:\s+01-01-1980', txt) is not None, True)
-    assert_equal(re.search('\s+- 01-01-1981', txt) is not None, True)
+    assert_equal(re.search('\s+- 01-01-1984', txt) is not None, True)
 
     # Test res.summary when `model_name` was not provided
     assert_equal(re.search('Model:\s+MLEModel', txt) is not None, True)
@@ -440,3 +585,82 @@ def test_pandas_endog():
     endog = pd.DataFrame({'a': [1., 2.], 'b': [3., 4.]}, index=dates)
     mod = check_endog(endog, k_endog=2, **kwargs2)
     mod.filter([])
+
+def test_diagnostics():
+    mod, res = get_dummy_mod()
+
+    # Make sure method=None selects the appropriate test
+    actual = res.test_normality(method=None)
+    desired = res.test_normality(method='jarquebera')
+    assert_allclose(actual, desired)
+
+    actual = res.test_heteroskedasticity(method=None)
+    desired = res.test_heteroskedasticity(method='breakvar')
+    assert_allclose(actual, desired)
+
+    actual = res.test_serial_correlation(method=None)
+    desired = res.test_serial_correlation(method='ljungbox')
+    assert_allclose(actual, desired)
+
+def test_diagnostics_nile_eviews():
+    # Test the diagnostic tests using the Nile dataset. Results are from 
+    # "Fitting State Space Models with EViews" (Van den Bossche 2011,
+    # Journal of Statistical Software).
+    # For parameter values, see Figure 2
+    # For Ljung-Box and Jarque-Bera statistics and p-values, see Figure 5
+    # The Heteroskedasticity statistic is not provided in this paper.
+    niledata = nile.data.load_pandas().data
+    niledata.index = pd.date_range('1871-01-01', '1970-01-01', freq='AS')
+
+    mod = MLEModel(niledata['volume'], k_states=1,
+        initialization='approximate_diffuse', initial_variance=1e15,
+        loglikelihood_burn=1)
+    mod.ssm['design', 0, 0] = 1
+    mod.ssm['obs_cov', 0, 0] = np.exp(9.600350)
+    mod.ssm['transition', 0, 0] = 1
+    mod.ssm['selection', 0, 0] = 1
+    mod.ssm['state_cov', 0, 0] = np.exp(7.348705)
+    res = mod.filter([])
+
+    # Test Ljung-Box
+    # Note: only 3 digits provided in the reference paper
+    actual = res.test_serial_correlation(method='ljungbox', lags=10)[0, :, -1]
+    assert_allclose(actual, [13.117, 0.217], atol=1e-3)
+
+    # Test Jarque-Bera
+    actual = res.test_normality(method='jarquebera')[0, :2]
+    assert_allclose(actual, [0.041686, 0.979373], atol=1e-5)
+
+def test_diagnostics_nile_durbinkoopman():
+    # Test the diagnostic tests using the Nile dataset. Results are from 
+    # Durbin and Koopman (2012); parameter values reported on page 37; test
+    # statistics on page 40
+    niledata = nile.data.load_pandas().data
+    niledata.index = pd.date_range('1871-01-01', '1970-01-01', freq='AS')
+
+    mod = MLEModel(niledata['volume'], k_states=1,
+        initialization='approximate_diffuse', initial_variance=1e15,
+        loglikelihood_burn=1)
+    mod.ssm['design', 0, 0] = 1
+    mod.ssm['obs_cov', 0, 0] = 15099.
+    mod.ssm['transition', 0, 0] = 1
+    mod.ssm['selection', 0, 0] = 1
+    mod.ssm['state_cov', 0, 0] = 1469.1
+    res = mod.filter([])
+
+    # Test Ljung-Box
+    # Note: only 3 digits provided in the reference paper
+    actual = res.test_serial_correlation(method='ljungbox', lags=9)[0, 0, -1]
+    assert_allclose(actual, [8.84], atol=1e-2)
+
+    # Test Jarque-Bera
+    # Note: The book reports 0.09 for Kurtosis, because it is reporting the
+    # statistic less the mean of the Kurtosis distribution (which is 3).
+    norm = res.test_normality(method='jarquebera')[0]
+    actual = [norm[0], norm[2], norm[3]]
+    assert_allclose(actual, [0.05, -0.03, 3.09], atol=1e-2)
+
+    # Test Heteroskedasticity
+    # Note: only 2 digits provided in the book
+    actual = res.test_heteroskedasticity(method='breakvar')[0, 0]
+    assert_allclose(actual, [0.61], atol=1e-2)
