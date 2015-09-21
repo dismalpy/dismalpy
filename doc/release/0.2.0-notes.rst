@@ -1,0 +1,15 @@
+DismalPy 0.2.0 Release Notes
+****************************
+
+This release supports Python 2.6 - 2.7 and 3.2 - 3.4.
+
+Highlights
+==========
+This release introduces new features including improved standard error
+calculation, diagnostic tests and plots, impulse response functions, time
+series simulation, and new models, including unobserved components, VARMAX,
+and dynamic factor models.
+
+It also now includes an improved reference guide and a full user guide
+describing the goals of the project, how to specify state space models, and
+how to use those models for classical and Bayesian parameter estimation.
