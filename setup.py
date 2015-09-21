@@ -181,7 +181,7 @@ def setup_package():
     # We don't want to do that unconditionally, because we risk updating
     # an installed numpy which fails too often.  Just if it's not installed, we
     # may give it a try.  See gh-3379.
-    build_requires = []
+    build_requires = ['statsmodels>=0.6', 'scipy>=0.14']
     try:
         import numpy
     except:
