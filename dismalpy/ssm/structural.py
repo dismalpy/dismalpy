@@ -8,7 +8,12 @@ from __future__ import division, absolute_import, print_function
 
 import numpy as np
 from .mlemodel import MLEMixin, MLEResultsMixin
-from statsmodels.tsa.statespace import mlemodel, structural
+try:
+    from statsmodels.tsa.statespace import varmax
+    from statsmodels.tsa.statespace import mlemodel, structural
+except ImportError:
+    from .compat import mlemodel, structural
+
 import statsmodels.base.wrapper as wrap
 
 class UnobservedComponents(MLEMixin, structural.UnobservedComponents):

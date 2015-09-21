@@ -8,7 +8,11 @@ from __future__ import division, absolute_import, print_function
 
 import numpy as np
 from .mlemodel import MLEMixin, MLEResultsMixin
-from statsmodels.tsa.statespace import mlemodel, sarimax
+try:
+    from statsmodels.tsa.statespace import varmax
+    from statsmodels.tsa.statespace import mlemodel, sarimax
+except ImportError:
+    from .compat import mlemodel, sarimax
 import statsmodels.base.wrapper as wrap
 
 class SARIMAX(MLEMixin, sarimax.SARIMAX):

@@ -8,7 +8,11 @@ from __future__ import division, absolute_import, print_function
 
 import numpy as np
 from .mlemodel import MLEMixin, MLEResultsMixin
-from statsmodels.tsa.statespace import mlemodel, dynamic_factor
+try:
+    raise ImportError
+    from statsmodels.tsa.statespace import mlemodel, dynamic_factor
+except ImportError:
+    from .compat import mlemodel, dynamic_factor
 import statsmodels.base.wrapper as wrap
 
 class DynamicFactor(MLEMixin, dynamic_factor.DynamicFactor):
