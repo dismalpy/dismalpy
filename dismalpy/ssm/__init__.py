@@ -52,6 +52,9 @@ from .simulation_smoother import (
 from .model import Model
 from .mlemodel import MLEModel, MLEResults
 from .sarimax import SARIMAX
+from .structural import UnobservedComponents
+from .varmax import VARMAX
+from .dynamic_factor import DynamicFactor
 from .tools import (
     find_best_blas_type, prefix_dtype_map,
     prefix_statespace_map, prefix_kalman_filter_map,

@@ -20,7 +20,7 @@ import pandas as pd
 import os
 
 from dismalpy.ssm import Representation, Model, sarimax, tools
-from dismalpy.ssm.kalman_filter import KalmanFilter
+from dismalpy.ssm.kalman_filter import KalmanFilter, PredictionResults
 from dismalpy.ssm.simulation_smoother import SimulationSmoother
 from dismalpy.ssm.kalman_smoother import SmootherResults
 import dismalpy.ssm.tests.results_kalman as results_kalman_filter
@@ -924,14 +924,14 @@ def test_predict():
                   obs_intercept=np.zeros(2))
 
     # Check that start=None gives start=0 and end=None gives end=nobs
-    assert_equal(res.predict().shape, (1,res.nobs))
+    assert_equal(res.predict().forecasts.shape, (1,res.nobs))
 
     # Check that dynamic=True begins dynamic prediction immediately
     # TODO just a smoke test
     res.predict(dynamic=True)
 
     # Check that full_results=True yields a SmootherResults object
-    assert_equal(isinstance(res.predict(full_results=True), SmootherResults), True)
+    assert_equal(isinstance(res.predict(), PredictionResults), True)
 
     # Check that an error is raised when a non-two-dimensional obs_cov
     # is given
@@ -1078,7 +1078,7 @@ def test_simulate():
 
     actual = res.simulate(
         nsimulations, measurement_shocks=measurement_shocks,
-        state_shocks=state_shocks)[0].squeeze()
+        state_shocks=state_shocks).squeeze()
     desired = lfilter(
         res.polynomial_reduced_ma, res.polynomial_reduced_ar,
         np.r_[0, state_shocks[:-1]])

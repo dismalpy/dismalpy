@@ -158,7 +158,8 @@ class SimulationSmoother(KalmanSmoother):
 
         # Set the disturbance variates
         disturbance_variates = np.array(
-            np.r_[measurement_shocks, state_shocks], dtype=self.dtype
+            np.r_[measurement_shocks.ravel(), state_shocks.ravel()],
+            dtype=self.dtype
         ).squeeze()
         simulator.set_disturbance_variates(disturbance_variates)
 
@@ -177,8 +178,8 @@ class SimulationSmoother(KalmanSmoother):
         simulated_state = np.array(simulator.generated_state, copy=True)
 
         return (
-            simulated_obs[:, :nsimulations].T,
-            simulated_state[:, :nsimulations].T
+            simulated_obs[:, :nsimulations],
+            simulated_state[:, :nsimulations]
         )
 
     @property

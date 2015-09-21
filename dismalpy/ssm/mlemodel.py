@@ -9,9 +9,11 @@ from __future__ import division, absolute_import, print_function
 import numpy as np
 from .simulation_smoother import SimulationSmoother, SimulationSmoothResults
 from statsmodels.tsa.statespace import mlemodel
+from statsmodels.tsa.statespace.mlemodel import PredictionResultsWrapper
 import statsmodels.base.wrapper as wrap
 
 class MLEMixin(object):
+
     def initialize_statespace(self, **kwargs):
         """
         Initialize the state space representation
@@ -242,7 +244,7 @@ class MLEMixin(object):
 
         return results
 
-    def simulation_smoother(self, params, transformed=True, **kwargs):
+    def simulation_smoother(self, **kwargs):
         """
         Retrieve a simulation smoother for the statespace model.
 
@@ -265,12 +267,6 @@ class MLEMixin(object):
         -------
         SimulationSmoothResults
         """
-        params = np.array(params, ndmin=1)
-
-        if not transformed:
-            params = self.transform_params(params)
-        self.update(params, transformed=True)
-
         return self.ssm.simulation_smoother(**kwargs)
 
 

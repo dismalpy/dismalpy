@@ -728,14 +728,14 @@ class TestFriedmanPredict(Friedman):
 
     def test_predict(self):
         assert_almost_equal(
-            self.result.predict()[0],
+            self.result.predict(),
             self.true['predict'], 3
         )
 
     def test_dynamic_predict(self):
         dynamic = len(self.true['data']['consump'])-15-1
         assert_almost_equal(
-            self.result.predict(dynamic=dynamic)[0],
+            self.result.predict(dynamic=dynamic),
             self.true['dynamic_predict'], 3
         )
 
@@ -790,7 +790,7 @@ class TestFriedmanForecast(Friedman):
         end = len(self.true['data']['consump'])+15-1
         exog = add_constant(self.true['forecast_data']['m2'])
         assert_almost_equal(
-            self.result.predict(end=end, exog=exog)[0],
+            self.result.predict(end=end, exog=exog),
             self.true['forecast'], 3
         )
 
@@ -799,7 +799,7 @@ class TestFriedmanForecast(Friedman):
         dynamic = len(self.true['data']['consump'])-1
         exog = add_constant(self.true['forecast_data']['m2'])
         assert_almost_equal(
-            self.result.predict(end=end, dynamic=dynamic, exog=exog)[0],
+            self.result.predict(end=end, dynamic=dynamic, exog=exog),
             self.true['dynamic_forecast'], 3
         )
 

@@ -69,7 +69,7 @@ class TestStatesAR3(object):
         n_disturbance_variates = (
             (self.model.k_endog + self.model.k_posdef) * self.model.nobs
         )
-        self.sim = self.model.simulation_smoother(params)
+        self.sim = self.model.simulation_smoother()
         self.sim.simulate(
             disturbance_variates=np.zeros(n_disturbance_variates),
             initial_state_variates=np.zeros(self.model.k_states)
@@ -78,7 +78,7 @@ class TestStatesAR3(object):
 
     def test_predict_obs(self):
         assert_almost_equal(
-            self.results.predict()[0],
+            self.results.predict().forecasts[0],
             self.stata.ix[1:, 'dep1'], 4
         )
 
@@ -222,7 +222,7 @@ class TestStatesMissingAR3(object):
         n_disturbance_variates = (
             (self.model.k_endog + self.model.k_posdef) * self.model.nobs
         )
-        self.sim = self.model.simulation_smoother(params)
+        self.sim = self.model.simulation_smoother()
         self.sim.simulate(
             disturbance_variates=np.zeros(n_disturbance_variates),
             initial_state_variates=np.zeros(self.model.k_states)
