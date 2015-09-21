@@ -9,94 +9,41 @@ State Space Models
 DismalPy provides functionality for describing, filtering, and parameter
 estimation for state space models.
 
-Representation
---------------
+Built-in models
+===============
 
-.. currentmodule:: dismalpy.ssm.representation
+The following classes define built-in models:
 
-.. autosummary::
-   :toctree: _generated/
+.. toctree::
+   :maxdepth: 2
 
-   Representation
-   FrozenRepresentation
+   ssm/sarimax
+   ssm/structural
+   ssm/varmax
+   ssm/dynamic_factor
 
-Kalman filter
--------------
+Extension starting point
+========================
 
-.. currentmodule:: dismalpy.ssm.kalman_filter
+Users wishing to specify and estimate custom state space models will typically
+want to extend the following class:
 
-.. autosummary::
-   :toctree: _generated/
+.. toctree::
+   :maxdepth: 2
 
-   KalmanFilter
-   FilterResults
+   ssm/mlemodel
 
-Kalman smoother 
----------------
+Base classes
+============
 
-.. currentmodule:: dismalpy.ssm.kalman_smoother
+The base state space model classes and tools are the following:
 
-.. autosummary::
-   :toctree: _generated/
+.. toctree::
+   :maxdepth: 2
 
-   KalmanSmoother
-   SmootherResults
-
-Simulation smoother
--------------------
-
-.. currentmodule:: dismalpy.ssm.simulation_smoother
-
-.. autosummary::
-   :toctree: _generated/
-
-   SimulationSmoother
-   SimulationSmoothResults
-
-Model
------
-
-.. currentmodule:: dismalpy.ssm.model
-
-.. autosummary::
-   :toctree: _generated/
-
-   Model
-
-Maximum Likelihood Estimation
------------------------------
-
-.. currentmodule:: dismalpy.ssm.mlemodel
-
-.. autosummary::
-   :toctree: _generated/
-
-   MLEModel
-   MLEResults
-
-SARIMAX
--------
-
-.. currentmodule:: dismalpy.ssm.sarimax
-
-.. autosummary::
-   :toctree: _generated/
-
-   SARIMAX
-   SARIMAXResults
-
-Tools
------
-
-.. currentmodule:: dismalpy.ssm.tools
-
-.. autosummary::
-   :toctree: _generated/
-
-   companion_matrix
-   diff
-   is_invertible
-   constrain_stationary_univariate
-   unconstrain_stationary_univariate
-   validate_matrix_shape
-   validate_vector_shape
+   ssm/representation
+   ssm/kalman_filter
+   ssm/kalman_smoother
+   ssm/simulation_smoother
+   ssm/model
+   ssm/tools

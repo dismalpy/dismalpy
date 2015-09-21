@@ -65,7 +65,7 @@ class SimulationSmoother(KalmanSmoother):
     def get_simulation_output(self, simulation_output=None,
                               simulate_state=None, simulate_disturbance=None,
                               simulate_all=None, **kwargs):
-        """
+        r"""
         Get simulation output bitmask
 
         Helper method to get final simulation output bitmask from a set of
@@ -84,9 +84,9 @@ class SimulationSmoother(KalmanSmoother):
             in the simulation output.
         simulate_all : boolean, optional
             Whether or not to include all simulation output.
-        **kwargs
+        \*\*kwargs
             Additional keyword arguments. Present so that calls to this method
-            can use **kwargs without clearing out additional arguments.
+            can use \*\*kwargs without clearing out additional arguments.
         """
         # If we don't explicitly have simulation_output, try to get it from
         # kwargs
@@ -194,7 +194,7 @@ class SimulationSmoother(KalmanSmoother):
 
     def simulation_smoother(self, simulation_output=None,
                             results_class=None, prefix=None, **kwargs):
-        """
+        r"""
         Retrieve a simulation smoother for the statespace model.
 
         Parameters
@@ -266,7 +266,7 @@ class SimulationSmoother(KalmanSmoother):
 
 
 class SimulationSmoothResults(object):
-    """
+    r"""
     Results from applying the Kalman smoother and/or filter to a state space
     model.
 
@@ -401,7 +401,7 @@ class SimulationSmoothResults(object):
 
     def simulate(self, simulation_output=-1, disturbance_variates=None,
                  initial_state_variates=None):
-        """
+        r"""
         Perform simulation smoothing
 
         Does not return anything, but populates the object's `simulated_*`

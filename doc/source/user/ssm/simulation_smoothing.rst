@@ -1,5 +1,0 @@
-.. _ssm:
-
-Simulation Smoothing
-====================
-

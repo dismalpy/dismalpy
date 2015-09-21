@@ -103,7 +103,7 @@ Thumbs.db
 *__config__.py
 *version.py
 cythonize.dat
-dismalpy/reg/_var.c
+dismalpy/_reg/_var.c
 dismalpy/src/*.c
 dismalpy/ssm/_statespace.c
 dismalpy/ssm/_statespace.pyx
@@ -125,11 +125,14 @@ dismalpy/ssm/_smoothers/_conventional.c
 dismalpy/ssm/_smoothers/_conventional.pyx
 dismalpy/ssm/_smoothers/_univariate.c
 dismalpy/ssm/_smoothers/_univariate.pyx
-dismalpy/stats/rvs/_normal.c
+dismalpy/_stats/rvs/_normal.c
 examples
 
 # lbfgs output
 *iterate.dat
+
+# example notebooks
+doc/example_notebooks
 
 # compiled doc notebooks
 doc/source/user/_notebooks/

@@ -141,7 +141,6 @@ class DynamicFactor(MLEModel):
        Berlin: Springer.
 
     """
-
     def __init__(self, endog, k_factors, factor_order, exog=None,
                  error_order=0, error_var=False, error_cov_type='diagonal',
                  enforce_stationarity=True, **kwargs):

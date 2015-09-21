@@ -21,6 +21,7 @@ def configuration(parent_package='', top_path=None):
     config.add_extension('_tools',
                          include_dirs=['dismalpy/src'],
                          sources=['_tools.c'])
+    config.add_subpackage('compat')
     config.add_data_dir('tests')
 
     config.add_subpackage('_filters')

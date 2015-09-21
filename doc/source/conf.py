@@ -28,7 +28,7 @@ extensions = [
     'sphinx.ext.coverage',
     'sphinx.ext.mathjax',
     'sphinx.ext.viewcode',
-
+    'sphinxcontrib.bibtex',
     'sphinx.ext.autosummary',
     'numpydoc'
 ]
@@ -232,7 +232,13 @@ latex_documents = [
 # If false, no module index is generated.
 #latex_domain_indices = True
 
+# Other
+
+numfig = True
+
 # -- Autosummary ----------------------------------------------------------
 
 import glob
 autosummary_generate = glob.glob("reference/*.rst")
+
+numpydoc_show_class_members = False

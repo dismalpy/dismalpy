@@ -21,6 +21,8 @@ Python prompt ``>>>`` (which is not a part of the example code). The
 examples assume that you have first entered::
 
 >>> import numpy as np
+>>> import pandas as pd
+>>> import statsmodels.api as sm
 >>> import dismalpy as dp
 
 before running the examples.

@@ -118,7 +118,7 @@ class KalmanSmoother(KalmanFilter):
         return prefix, dtype, create_smoother, create_filter, create_statespace
 
     def set_smoother_output(self, smoother_output=None, **kwargs):
-        """
+        r"""
         Set the smoother output
 
         The smoother can produce several types of results. The smoother output

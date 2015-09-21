@@ -274,6 +274,55 @@ class MLEMixin(object):
 
 
 class MLEModel(MLEMixin, mlemodel.MLEModel):
+    r"""
+    State space model for maximum likelihood estimation
+
+    Parameters
+    ----------
+    endog : array_like
+        The observed time-series process :math:`y`
+    k_states : int
+        The dimension of the unobserved state process.
+    exog : array_like, optional
+        Array of exogenous regressors, shaped nobs x k. Default is no
+        exogenous regressors.
+    dates : array-like of datetime, optional
+        An array-like object of datetime objects. If a Pandas object is given
+        for endog, it is assumed to have a DateIndex.
+    freq : str, optional
+        The frequency of the time-series. A Pandas offset or 'B', 'D', 'W',
+        'M', 'A', or 'Q'. This is optional if dates are given.
+    **kwargs
+        Keyword arguments may be used to provide default values for state space
+        matrices or for Kalman filtering options. See `Representation`, and
+        `KalmanFilter` for more details.
+
+    Attributes
+    ----------
+    ssm : KalmanFilter
+        Underlying state space representation.
+
+    Notes
+    -----
+    This class wraps the state space model with Kalman filtering to add in
+    functionality for maximum likelihood estimation. In particular, it adds
+    the concept of updating the state space representation based on a defined
+    set of parameters, through the `update` method or `updater` attribute (see
+    below for more details on which to use when), and it adds a `fit` method
+    which uses a numerical optimizer to select the parameters that maximize
+    the likelihood of the model.
+
+    The `start_params` `update` method must be overridden in the
+    child class (and the `transform` and `untransform` methods, if needed).
+
+    See Also
+    --------
+    MLEResults
+    dismalpy.ssm.simulation_smoother.SimulationSmoother
+    dismalpy.ssm.kalman_smoother.KalmanSmoother
+    dismalpy.ssm.kalman_filter.KalmanFilter
+    dismalpy.ssm.representation.Representation
+    """
     pass
 
 
@@ -290,6 +339,9 @@ class MLEResultsMixin(object):
 
     @property
     def kalman_gain(self):
+        """
+        Kalman gain matrices
+        """
         return self._kalman_gain
     @kalman_gain.setter
     def kalman_gain(self, value):
@@ -297,6 +349,38 @@ class MLEResultsMixin(object):
 
 
 class MLEResults(MLEResultsMixin, mlemodel.MLEResults):
+    r"""
+    Class to hold results from fitting a state space model.
+
+    Parameters
+    ----------
+    model : MLEModel instance
+        The fitted model instance
+    params : array
+        Fitted parameters
+    filter_results : KalmanFilter instance
+        The underlying state space model and Kalman filter output
+
+    Attributes
+    ----------
+    model : Model instance
+        A reference to the model that was fit.
+    filter_results : KalmanFilter instance
+        The underlying state space model and Kalman filter output
+    nobs : float
+        The number of observations used to fit the model.
+    params : array
+        The parameters of the model.
+    scale : float
+        This is currently set to 1.0 and not used by the model or its results.
+
+    See Also
+    --------
+    MLEModel
+    dismalpy.ssm.kalman_smoother.SmootherResults
+    dismalpy.ssm.kalman_filter.FilterResults
+    dismalpy.ssm.representation.FrozenRepresentation
+    """
     pass
 
 

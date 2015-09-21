@@ -377,7 +377,7 @@ class KalmanFilter(Representation):
         return prefix, dtype, create_filter, create_statespace
 
     def set_filter_method(self, filter_method=None, **kwargs):
-        """
+        r"""
         Set the filtering method
 
         The filtering method controls aspects of which Kalman filtering
@@ -450,7 +450,7 @@ class KalmanFilter(Representation):
                 setattr(self, name, kwargs[name])
 
     def set_inversion_method(self, inversion_method=None, **kwargs):
-        """
+        r"""
         Set the inversion method
 
         The Kalman filter may contain one matrix inversion: that of the
@@ -540,7 +540,7 @@ class KalmanFilter(Representation):
                 setattr(self, name, kwargs[name])
 
     def set_stability_method(self, stability_method=None, **kwargs):
-        """
+        r"""
         Set the numerical stability method
 
         The Kalman filter is a recursive algorithm that may in some cases
@@ -598,7 +598,7 @@ class KalmanFilter(Representation):
                 setattr(self, name, kwargs[name])
 
     def set_conserve_memory(self, conserve_memory=None, **kwargs):
-        """
+        r"""
         Set the memory conservation method
 
         By default, the Kalman filter computes a number of intermediate
@@ -679,7 +679,7 @@ class KalmanFilter(Representation):
                 setattr(self, name, kwargs[name])
 
     def set_filter_timing(self, alternate_timing=None, **kwargs):
-        """
+        r"""
         Set the filter timing convention
 
         By default, the Kalman filter follows Durbin and Koopman, 2012, in
@@ -706,7 +706,7 @@ class KalmanFilter(Representation):
     def filter(self, filter_method=None, inversion_method=None,
                stability_method=None, conserve_memory=None, filter_timing=None,
                tolerance=None, loglikelihood_burn=None, results=None):
-        """
+        r"""
         Apply the Kalman filter to the statespace model.
 
         Parameters
@@ -785,7 +785,7 @@ class KalmanFilter(Representation):
         return results
 
     def loglike(self, loglikelihood_burn=None, **kwargs):
-        """
+        r"""
         Calculate the loglikelihood associated with the statespace model.
 
         Parameters
@@ -811,7 +811,7 @@ class KalmanFilter(Representation):
         return np.sum(self.filter(**kwargs)[loglikelihood_burn:])
 
     def loglikeobs(self, loglikelihood_burn=None, **kwargs):
-        """
+        r"""
         Calculate the loglikelihood for each observation associated with the
         statespace model.
 
@@ -849,7 +849,7 @@ class KalmanFilter(Representation):
 
     def simulate(self, nsimulations, measurement_shocks=None,
                  state_shocks=None, initial_state=None):
-        """
+        r"""
         Simulate a new time series following the state space model
 
         Parameters
@@ -1005,7 +1005,7 @@ class KalmanFilter(Representation):
 
     def impulse_responses(self, steps=1, impulse=0, orthogonalized=False,
                           cumulative=False, **kwargs):
-        """
+        r"""
         Impulse response function
 
         Parameters
@@ -1158,7 +1158,7 @@ class KalmanFilter(Representation):
 
 
 class FilterResults(FrozenRepresentation):
-    """
+    r"""
     Results from applying the Kalman filter to a state space model.
 
     Parameters
@@ -1506,7 +1506,7 @@ class FilterResults(FrozenRepresentation):
         return self._standardized_forecasts_error
 
     def predict(self, start=None, end=None, dynamic=None, **kwargs):
-        """
+        r"""
         In-sample and out-of-sample prediction for state space models generally
 
         Parameters
@@ -1756,7 +1756,7 @@ class FilterResults(FrozenRepresentation):
 
 
 class PredictionResults(FilterResults):
-    """
+    r"""
     Results of in-sample and out-of-sample prediction for state space models
     generally
 

@@ -2,7 +2,7 @@
 DismalPy License
 ****************
 
-Copyright (c) 2013, Chad Fulton
+Copyright (c) 2015, Chad Fulton
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without

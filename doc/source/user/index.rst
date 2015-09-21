@@ -9,6 +9,6 @@ reference documentation of the functions and classes contained in the package,
 see the :ref:`reference`.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
 
    ssm

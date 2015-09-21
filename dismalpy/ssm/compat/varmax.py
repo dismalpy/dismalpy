@@ -115,7 +115,6 @@ class VARMAX(MLEModel):
        Berlin: Springer.
 
     """
-
     def __init__(self, endog, exog=None, order=(1, 0), trend='c',
                  error_cov_type='unstructured', measurement_error=False,
                  enforce_stationarity=True, enforce_invertibility=True,
