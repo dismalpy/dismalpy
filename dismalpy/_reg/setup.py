@@ -3,8 +3,10 @@ from __future__ import division, print_function, absolute_import
 def configuration(parent_package='', top_path=None):
     from numpy.distutils.misc_util import Configuration
 
-    config = Configuration('stats', parent_package, top_path)
-    config.add_subpackage('rvs')
+    config = Configuration('_reg', parent_package, top_path)
+    config.add_extension('_var',
+                         include_dirs=['dismalpy/src'],
+                         sources=['_var.c'])
     config.make_config_py()
     return config
 
