@@ -1,5 +1,5 @@
 .
 scipy>=0.14.0
-statsmodels>=0.6
+-e git://github.com/statsmodels/statsmodels.git
 Cython>=0.20
 pandas>=0.16.0
