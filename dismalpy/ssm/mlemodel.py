@@ -10,9 +10,10 @@ import numpy as np
 from .simulation_smoother import SimulationSmoother, SimulationSmoothResults
 try:
     from statsmodels.tsa.statespace import mlemodel, varmax
+    from statsmodels.tsa.statespace.mlemodel import PredictionResultsWrapper
 except ImportError:
     from .compat import mlemodel
-from statsmodels.tsa.statespace.mlemodel import PredictionResultsWrapper
+    from .compat.mlemodel import PredictionResultsWrapper
 import statsmodels.base.wrapper as wrap
 
 class MLEMixin(object):
