@@ -25,8 +25,20 @@ Documentation
 Installation
 ------------
 
+See http://dismalpy.github.io/installation.html for details on installation.
+
 - The up-to-date source code is available on GitHub: http://github.com/dismalpy/dismalpy
 - Source distributions and some wheels are available on PyPi: https://pypi.python.org/pypi/dismalpy/
+
+This package has the following dependencies:
+
+- NumPy
+- SciPy >= 0.14.0
+- Pandas >= 0.16.0
+- Cython >= 0.20.0
+- Statsmodels >= 0.8.0; note that this has not yet been released, so for the
+  time being the development version must be installed prior to installing
+  DismalPy.
 
 License
 -------

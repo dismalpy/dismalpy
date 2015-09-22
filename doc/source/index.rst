@@ -12,9 +12,9 @@ The user guide is an introduction to the package in narrative form. It is a
 good place to start.
 
 .. toctree::
-    :maxdepth: 4
+   :maxdepth: 4
 
-    user/index
+   user/index
 
 Reference manual
 ----------------
@@ -23,6 +23,6 @@ The reference manual contains detailed information about the underlying classes
 and functions. It is a good place to check for specific questings.
 
 .. toctree::
-    :maxdepth: 2
+   :maxdepth: 2
    
    reference/index

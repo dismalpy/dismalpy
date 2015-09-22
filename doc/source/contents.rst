@@ -6,6 +6,7 @@ DismalPy manual contents
 
    user/index
    reference/index
+   installation
    release
    about
    bugs
