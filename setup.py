@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""DismalPy: tools for economic research
+"""DismalPy: a collection of resources for quantitative economics in Python.
 """
 
 DOCLINES = __doc__.split("\n")
@@ -18,14 +18,13 @@ else:
     import builtins
 
 CLASSIFIERS = """\
-Development Status :: 3 - Alpha
+Development Status :: 4 - Beta
 Intended Audience :: Science/Research
 License :: OSI Approved :: BSD License
 Programming Language :: Cython
 Programming Language :: Python
 Programming Language :: Python :: 3
 Topic :: Scientific/Engineering
-Topic :: Scientific/Engineering :: Economics
 Operating System :: Microsoft :: Windows
 Operating System :: POSIX
 Operating System :: Unix
@@ -33,8 +32,8 @@ Operating System :: MacOS
 """
 
 MAJOR               = 0
-MINOR               = 1
-MICRO               = 0
+MINOR               = 2
+MICRO               = 1
 ISRELEASED          = True
 VERSION             = '%d.%d.%d' % (MAJOR, MINOR, MICRO)
 
@@ -181,7 +180,7 @@ def setup_package():
     # We don't want to do that unconditionally, because we risk updating
     # an installed numpy which fails too often.  Just if it's not installed, we
     # may give it a try.  See gh-3379.
-    build_requires = ['statsmodels>=0.6', 'scipy>=0.14']
+    build_requires = ['statsmodels>=0.6', 'scipy>=0.14', 'Cython>=0.20','pandas>=0.16.0']
     try:
         import numpy
     except:
@@ -190,10 +189,10 @@ def setup_package():
     metadata = dict(
         name = 'dismalpy',
         maintainer = "Chad Fulton",
-        # maintainer_email = "",
+        maintainer_email = "ChadFulton+pypi@gmail.com",
         description = DOCLINES[0],
         long_description = "\n".join(DOCLINES[2:]),
-        url = "http://github.com/ChadFulton/dismalpy",
+        url = "http://github.com/dismalpy/dismalpy",
         # download_url = "",
         license = 'Simplified-BSD',
         cmdclass=cmdclass,
