@@ -13,7 +13,7 @@ import re
 
 import warnings
 from statsmodels.datasets import webuse
-from statsmodels.tsa.statespace import dynamic_factor
+from dismalpy.ssm import dynamic_factor
 from .results import results_varmax, results_dynamic_factor
 from numpy.testing import assert_equal, assert_almost_equal, assert_raises, assert_allclose
 from nose.exc import SkipTest

@@ -12,8 +12,8 @@ import os
 
 import warnings
 from statsmodels.datasets import macrodata
-from statsmodels.tsa.statespace import structural
-from statsmodels.tsa.statespace.structural import UnobservedComponents
+from dismalpy.ssm import structural
+from dismalpy.ssm.structural import UnobservedComponents
 from .results import results_structural
 from statsmodels.tools import add_constant
 from numpy.testing import assert_equal, assert_almost_equal, assert_raises, assert_allclose
