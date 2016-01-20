@@ -511,7 +511,7 @@ cdef class {{prefix}}Statespace(object):
 
                 # i is rows, k is rows
                 blas.{{prefix}}copy(&self.k_states,
-                      self._design, &self.k_endog,
+                      &self._design[i], &self.k_endog,
                       &self.selected_design[k], &k_endog)
 
                 # i, k is columns, j, l is rows
