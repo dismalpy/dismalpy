@@ -355,7 +355,7 @@ cdef {{cython_type}} {{prefix}}solve_lu({{prefix}}KalmanFilter kfilter, {{prefix
         for i in range(model._k_states): # columns
             for j in range(model._k_endog): # rows
                 kfilter._tmp3[j + i*kfilter.k_endog] = model._design[j + i*model._k_endog]
-    lapack.{{prefix}}getrs("N", &kfilter.k_endog, &kfilter.k_states, kfilter._forecast_error_fac, &kfilter.k_endog,
+    lapack.{{prefix}}getrs("N", &model._k_endog, &model._k_states, kfilter._forecast_error_fac, &kfilter.k_endog,
                     kfilter._forecast_error_ipiv, kfilter._tmp3, &kfilter.k_endog, &info)
 
     if not (kfilter.conserve_memory & MEMORY_NO_SMOOTHING > 0):
