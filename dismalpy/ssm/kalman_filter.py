@@ -1368,6 +1368,16 @@ class FilterResults(FrozenRepresentation):
             kalman_filter.predicted_state_cov, copy=True
         )
         self.kalman_gain = np.array(kalman_filter.kalman_gain, copy=True)
+        # In the partially missing data case, the Kalman gain entries will
+        # be in the first rows rather than the correct rows
+        if not self.memory_no_gain:
+            for t in range(self.nobs):
+                if self.nmissing[t] > 0:
+                    k_endog = self.k_endog - self.nmissing[t]
+                    mask = ~self.missing[:, t].astype(bool)
+                    tmp = self.kalman_gain[:, :, t].copy()
+                    self.kalman_gain[:, :, t] = 0
+                    self.kalman_gain[:, mask, t] = tmp[:, :k_endog]
 
         self.tmp1 = np.array(kalman_filter.tmp1, copy=True)
         self.tmp2 = np.array(kalman_filter.tmp2, copy=True)
