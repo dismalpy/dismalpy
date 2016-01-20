@@ -40,6 +40,8 @@ class KalmanSmoother(KalmanFilter):
         Default results class to use to save filtering output. Default is
         `SmootherResults`. If specified, class must extend from
         `SmootherResults`.
+    kalman_smoother_classes : dict, optional
+        Dictionary with BLAS prefixes as keys and classes as values.
     **kwargs
         Keyword arguments may be used to provide default values for state space
         matrices, for Kalman filtering options, or for Kalman smoothing
@@ -61,7 +63,7 @@ class KalmanSmoother(KalmanFilter):
     smoother_output = SMOOTHER_ALL
 
     def __init__(self, k_endog, k_states, k_posdef=None, results_class=None,
-                 **kwargs):
+                 kalman_smoother_classes=None, **kwargs):
         # Set the default results class
         if results_class is None:
             results_class = SmootherResults
@@ -69,6 +71,12 @@ class KalmanSmoother(KalmanFilter):
         super(KalmanSmoother, self).__init__(
             k_endog, k_states, k_posdef, results_class=results_class, **kwargs
         )
+
+        # Options
+        self.prefix_kalman_smoother_map = (
+            kalman_smoother_classes
+            if kalman_smoother_classes is not None
+            else prefix_kalman_smoother_map)
 
         # Setup the underlying Kalman smoother storage
         self._kalman_smoothers = {}
@@ -106,7 +114,7 @@ class KalmanSmoother(KalmanFilter):
         # to re-create it), create it
         if create_smoother:
             # Setup the smoother
-            cls = prefix_kalman_smoother_map[prefix]
+            cls = self.prefix_kalman_smoother_map[prefix]
             self._kalman_smoothers[prefix] = cls(
                 self._statespaces[prefix], self._kalman_filters[prefix],
                 smoother_output

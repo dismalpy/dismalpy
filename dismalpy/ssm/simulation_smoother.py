@@ -36,6 +36,8 @@ class SimulationSmoother(KalmanSmoother):
         Default results class to use to save output of simulation smoothing.
         Default is `SimulationSmoothResults`. If specified, class must extend
         from `SimulationSmoothResults`.
+    simulation_smoother_classes : dict, optional
+        Dictionary with BLAS prefixes as keys and classes as values.
     **kwargs
         Keyword arguments may be used to provide default values for state space
         matrices, for Kalman filtering options, for Kalman smoothing
@@ -49,7 +51,8 @@ class SimulationSmoother(KalmanSmoother):
     ]
     
     def __init__(self, k_endog, k_states, k_posdef=None,
-                 simulation_smooth_results_class=None, **kwargs):
+                 simulation_smooth_results_class=None,
+                 simulation_smoother_classes=None, **kwargs):
         super(SimulationSmoother, self).__init__(
             k_endog, k_states, k_posdef, **kwargs
         )
@@ -57,6 +60,11 @@ class SimulationSmoother(KalmanSmoother):
         if simulation_smooth_results_class is None:
             simulation_smooth_results_class = SimulationSmoothResults
         self.simulation_smooth_results_class = simulation_smooth_results_class
+
+        self.prefix_simulation_smoother_map = (
+            simulation_smoother_classes
+            if simulation_smoother_classes is not None
+            else prefix_simulation_smoother_map)
 
         # Holder for an model-level simulation smoother objects, to use in
         # simulating new time series.
@@ -130,7 +138,8 @@ class SimulationSmoother(KalmanSmoother):
                 nsimulations > self._simulators[prefix].nobs):
 
             # Make sure we have the required Statespace representation
-            prefix, dtype, create_statespace = self._initialize_representation()
+            prefix, dtype, create_statespace = (
+                self._initialize_representation())
 
             # Initialize the state
             self._initialize_state(prefix=self.prefix)
@@ -147,12 +156,12 @@ class SimulationSmoother(KalmanSmoother):
             tolerance = self.tolerance
 
             # Create a new simulation smoother object
-            cls = prefix_simulation_smoother_map[prefix]
+            cls = self.prefix_simulation_smoother_map[prefix]
             self._simulators[prefix] = cls(
                 self._statespaces[prefix],
-                filter_method, inversion_method, stability_method, conserve_memory,
-                tolerance, loglikelihood_burn, smoother_output, simulation_output,
-                nsimulations, True
+                filter_method, inversion_method, stability_method,
+                conserve_memory, tolerance, loglikelihood_burn,
+                smoother_output, simulation_output, nsimulations, True
             )
         simulator = self._simulators[prefix]
 

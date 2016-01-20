@@ -72,6 +72,8 @@ class KalmanFilter(Representation):
     results_class : class, optional
         Default results class to use to save filtering output. Default is
         `FilterResults`. If specified, class must extend from `FilterResults`.
+    kalman_filter_classes : dict, optional
+        Dictionary with BLAS prefixes as keys and classes as values.
     **kwargs
         Keyword arguments may be used to provide values for the filter,
         inversion, and stability methods. See `set_filter_method`,
@@ -283,7 +285,7 @@ class KalmanFilter(Representation):
 
     def __init__(self, k_endog, k_states, k_posdef=None,
                  loglikelihood_burn=0, tolerance=1e-19, results_class=None,
-                 **kwargs):
+                 kalman_filter_classes=None, **kwargs):
         super(KalmanFilter, self).__init__(
             k_endog, k_states, k_posdef, **kwargs
         )
@@ -296,6 +298,9 @@ class KalmanFilter(Representation):
         self.results_class = (
             results_class if results_class is not None else FilterResults
         )
+        self.prefix_kalman_filter_map = (kalman_filter_classes
+                                         if kalman_filter_classes is not None
+                                         else prefix_kalman_filter_map)
 
         self.set_filter_method(**kwargs)
         self.set_inversion_method(**kwargs)
@@ -357,7 +362,7 @@ class KalmanFilter(Representation):
                 # Delete the old filter
                 del self._kalman_filters[prefix]
             # Setup the filter
-            cls = prefix_kalman_filter_map[prefix]
+            cls = self.prefix_kalman_filter_map[prefix]
             self._kalman_filters[prefix] = cls(
                 self._statespaces[prefix], filter_method, inversion_method,
                 stability_method, conserve_memory, filter_timing, tolerance,

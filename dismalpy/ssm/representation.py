@@ -141,6 +141,8 @@ class Representation(object):
     state_cov : array_like, optional
         The covariance matrix for the state equation :math:`Q`. Default is set
         to zeros.
+    statespace_classes : dict, optional
+        Dictionary with BLAS prefixes as keys and classes as values.
     **kwargs
         Additional keyword arguments. Not used directly. It is present to
         improve compatibility with subclasses, so that they can use `**kwargs`
@@ -255,7 +257,7 @@ class Representation(object):
                  initial_variance=1e6, nobs=0, dtype=np.float64,
                  design=None, obs_intercept=None, obs_cov=None,
                  transition=None, state_intercept=None, selection=None,
-                 state_cov=None, **kwargs):
+                 state_cov=None, statespace_classes=None, **kwargs):
         self.shapes = {}
 
         # Check if k_endog is actually the endog array
@@ -318,6 +320,9 @@ class Representation(object):
 
         # Options
         self.initial_variance = initial_variance
+        self.prefix_statespace_map = (statespace_classes
+                                      if statespace_classes is not None
+                                      else prefix_statespace_map)
 
         # State-space initialization data
         self.initialization = kwargs.get('initialization', None)
@@ -690,7 +695,7 @@ class Representation(object):
                 del self._statespaces[prefix]
 
             # Setup the base statespace object
-            cls = prefix_statespace_map[prefix]
+            cls = self.prefix_statespace_map[prefix]
             self._statespaces[prefix] = cls(
                 self._representations[prefix]['obs'],
                 self._representations[prefix]['design'],
