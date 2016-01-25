@@ -1369,9 +1369,10 @@ class FilterResults(FrozenRepresentation):
             kalman_filter.predicted_state_cov, copy=True
         )
         self.kalman_gain = np.array(kalman_filter.kalman_gain, copy=True)
-        # In the partially missing data case, the Kalman gain entries will
+        # In the partially missing data case, various entries will
         # be in the first rows rather than the correct rows
-        if not self.memory_no_gain:
+        # TODO this does not work for collapsed data.
+        if not self.memory_no_gain and not self.filter_collapsed:
             for t in range(self.nobs):
                 if self.nmissing[t] > 0:
                     k_endog = self.k_endog - self.nmissing[t]
@@ -1449,6 +1450,7 @@ class FilterResults(FrozenRepresentation):
                 # error covariance matrix will be zeros - make them nan to
                 # improve clarity of results.
                 if self.nmissing[t] > 0:
+                    mask = ~self.missing[:, t].astype(bool)
                     # We can recover forecasts
                     # For partially missing observations, the Kalman filter
                     # will produce all elements (forecasts, forecast errors,
@@ -1469,6 +1471,8 @@ class FilterResults(FrozenRepresentation):
                         self.design[:, :, design_t], self.predicted_state[:, t]
                     ) + self.obs_intercept[:, obs_intercept_t]
                     self.forecasts_error[:, t] = np.nan
+                    self.forecasts_error[mask, t] = (
+                        self.endog[mask, t] - self.forecasts[mask, t])
                     self.forecasts_error_cov[:, :, t] = np.dot(
                         np.dot(self.design[:, :, design_t],
                                self.predicted_state_cov[:, :, t]),
@@ -1506,12 +1510,12 @@ class FilterResults(FrozenRepresentation):
                 if self.nmissing[t] > 0:
                     self._standardized_forecasts_error[:, t] = np.nan
                 else:
-                    upper, _ = linalg.cho_factor(
-                        self.forecasts_error_cov[:, :, t]
-                    )
-                    self._standardized_forecasts_error[:, t] = (
+                    mask = ~self.missing[:, t].astype(bool)
+                    F = self.forecasts_error_cov[np.ix_(mask, mask, [t])]
+                    upper, _ = linalg.cho_factor(F[:, :, 0])
+                    self._standardized_forecasts_error[mask, t] = (
                         linalg.solve_triangular(
-                            upper, self.forecasts_error[:, t]
+                            upper, self.forecasts_error[mask, t]
                         )
                     )
 
