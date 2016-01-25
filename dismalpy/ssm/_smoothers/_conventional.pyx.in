@@ -105,7 +105,7 @@ cdef int {{prefix}}smoothed_estimators_missing_conventional({{prefix}}KalmanSmoo
         blas.{{prefix}}gemv("T", &model._k_states, &model._k_states,
                   &alpha, model._transition, &model._k_states,
                           smoother._input_scaled_smoothed_estimator, &inc,
-                  &alpha, smoother._scaled_smoothed_estimator, &inc)
+                  &beta, smoother._scaled_smoothed_estimator, &inc)
 
     # Scaled smoothed estimator covariance matrix  
     # $N_{t-1} = T_t' N_t T_t$  
