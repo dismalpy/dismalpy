@@ -195,7 +195,8 @@ class KalmanSmoother(KalmanFilter):
             if name in kwargs:
                 setattr(self, name, kwargs[name])
 
-    def smooth(self, smoother_output=None, results=None, prefix=None):
+    def smooth(self, smoother_output=None, results=None, run_filter=True,
+               prefix=None):
         """
         Apply the Kalman smoother to the statespace model.
 
@@ -210,14 +211,15 @@ class KalmanSmoother(KalmanFilter):
             If an object, then that object is updated with the smoothing data.
             If None, then a FilterResults object is returned with both
             filtering and smoothing results.
+        run_filter : bool, optional
+            Whether or not to run the Kalman filter prior to smoothing. Default
+            is True.
         prefix : string
             The prefix of the datatype. Usually only used internally.
         Returns
         -------
         FilterResults object
         """
-        new_results = not isinstance(results, SmootherResults)
-
         # Set the class to be the default results class, if None provided
         if results is None:
             results = self.results_class
@@ -229,14 +231,20 @@ class KalmanSmoother(KalmanFilter):
         ))
 
         # Instantiate a new results object, if required
+        new_results = False
         if isinstance(results, type):
             if not issubclass(results, SmootherResults):
                 raise ValueError('Invalid results class provided.')
             results = results(self)
+            new_results = True
 
         # Run the filter if necessary
         kfilter = self._kalman_filters[prefix]
-        if not kfilter.t == self.nobs:
+        if not run_filter and (not kfilter.t == self.nobs or create_filter):
+            run_filter = True
+            warnings.warn('Despite `run_filter=False`, Kalman filtering was'
+                          ' performed because filtering was not complete.')
+        if run_filter:
             self._initialize_state()
             kfilter()
 
@@ -247,8 +255,9 @@ class KalmanSmoother(KalmanFilter):
         # Update the results object
         # Update the model features; unless we had to recreate the
         # statespace, only update the filter options
-        results.update_representation(self, only_options=not create_statespace)
-        if new_results or create_filter:
+        if not new_results:
+            results.update_representation(self)
+        if run_filter:
             results.update_filter(kfilter)
         results.update_smoother(smoother)
 
