@@ -495,9 +495,34 @@ class SmootherResults(FilterResults):
         # so exclude the zeroth element so that the time index is consistent
         # with the other returned output
         if 'scaled_smoothed_estimator' in attributes:
-            self.scaled_smoothed_estimator = self.scaled_smoothed_estimator[:,1:]
+            self.scaled_smoothed_estimator = (
+                self.scaled_smoothed_estimator[:,1:])
         if 'scaled_smoothed_estimator_cov' in attributes:
-            self.scaled_smoothed_estimator_cov = self.scaled_smoothed_estimator_cov[:,1:]
+            self.scaled_smoothed_estimator_cov = (
+                self.scaled_smoothed_estimator_cov[:, :, 1:])
+
+        # In the partially missing data case, various entries will
+        # be in the first rows rather than the correct rows
+        if not self.filter_collapsed:
+            for t in range(self.nobs):
+                if self.nmissing[t] > 0:
+                    k_endog = self.k_endog - self.nmissing[t]
+                    mask = ~self.missing[:, t].astype(bool)
+
+                    if 'smoothed_measurement_disturbance' in attributes:
+                        tmp = self.smoothed_measurement_disturbance[:, t].copy()
+                        self.smoothed_measurement_disturbance[:, t] = 0
+                        self.smoothed_measurement_disturbance[mask, t] = (
+                            tmp[:k_endog])
+                    if 'smoothed_measurement_disturbance_cov' in attributes:
+                        obs_cov_t = 0 if self.obs_cov.shape[2] == 1 else t
+                        tmp = np.copy(
+                            self.smoothed_measurement_disturbance_cov[:, :, t])
+                        self.smoothed_measurement_disturbance_cov[:, :, t] = (
+                            np.copy(self.obs_cov[:, :, obs_cov_t]))
+                        ix = np.ix_(mask, mask, [t])
+                        self.smoothed_measurement_disturbance_cov[ix] = (
+                            tmp[:k_endog, :k_endog, np.newaxis])
 
         # Clear the smoothed forecasts
         self._smoothed_forecasts = None
