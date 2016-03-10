@@ -97,7 +97,7 @@ if prefix == 's':
 cdef int _{{prefix}}select({{cython_type}} a, {{cython_type}} b):
     return 0
 
-cdef int _{{prefix}}solve_discrete_lyapunov({{cython_type}} * a, {{cython_type}} * q, int n) except *:
+cdef int _{{prefix}}solve_discrete_lyapunov({{cython_type}} * a, {{cython_type}} * q, int n, int complex_step=False) except *:
     # Note: some of this code (esp. the Sylvester solving part) cribbed from
     # https://raw.githubusercontent.com/scipy/scipy/master/scipy/linalg/_solvers.py
 
@@ -114,7 +114,7 @@ cdef int _{{prefix}}solve_discrete_lyapunov({{cython_type}} * a, {{cython_type}}
         {{cython_type}} beta = 0.0
         {{cython_type}} delta = -2.0
     cdef np.npy_intp dim[2]
-    cdef {{cython_type}} [::1,:] apI, capI, u
+    cdef {{cython_type}} [::1,:] apI, capI, u, v
     cdef int [::1,:] ipiv
     # Dummy selection function, won't actually be referenced since we don't
     # need to order the eigenvalues in the ?gees call.
@@ -138,6 +138,7 @@ cdef int _{{prefix}}solve_discrete_lyapunov({{cython_type}} * a, {{cython_type}}
     apI = np.PyArray_ZEROS(2, dim, {{typenum}}, FORTRAN)
     capI = np.PyArray_ZEROS(2, dim, {{typenum}}, FORTRAN)
     u = np.PyArray_ZEROS(2, dim, {{typenum}}, FORTRAN)
+    v = np.PyArray_ZEROS(2, dim, {{typenum}}, FORTRAN)
     ipiv = np.PyArray_ZEROS(2, dim, np.NPY_INT32, FORTRAN)
 
     dim1[0] = n;
@@ -227,8 +228,9 @@ cdef int _{{prefix}}solve_discrete_lyapunov({{cython_type}} * a, {{cython_type}}
             q[j + i*n] = scale
 
     {{if combined_prefix == 'z'}}
-    for i in range(n2):
-        q[i] = q[i] - q[i].imag * 2.0j
+    if not complex_step:
+        for i in range(n2):
+            q[i] = q[i] - q[i].imag * 2.0j
     {{endif}}
 
     lapack.{{prefix}}getrs("N", &n, &n, &capI[0,0], &n, &ipiv[0,0],
@@ -253,9 +255,12 @@ cdef int _{{prefix}}solve_discrete_lyapunov({{cython_type}} * a, {{cython_type}}
     {{if combined_prefix == 'd'}}
     # a is now the Schur form of A; (r)
     # u is now the unitary Schur transformation matrix for A; (u)
-    # also we have:
-    # a; (s)
-    # u; (v)
+    # In the usual case, we will also have:
+    # r = s, so s is also stored in a
+    # u = v, so v is also stored in u
+    # In the complex-step case, we will instead have:
+    # r = s.conj()
+    # u = v.conj()
     lapack.{{prefix}}gees("V", "N", select, &n,
                           a, &n,
                           &sdim,
@@ -277,10 +282,22 @@ cdef int _{{prefix}}solve_discrete_lyapunov({{cython_type}} * a, {{cython_type}}
     if not info == 0:
         raise np.linalg.LinAlgError('Schur decomposition solver error.')
 
-    # Construct f = u'*q*u (result overwrites q)
+    # Get v (so that in the complex step case we can take the conjugate)
+    blas.{{prefix}}copy(&n2, &u[0,0], &inc, &v[0,0], &inc)
+    # If complex step, take the conjugate
+    {{if combined_prefix == 'z'}}
+    if complex_step:
+        for i in range(n):
+            for j in range(n):
+                v[i,j] = v[i,j] - v[i,j].imag * 2.0j
+    {{endif}}
+
+    # Construct f = u^H*q*v (result overwrites q)
+    # In the usual case, v = u
+    # In the complex step case, v = u.conj()
     blas.{{prefix}}gemm("N", "N", &n, &n, &n,
                         &alpha, q, &n,
-                                &u[0,0], &n,
+                                &v[0,0], &n,
                         &beta, &capI[0,0], &n)
     blas.{{prefix}}gemm("C", "N", &n, &n, &n,
                         &alpha, &u[0,0], &n,
@@ -290,9 +307,16 @@ cdef int _{{prefix}}solve_discrete_lyapunov({{cython_type}} * a, {{cython_type}}
     # DTRYSL Solve op(A)*X + X*op(B) = scale*C which is here:
     # r*X + X*r = scale*q
     # results overwrite q
+    blas.{{prefix}}copy(&n2, a, &inc, &apI[0,0], &inc)
+    {{if combined_prefix == 'z'}}
+    if complex_step:
+        for i in range(n):
+            for j in range(n):
+                apI[j,i] = apI[j,i] - apI[j,i].imag * 2.0j
+    {{endif}}
     lapack.{{prefix}}trsyl("N", "C", &inc, &n, &n,
                            a, &n,
-                           a, &n,
+                           &apI[0,0], &n,
                            q, &n,
                            &scale, &info)
 
@@ -300,21 +324,17 @@ cdef int _{{prefix}}solve_discrete_lyapunov({{cython_type}} * a, {{cython_type}}
     if not scale == 1.0:
         blas.{{prefix}}scal(&n2, &scale, q, &inc)
 
-    # Calculate the solution: u * q * u^H (results overwrite q)
+    # Calculate the solution: u * q * v^H (results overwrite q)
+    # In the usual case, v = u
+    # In the complex step case, v = u.conj()
     blas.{{prefix}}gemm("N", "C", &n, &n, &n,
                         &alpha, q, &n,
-                                &u[0,0], &n,
+                                &v[0,0], &n,
                         &beta, &capI[0,0], &n)
     blas.{{prefix}}gemm("N", "N", &n, &n, &n,
                         &alpha, &u[0,0], &n,
                                 &capI[0,0], &n,
                         &beta, q, &n)
-
-    # TODO why is this necessary?
-    {{if combined_prefix == 'z'}}
-    for i in range(n2):
-        q[i] = q[i] - q[i].imag * 2.0j
-    {{endif}}
 
 
 cpdef _{{prefix}}compute_coefficients_from_multivariate_pacf({{cython_type}} [::1,:] partial_autocorrelations,
