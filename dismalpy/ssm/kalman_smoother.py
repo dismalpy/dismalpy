@@ -503,6 +503,8 @@ class SmootherResults(FilterResults):
 
         # In the partially missing data case, various entries will
         # be in the first rows rather than the correct rows
+        # TODO this can really slow things down if the smoother needs to be run
+        # many times in a row.
         if not self.filter_collapsed:
             for t in range(self.nobs):
                 if self.nmissing[t] > 0:
