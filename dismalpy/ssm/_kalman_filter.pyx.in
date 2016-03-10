@@ -683,6 +683,8 @@ cdef class {{prefix}}KalmanFilter(object):
                 # self._calculate_loglikelihood() +
                 self.model.collapse_loglikelihood
             )
+        else:
+            self._loglikelihood[0] = 0
 
         # Prediction step (default timing)
         if self.filter_timing == TIMING_INIT_PREDICTED:
