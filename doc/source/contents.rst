@@ -4,6 +4,7 @@ DismalPy manual contents
 
 .. toctree::
 
+   examples
    user/index
    reference/index
    installation
