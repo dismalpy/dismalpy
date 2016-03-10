@@ -50,7 +50,7 @@ class TestStatesAR3(object):
             hamilton_representation=True, *args, **kwargs
         )
         if alternate_timing:
-            self.model.timing_init_filtered = True
+            self.model.ssm.timing_init_filtered = True
 
         # Parameters from from Stata's sspace MLE estimation
         params = np.r_[.5270715, .0952613, .2580355, .5307459]
