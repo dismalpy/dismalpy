@@ -18,7 +18,10 @@ from dismalpy.ssm.tools import (
     constrain_stationary_multivariate, unconstrain_stationary_multivariate
 )
 from scipy.linalg import solve_discrete_lyapunov
-from statsmodels.tools.pca import PCA
+try:
+    from statsmodels.tools.pca import PCA
+except ImportError:
+    from statsmodels.multivariate.pca import PCA
 from statsmodels.regression.linear_model import OLS
 from statsmodels.tsa.vector_ar.var_model import VAR
 from statsmodels.tools.tools import Bunch
