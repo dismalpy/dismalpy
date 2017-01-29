@@ -1,6 +1,17 @@
 DismalPy
 ========
 
+**Note**: this package is largely obsolete, because most of its content has
+been integrated into [Statsmodels](http://statsmodels.github.io/). Please see
+my working paper [Estimating time series models by state space methods in Python: Statsmodels](http://www.chadfulton.com/research.html#est-ssm-py) for more
+information on using Statsmodels to estimate state space models.
+
+- [Working paper (PDF)](https://github.com/ChadFulton/fulton_statsmodels_2017/raw/master/fulton_statsmodels_2017_v1.pdf)
+- [Working paper (HTML)](https://chadfulton.github.io/fulton_statsmodels_2017/)
+- [Github Repository](https://github.com/ChadFulton/fulton_statsmodels_2017)
+
+------------
+
 A collection of resources for quantitative economics in Python. Includes:
 
 - a Python wrapper for state space models along with a fast (compiled) Kalman
